@@ -126,7 +126,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       const [reqsRes, booksRes, tripsRes, clientsRes, driversRes] = await Promise.all([
         supabase.from('requirements').select('*, client_companies(company_name)').gte('created_at', startIST).lte('created_at', endIST),
         supabase.from('bookings').select('*, client_companies(company_name)').gte('confirmed_at', startIST).lte('confirmed_at', endIST),
-        supabase.from('trips').select('*, vehicles(registration_number, vehicle_type), bookings!inner(*, requirements!inner(*))').gte('created_at', startIST).lte('created_at', endIST),
+        supabase.from('trips').select('*, vehicles(registration_number, vehicle_type), drivers(full_name), bookings!inner(*, requirements!inner(*))').gte('created_at', startIST).lte('created_at', endIST),
         supabase.from('client_companies').select('*'),
         supabase.from('drivers').select('*'),
       ]);
@@ -192,11 +192,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             tripNumber: t.id.substring(0, 12).toUpperCase(),
             route: `${origin} → ${dest}`,
             vehicle: t.vehicles?.registration_number || 'N/A',
-            driver: 'Assigned Driver',
+            driver: t.drivers?.full_name || 'N/A',
             status: statusInfo.label,
             statusColor: statusInfo.color,
             progress,
-            eta: '6:45 PM',
+            eta: 'N/A',
             updatedAt: minutesAgo < 60 ? `${minutesAgo} min ago` : `${Math.floor(minutesAgo / 60)}h ago`,
           };
         });
