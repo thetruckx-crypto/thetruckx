@@ -30,7 +30,9 @@ import {
   Package
 } from 'lucide-react';
 import { supabase } from '../../utils/supabase';
+import { apiFetch } from '../../utils/api';
 import { DocumentRejectionModal } from './DocumentRejectionModal';
+import { formatDisplayId } from '../../utils/idGenerator';
 
 interface VendorProfileProps {
   vendorId: string;
@@ -281,10 +283,53 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
 
           if (appErr) throw appErr;
 
+          apiFetch('/admin/vendor-approval', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ vendorId: vendor.id, decision: 'APPROVED' }),
+          }).catch(() => {});
+
           showToast(`✅ Vendor "${vendor.vendor_name}" has been approved!`);
           await loadVendorData();
         } catch (err: any) {
           showToast(`❌ Approval failed: ${err.message}`);
+        } finally {
+          setIsActionLoading(false);
+          setConfirmDialog(null);
+        }
+      },
+    });
+  };
+
+  const handleRejectVendor = () => {
+    if (!vendor) return;
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Reject Vendor Application',
+      message: `Are you sure you want to reject ${vendor.vendor_name}'s registration application?`,
+      onConfirm: async () => {
+        setIsActionLoading(true);
+        try {
+          const { error: rejErr } = await supabase
+            .from('vendor_companies')
+            .update({
+              status: 'REJECTED',
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', vendor.id);
+
+          if (rejErr) throw rejErr;
+
+          apiFetch('/admin/vendor-approval', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ vendorId: vendor.id, decision: 'REJECTED' }),
+          }).catch(() => {});
+
+          showToast(`❌ Vendor "${vendor.vendor_name}" has been marked as rejected.`);
+          await loadVendorData();
+        } catch (err: any) {
+          showToast(`❌ Action failed: ${err.message}`);
         } finally {
           setIsActionLoading(false);
           setConfirmDialog(null);
@@ -405,7 +450,7 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
   if (loading && !vendor) {
     return (
       <div className="profile-loading-box">
-        <RefreshCw size={24} className="spin" style={{ color: '#FF6B35', margin: '0 auto 12px' }} />
+        <RefreshCw size={24} className="spin" style={{ color: '#F45325', margin: '0 auto 12px' }} />
         <p>Loading vendor profile from database...</p>
       </div>
     );
@@ -414,7 +459,7 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
   if (error || !vendor) {
     return (
       <div className="profile-error-box">
-        <AlertTriangle size={32} style={{ color: '#EF4444', margin: '0 auto 12px' }} />
+        <AlertTriangle size={32} style={{ color: '#F45325', margin: '0 auto 12px' }} />
         <h3>Unable to load vendor profile</h3>
         <p>{error || 'Vendor not found.'}</p>
         <button className="btn-back-link" onClick={onBack}>
@@ -506,7 +551,51 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
             </div>
           </div>
 
-          <div className="title-right-actions">
+          <div className="title-right-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {isPending && (
+              <>
+                <button
+                  className="btn-approve-action"
+                  onClick={handleApproveVendor}
+                  style={{
+                    backgroundColor: '#10B981',
+                    color: '#ffffff',
+                    border: 'none',
+                    padding: '8px 14px',
+                    borderRadius: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                  }}
+                >
+                  <CheckCircle2 size={15} />
+                  <span>Approve Vendor</span>
+                </button>
+                <button
+                  className="btn-reject-action"
+                  onClick={handleRejectVendor}
+                  style={{
+                    backgroundColor: '#EF4444',
+                    color: '#ffffff',
+                    border: 'none',
+                    padding: '8px 14px',
+                    borderRadius: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                  }}
+                >
+                  <XCircle size={15} />
+                  <span>Reject</span>
+                </button>
+              </>
+            )}
             <button
               className="btn-orange-action"
               onClick={() => setIsEditModalOpen(true)}
@@ -558,7 +647,7 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
           <div className="vendor-avatar-circle-large">{initials}</div>
           <div className="banner-details">
             <h2 className="banner-company-title">{vendor.vendor_name}</h2>
-            <p className="banner-id">VEN-{vendor.id.slice(0, 8).toUpperCase()}</p>
+            <p className="banner-id">{formatDisplayId('VD', vendor.vendor_code || vendor.id, vendor.created_at)}</p>
             <div className="banner-meta-row">
               <span>{vendor.onboarding_source === 'INVITED' ? 'Fleet Owner (Invited)' : 'Fleet Owner'}</span>
               <span className="sep">•</span>
@@ -738,9 +827,9 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
                   <div className={`rfq-eligibility-callout ${isApproved ? 'eligible' : 'ineligible'}`}>
                     {isApproved ? (
                       <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                        <CheckCircle2 size={18} style={{ color: '#10B981', flexShrink: 0, marginTop: '2px' }} />
+                        <CheckCircle2 size={18} style={{ color: '#F45325', flexShrink: 0, marginTop: '2px' }} />
                         <div>
-                          <div style={{ fontWeight: 600, color: '#065F46', fontSize: '13px' }}>
+                          <div style={{ fontWeight: 600, color: '#F45325', fontSize: '13px' }}>
                             RFQ Eligibility: Active & Eligible
                           </div>
                           <div style={{ fontSize: '12px', color: '#047857', marginTop: '2px' }}>
@@ -750,12 +839,12 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
                       </div>
                     ) : (
                       <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                        <AlertTriangle size={18} style={{ color: '#FF6B35', flexShrink: 0, marginTop: '2px' }} />
+                        <AlertTriangle size={18} style={{ color: '#F45325', flexShrink: 0, marginTop: '2px' }} />
                         <div>
                           <div style={{ fontWeight: 600, color: '#171717', fontSize: '13px' }}>
                             RFQ Eligibility: Ineligible
                           </div>
-                          <div style={{ fontSize: '12px', color: '#E85D26', marginTop: '2px' }}>
+                          <div style={{ fontSize: '12px', color: '#F45325', marginTop: '2px' }}>
                             Unapproved vendors cannot receive RFQs. Review credentials and approve to activate.
                           </div>
                         </div>
@@ -804,7 +893,7 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
 
               {!loadedTabs.has('documents') ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: '#64748B' }}>
-                  <RefreshCw size={24} className="spin" style={{ margin: '0 auto 12px', color: '#FF6B35' }} />
+                  <RefreshCw size={24} className="spin" style={{ margin: '0 auto 12px', color: '#F45325' }} />
                   <p>Loading documents...</p>
                 </div>
               ) : documents.length === 0 ? (
@@ -915,7 +1004,7 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
 
               {!loadedTabs.has('vehicles') ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: '#64748B' }}>
-                  <RefreshCw size={24} className="spin" style={{ margin: '0 auto 12px', color: '#FF6B35' }} />
+                  <RefreshCw size={24} className="spin" style={{ margin: '0 auto 12px', color: '#F45325' }} />
                   <p>Loading vehicles...</p>
                 </div>
               ) : vehicles.length === 0 ? (
@@ -974,7 +1063,7 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
 
               {!loadedTabs.has('trips') ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: '#64748B' }}>
-                  <RefreshCw size={24} className="spin" style={{ margin: '0 auto 12px', color: '#FF6B35' }} />
+                  <RefreshCw size={24} className="spin" style={{ margin: '0 auto 12px', color: '#F45325' }} />
                   <p>Loading trips...</p>
                 </div>
               ) : trips.length === 0 ? (
@@ -995,7 +1084,7 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
                     <tbody>
                       {trips.map((trip) => (
                         <tr key={trip.id}>
-                          <td className="mono-text">TRIP-{trip.id.slice(0, 8).toUpperCase()}</td>
+                          <td className="mono-text">{formatDisplayId('TRP', trip.id, trip.created_at)}</td>
                           <td>{trip.vehicles?.registration_number || '—'}</td>
                           <td>
                             <span className={`status-pill ${trip.trip_status === 'COMPLETED' ? 'verified' : 'pending'}`}>
@@ -1033,7 +1122,7 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
 
               {!loadedTabs.has('requirements') ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: '#64748B' }}>
-                  <RefreshCw size={24} className="spin" style={{ margin: '0 auto 12px', color: '#FF6B35' }} />
+                  <RefreshCw size={24} className="spin" style={{ margin: '0 auto 12px', color: '#F45325' }} />
                   <p>Loading requirements...</p>
                 </div>
               ) : requirements.length === 0 ? (
@@ -1052,7 +1141,7 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
                     <tbody>
                       {requirements.map((req) => (
                         <tr key={req.id}>
-                          <td className="mono-text">REQ-{req.id.slice(0, 8).toUpperCase()}</td>
+                          <td className="mono-text">{formatDisplayId('REQ', req.requirement_reference || req.requirement_code || req.id, req.created_at)}</td>
                           <td>
                             <span className="status-pill pending">
                               <span className="dot-indicator"></span>

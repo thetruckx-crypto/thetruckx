@@ -12,6 +12,7 @@ import {
   Plus
 } from 'lucide-react';
 import { supabase } from '../../utils/supabase';
+import { generateDbNeclId } from '../../utils/idGenerator';
 
 interface CreateSharedVehicleProps {
   onBack: () => void;
@@ -54,8 +55,11 @@ export const CreateSharedVehicle: React.FC<CreateSharedVehicleProps> = ({
     setLoading(true);
     setError(null);
 
+    const vehicleId = await generateDbNeclId('VH');
+
     const vehiclePayload = {
-      id: 'veh-' + Date.now(),
+      id: vehicleId,
+      vehicle_code: vehicleId,
       registration_number: regNo,
       vehicle_type: formData.vehicle_type,
       body_type: formData.body_type,
@@ -109,7 +113,7 @@ export const CreateSharedVehicle: React.FC<CreateSharedVehicleProps> = ({
           <ArrowLeft size={16} />
           <span>Back to Vehicle Master Directory</span>
         </button>
-        <span className="subnav-bullet" style={{ color: '#FF6B35', fontSize: '10px' }}>
+        <span className="subnav-bullet" style={{ color: '#F45325', fontSize: '10px' }}>
           ◆ FLEET REGISTRATION
         </span>
       </div>
@@ -117,7 +121,7 @@ export const CreateSharedVehicle: React.FC<CreateSharedVehicleProps> = ({
       {/* Main Card */}
       <div style={{
         background: '#FFFFFF',
-        border: '1px solid #E2E8F0',
+        border: '1px solid rgba(244,83,37,0.25)',
         borderRadius: '16px',
         padding: '32px',
         boxShadow: '0 4px 20px rgba(0, 0, 0, 0.04)',
@@ -131,12 +135,12 @@ export const CreateSharedVehicle: React.FC<CreateSharedVehicleProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: '#E85D26',
+            color: '#F45325',
           }}>
             <Truck size={24} />
           </div>
           <div>
-            <h2 style={{ fontSize: '22px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
+            <h2 style={{ fontSize: '22px', fontWeight: 800, color: '#111111', margin: 0 }}>
               Add Shared Commercial Vehicle
             </h2>
             <p style={{ fontSize: '14px', color: '#64748B', margin: '4px 0 0' }}>
@@ -155,7 +159,7 @@ export const CreateSharedVehicle: React.FC<CreateSharedVehicleProps> = ({
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           {/* Section 1: Vehicle Identifiers */}
           <div>
-            <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#1E293B', marginBottom: '14px', borderBottom: '1px solid #F1F5F9', paddingBottom: '6px' }}>
+            <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#111111', marginBottom: '14px', borderBottom: '1px solid #FFFFFF', paddingBottom: '6px' }}>
               1. Registration & Specifications
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
@@ -239,7 +243,7 @@ export const CreateSharedVehicle: React.FC<CreateSharedVehicleProps> = ({
 
           {/* Section 2: Weight Capacities */}
           <div>
-            <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#1E293B', marginBottom: '14px', borderBottom: '1px solid #F1F5F9', paddingBottom: '6px' }}>
+            <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#111111', marginBottom: '14px', borderBottom: '1px solid #FFFFFF', paddingBottom: '6px' }}>
               2. Weight Capacities & Telematics
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
@@ -273,7 +277,7 @@ export const CreateSharedVehicle: React.FC<CreateSharedVehicleProps> = ({
                     checked={formData.gps_installed}
                     onChange={(e) => setFormData({ ...formData, gps_installed: e.target.checked })}
                   />
-                  <span className="checkbox-label" style={{ fontWeight: 600, color: '#1E293B' }}>
+                  <span className="checkbox-label" style={{ fontWeight: 600, color: '#111111' }}>
                     Active GPS Telematics Tracker Installed
                   </span>
                 </label>
@@ -283,7 +287,7 @@ export const CreateSharedVehicle: React.FC<CreateSharedVehicleProps> = ({
 
           {/* Section 3: Compliance & Documents */}
           <div>
-            <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#1E293B', marginBottom: '14px', borderBottom: '1px solid #F1F5F9', paddingBottom: '6px' }}>
+            <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#111111', marginBottom: '14px', borderBottom: '1px solid #FFFFFF', paddingBottom: '6px' }}>
               3. Initial Compliance & Expiry Dates
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
@@ -331,7 +335,7 @@ export const CreateSharedVehicle: React.FC<CreateSharedVehicleProps> = ({
           </div>
 
           {/* Form Actions */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px', borderTop: '1px solid #E2E8F0', paddingTop: '20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px', borderTop: '1px solid rgba(244,83,37,0.25)', paddingTop: '20px' }}>
             <button
               type="button"
               className="btn-secondary-cancel"

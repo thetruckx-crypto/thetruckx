@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import {
   X,
   ShieldCheck,
@@ -21,6 +21,7 @@ import {
   Check
 } from 'lucide-react';
 import { supabase } from '../../utils/supabase';
+import { apiFetch } from '../../utils/api';
 
 export interface DriverLicenceAuditProps {
   driver: {
@@ -81,16 +82,20 @@ export const DriverLicenceAudit: React.FC<DriverLicenceAuditProps> = ({
         .update({
           status: 'APPROVED',
           rejection_reason: null,
-          updated_at: new Date().toISOString(),
         })
         .eq('id', driver.id)
         .select()
         .single();
 
       if (error) {
-        // If supabase fails, still update locally for seamless operational continuity
-        console.warn('Supabase update warning, falling back to local state:', error);
+        throw error;
       }
+
+      apiFetch('/admin/driver-approval', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ driverId: driver.id, decision: 'APPROVED' }),
+      }).catch(() => {});
 
       showNotification(`Driver ${driver.full_name} licence verified & approved!`, 'success');
       setTimeout(() => {
@@ -98,11 +103,7 @@ export const DriverLicenceAudit: React.FC<DriverLicenceAuditProps> = ({
         onClose();
       }, 1000);
     } catch (err: any) {
-      showNotification(err.message || 'Verification update completed', 'success');
-      setTimeout(() => {
-        onVerificationComplete({ ...driver, status: 'APPROVED' });
-        onClose();
-      }, 1000);
+      showNotification(err.message || 'Verification update failed', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -121,15 +122,20 @@ export const DriverLicenceAudit: React.FC<DriverLicenceAuditProps> = ({
         .update({
           status: 'REJECTED',
           rejection_reason: rejectionReason.trim(),
-          updated_at: new Date().toISOString(),
         })
         .eq('id', driver.id)
         .select()
         .single();
 
       if (error) {
-        console.warn('Supabase update warning:', error);
+        throw error;
       }
+
+      apiFetch('/admin/driver-approval', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ driverId: driver.id, decision: 'REJECTED', reason: rejectionReason.trim() }),
+      }).catch(() => {});
 
       showNotification(`Driver verification rejected with specified remark.`, 'success');
       setTimeout(() => {
@@ -141,15 +147,7 @@ export const DriverLicenceAudit: React.FC<DriverLicenceAuditProps> = ({
         onClose();
       }, 1000);
     } catch (err: any) {
-      showNotification('Driver status marked as rejected.', 'success');
-      setTimeout(() => {
-        onVerificationComplete({
-          ...driver,
-          status: 'REJECTED',
-          rejection_reason: rejectionReason.trim(),
-        });
-        onClose();
-      }, 1000);
+      showNotification(err.message || 'Driver rejection update failed.', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -271,7 +269,7 @@ export const DriverLicenceAudit: React.FC<DriverLicenceAuditProps> = ({
                     </div>
                     <div className="licence-field-row">
                       <span className="licence-label">VALID TILL:</span>
-                      <strong className={`licence-value ${isExpired ? 'text-red-500' : 'text-emerald-400'}`}>
+                      <strong className={`licence-value ${isExpired ? 'text-[#F45325]' : 'text-emerald-400'}`}>
                         {expiryDateFormatted}
                         {isExpired && ' (EXPIRED)'}
                       </strong>
@@ -292,7 +290,7 @@ export const DriverLicenceAudit: React.FC<DriverLicenceAuditProps> = ({
                     <div className="chip-orange" />
                     <span>SMART CARD COMPLIANT</span>
                   </div>
-                  <span className="licence-qr-text">SARATHI VERIFIED ◆ RTO NORTH EAST</span>
+                  <span className="licence-qr-text">SARATHI VERIFIED ? RTO NORTH EAST</span>
                 </div>
               </div>
 

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { BrandLogo } from './BrandLogo';
 import { supabase } from '../utils/supabase';
+import neclLogo from '../assets/images/necl-logo.png';
 import {
-  Truck,
+  MapPin,
   ShieldCheck,
   Users,
   TrendingUp,
@@ -24,24 +24,16 @@ interface LoginScreenProps {
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onRequire2FA }) => {
-  // Mock credentials for development/testing - ONLY pre-fills form, does NOT bypass Supabase Auth
-  const MOCK_CREDENTIALS = {
-    ADMIN: {
-      email: 'admin@necl.com',
-      password: 'admin123'  // Change this to match your actual Supabase Auth user password
-    },
-    SUPER_ADMIN: {
-      email: 'superadmin@necl.com', 
-      password: 'superadmin123'  // Change this to match your actual Supabase Auth user password
-    }
-  };
-
   const [selectedRole, setSelectedRole] = useState<'ADMIN' | 'SUPER_ADMIN'>('ADMIN');
-  const [email, setEmail] = useState<string>(MOCK_CREDENTIALS.ADMIN.email);
-  const [password, setPassword] = useState<string>(MOCK_CREDENTIALS.ADMIN.password);
+  const [email, setEmail] = useState<string>('');
+  const [password, setPassword] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const [isCapsLockOn, setIsCapsLockOn] = useState<boolean>(false);
+
+  // Email format verification
+  const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
   // Forgot Password Modal State
   const [isForgotModalOpen, setIsForgotModalOpen] = useState<boolean>(false);
@@ -52,10 +44,15 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onRequ
 
   const handleRoleSelect = (role: 'ADMIN' | 'SUPER_ADMIN') => {
     setSelectedRole(role);
-    // Pre-fill with mock credentials for selected role
-    setEmail(MOCK_CREDENTIALS[role].email);
-    setPassword(MOCK_CREDENTIALS[role].password);
     setErrorMessage('');
+  };
+
+  const handleKeyDownPassword = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.getModifierState && e.getModifierState('CapsLock')) {
+      setIsCapsLockOn(true);
+    } else {
+      setIsCapsLockOn(false);
+    }
   };
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
@@ -72,48 +69,60 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onRequ
     setIsLoading(true);
     setErrorMessage('');
 
+    const trimmedEmail = email.trim().toLowerCase();
+    const enteredPassword = password.trim();
+
     try {
       // 1. Supabase Authentication
       const { data: supaData, error: supaErr } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password: password.trim(),
+        email: trimmedEmail,
+        password: enteredPassword,
       });
 
-      if (!supaErr && supaData?.user) {
-        const userMeta = supaData.user.user_metadata || {};
-        const userName = userMeta.name || userMeta.full_name || (selectedRole === 'SUPER_ADMIN' ? 'Pavani (Super Admin)' : 'Pavani (Admin)');
+      if (supaErr) {
+        throw new Error(supaErr.message || 'Invalid email or password. Please verify your credentials.');
+      }
 
-        if (selectedRole === 'SUPER_ADMIN') {
-          onRequire2FA(email.trim());
+      if (supaData?.user) {
+        // Query database record to resolve genuine role and status
+        const { data: dbAdmin, error: dbErr } = await supabase
+          .from('admin_users')
+          .select('id, name, email, role, is_active')
+          .or(`auth_uid.eq.${supaData.user.id},email.eq.${trimmedEmail}`)
+          .maybeSingle();
+
+        if (dbErr) {
+          console.error('Error fetching admin record:', dbErr);
+          await supabase.auth.signOut();
+          setErrorMessage('Unable to verify administrative authorization. Please contact support.');
+          return;
+        }
+
+        if (!dbAdmin) {
+          await supabase.auth.signOut();
+          setErrorMessage('Access denied. No administrator record associated with this account.');
+          return;
+        }
+
+        if (!dbAdmin.is_active) {
+          await supabase.auth.signOut();
+          setErrorMessage('Your administrator account has been suspended or deactivated by the Super Admin. Access denied.');
+          return;
+        }
+
+        const realRole = dbAdmin.role === 'SUPER_ADMIN' ? 'SUPER_ADMIN' : 'ADMIN';
+        const userName = dbAdmin.name || supaData.user.user_metadata?.name || (realRole === 'SUPER_ADMIN' ? 'Super Admin' : 'Admin');
+
+        if (realRole === 'SUPER_ADMIN') {
+          onRequire2FA(trimmedEmail);
         } else {
           onLoginSuccess({
             name: userName,
             role: 'ADMIN',
-            email: email.trim(),
+            email: trimmedEmail,
           });
         }
         return;
-      }
-
-      // Seamless development & review fallback for pre-filled demo accounts
-      const isDemoAdmin = email.trim().toLowerCase() === 'admin@necl.com' && password.trim() === 'admin123';
-      const isDemoSuperAdmin = email.trim().toLowerCase() === 'superadmin@necl.com' && password.trim() === 'superadmin123';
-
-      if (isDemoAdmin || isDemoSuperAdmin) {
-        if (selectedRole === 'SUPER_ADMIN') {
-          onRequire2FA(email.trim());
-        } else {
-          onLoginSuccess({
-            name: 'Operations Admin',
-            role: 'ADMIN',
-            email: email.trim(),
-          });
-        }
-        return;
-      }
-
-      if (supaErr) {
-        throw new Error(supaErr.message);
       }
 
       throw new Error('Invalid email or password. Please verify your credentials.');
@@ -161,8 +170,17 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onRequ
         <section className="login-branding-section" aria-label="North Eastern Carriers Overview">
           {/* Top Logo */}
           <div className="hero-brand-header">
-            <BrandLogo theme="dark" size="lg" alt="North Eastern Carriers" />
-            <div className="brand-orange-bar" />
+            <div className="hero-logo-box">
+              <img
+                src={neclLogo}
+                alt="North Eastern Carriers"
+                className="hero-logo-img"
+              />
+              <div className="hero-logo-tagline">
+                LOGISTICS &nbsp;|&nbsp; PEOPLE &nbsp;|&nbsp; PROGRESS
+              </div>
+            </div>
+            <div className="hero-accent-line" />
           </div>
 
           {/* Main Hero Headline */}
@@ -173,36 +191,50 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onRequ
               Across <span className="highlight-orange">India</span>
             </h1>
             <p className="hero-subtitle">
-              Reliable | Efficient | Trusted Logistics Solutions
+              Reliable. Efficient. Trusted Logistics Solutions.
             </p>
           </div>
 
-          {/* 4 Feature Badges in a compact translucent feature strip */}
-          <div className="hero-features-strip" role="list">
-            <div className="feature-item" role="listitem">
-              <Truck size={22} className="feature-orange-icon" />
-              <div className="feature-title">Pan India<br />Coverage</div>
+          {/* 4 Feature Badges in 2x2 Glassmorphic Grid */}
+          <div className="hero-features-grid" role="list">
+            <div className="hero-feature-card" role="listitem">
+              <div className="feature-icon-box">
+                <MapPin size={20} />
+              </div>
+              <div className="feature-text">
+                <h4>Pan-India Coverage</h4>
+                <p>Serving businesses across every state</p>
+              </div>
             </div>
 
-            <div className="feature-divider" />
-
-            <div className="feature-item" role="listitem">
-              <ShieldCheck size={22} className="feature-orange-icon" />
-              <div className="feature-title">Safe & Secure<br />Transport</div>
+            <div className="hero-feature-card" role="listitem">
+              <div className="feature-icon-box">
+                <ShieldCheck size={20} />
+              </div>
+              <div className="feature-text">
+                <h4>Secure Transport</h4>
+                <p>Your cargo, our priority</p>
+              </div>
             </div>
 
-            <div className="feature-divider" />
-
-            <div className="feature-item" role="listitem">
-              <Users size={22} className="feature-orange-icon" />
-              <div className="feature-title">Trusted<br />Network</div>
+            <div className="hero-feature-card" role="listitem">
+              <div className="feature-icon-box">
+                <Users size={20} />
+              </div>
+              <div className="feature-text">
+                <h4>Trusted Network</h4>
+                <p>Verified partners and fleet</p>
+              </div>
             </div>
 
-            <div className="feature-divider" />
-
-            <div className="feature-item" role="listitem">
-              <TrendingUp size={22} className="feature-orange-icon" />
-              <div className="feature-title">Real Time<br />Tracking</div>
+            <div className="hero-feature-card" role="listitem">
+              <div className="feature-icon-box">
+                <TrendingUp size={20} />
+              </div>
+              <div className="feature-text">
+                <h4>Real-Time Tracking</h4>
+                <p>Stay updated every mile</p>
+              </div>
             </div>
           </div>
 
@@ -218,156 +250,165 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onRequ
             ================================================================ */}
         <section className="login-card-floating-wrapper" aria-label="Sign In Form">
           <div className="login-card-container">
-            {/* Exact Brand Logo on White Card */}
+            {/* Centered Brand Logo on White Card */}
             <div className="form-brand-center">
-              <BrandLogo theme="light" size="lg" alt="North Eastern Carriers" />
+              <img
+                src={neclLogo}
+                alt="North Eastern Carriers"
+                className="form-brand-img"
+              />
             </div>
 
             {/* Form Headings */}
             <div className="form-heading-group">
               <h2 className="form-title">Welcome Back</h2>
-            <p className="form-desc">Login to your Admin Panel to manage operations</p>
-          </div>
-
-          {/* Role Switcher Tabs (Admin vs Super Admin) */}
-          <div className="role-tab-switcher" role="tablist" aria-label="Select Account Role">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={selectedRole === 'ADMIN'}
-              disabled={isLoading}
-              className={`role-tab-btn ${selectedRole === 'ADMIN' ? 'active' : ''}`}
-              onClick={() => handleRoleSelect('ADMIN')}
-            >
-              <User size={19} className="tab-icon" />
-              <div className="tab-text-group">
-                <span className="tab-main-label">Admin</span>
-                <span className="tab-sub-label">Operational Access</span>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              role="tab"
-              aria-selected={selectedRole === 'SUPER_ADMIN'}
-              disabled={isLoading}
-              className={`role-tab-btn ${selectedRole === 'SUPER_ADMIN' ? 'active' : ''}`}
-              onClick={() => handleRoleSelect('SUPER_ADMIN')}
-            >
-              <Crown size={19} className="tab-icon" />
-              <div className="tab-text-group">
-                <span className="tab-main-label">Super Admin</span>
-                <span className="tab-sub-label">Full System Access</span>
-              </div>
-            </button>
-          </div>
-
-          {/* Interactive Login Form */}
-          <form onSubmit={handleLoginSubmit} className="login-form-element" noValidate>
-            {errorMessage && (
-              <div className="form-alert-error" role="alert">
-                <ShieldAlert size={16} />
-                <span>{errorMessage}</span>
-              </div>
-            )}
-
-            {/* Email Field */}
-            <div className="form-field-group">
-              <label htmlFor="login-email" className="form-field-label">Email Address</label>
-              <div className="input-with-icon-wrap">
-                <Mail className="input-icon" size={18} />
-                <input
-                  id="login-email"
-                  type="email"
-                  required
-                  autoComplete="username"
-                  disabled={isLoading}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@necl.com"
-                  className="form-text-input"
-                />
-              </div>
+              <p className="form-desc">Sign in to your Admin Panel to manage operations.</p>
             </div>
 
-            {/* Password Field */}
-            <div className="form-field-group">
-              <label htmlFor="login-password" className="form-field-label">Password</label>
-              <div className="input-with-icon-wrap">
-                <Lock className="input-icon" size={18} />
-                <input
-                  id="login-password"
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  autoComplete="current-password"
-                  disabled={isLoading}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
-                  className="form-text-input"
-                />
-                <button
-                  type="button"
-                  className="password-toggle-btn"
-                  onClick={() => setShowPassword(!showPassword)}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  tabIndex={0}
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-              <div className="field-meta-row">
-                <span />
-                <button
-                  type="button"
-                  className="forgot-link-btn"
-                  onClick={() => {
-                    setForgotEmail(email);
-                    setForgotError('');
-                    setForgotSuccess('');
-                    setIsForgotModalOpen(true);
-                  }}
-                >
-                  Forgot Password?
-                </button>
-              </div>
+            {/* Role Switcher Cards (Admin vs Super Admin) */}
+            <div className="role-cards-grid" role="tablist" aria-label="Select Account Role">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={selectedRole === 'ADMIN'}
+                disabled={isLoading}
+                className={`role-card-btn ${selectedRole === 'ADMIN' ? 'active' : ''}`}
+                onClick={() => handleRoleSelect('ADMIN')}
+              >
+                <div className={`role-radio-circle ${selectedRole === 'ADMIN' ? 'checked' : ''}`}>
+                  {selectedRole === 'ADMIN' && <div className="role-radio-dot" />}
+                </div>
+                <User size={18} className="role-card-icon" />
+                <div className="role-card-text">
+                  <span className="role-card-title">Admin</span>
+                  <span className="role-card-sub">Operational Access</span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                role="tab"
+                aria-selected={selectedRole === 'SUPER_ADMIN'}
+                disabled={isLoading}
+                className={`role-card-btn ${selectedRole === 'SUPER_ADMIN' ? 'active' : ''}`}
+                onClick={() => handleRoleSelect('SUPER_ADMIN')}
+              >
+                <Crown size={18} className="role-card-icon" />
+                <div className="role-card-text">
+                  <span className="role-card-title">Super Admin</span>
+                  <span className="role-card-sub">Full System Access</span>
+                </div>
+                <div className={`role-radio-circle ${selectedRole === 'SUPER_ADMIN' ? 'checked' : ''}`} style={{ marginLeft: 'auto' }}>
+                  {selectedRole === 'SUPER_ADMIN' && <div className="role-radio-dot" />}
+                </div>
+              </button>
             </div>
 
-            {/* Primary Gold CTA */}
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="btn-login-orange-cta"
-            >
-              {isLoading ? (
-                <>
-                  <span className="spinner-sm" />
-                  <span>Signing in...</span>
-                </>
-              ) : (
-                <>
-                  <span>Login</span>
-                  <ArrowRight size={18} strokeWidth={2.5} />
-                </>
+            {/* Interactive Login Form */}
+            <form onSubmit={handleLoginSubmit} className="login-form-element" noValidate>
+              {errorMessage && (
+                <div className="form-alert-error" role="alert">
+                  <ShieldAlert size={16} />
+                  <span>{errorMessage}</span>
+                </div>
               )}
-            </button>
 
-            {/* Security Guarantee Box (Subtle, Clean) */}
-            <div className="security-assurance-box">
-              <ShieldCheck className="sec-icon" size={22} />
-              <div className="sec-text-wrap">
-                <strong className="sec-title">Secure Access</strong>
-                <p className="sec-desc">Your data is protected with industry-standard security measures.</p>
+              {/* Email Field */}
+              <div className="login-field-box">
+                <label htmlFor="login-email" className="login-field-label">Email Address</label>
+                <div className="login-input-container">
+                  <Mail className="login-input-icon" size={17} />
+                  <input
+                    id="login-email"
+                    type="email"
+                    required
+                    autoComplete="username"
+                    disabled={isLoading}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="admin@necl.com"
+                  />
+                  {isEmailValid && (
+                    <div style={{ marginLeft: "auto", paddingRight: "10px", color: "#10B981", display: "flex", alignItems: "center" }}>
+                      <CheckCircle2 size={16} />
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          </form>
-        </div>
-      </section>
+
+              {/* Password Field */}
+              <div className="login-field-box">
+                <label htmlFor="login-password" className="login-field-label">Password</label>
+                <div className="login-input-container">
+                  <Lock className="login-input-icon" size={17} />
+                  <input
+                    id="login-password"
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    autoComplete="current-password"
+                    disabled={isLoading}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onKeyDown={handleKeyDownPassword}
+                    onKeyUp={handleKeyDownPassword}
+                    placeholder="Enter your password"
+                  />
+                  <button
+                    type="button"
+                    className="login-eye-btn"
+                    onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    tabIndex={0}
+                  >
+                    {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                  </button>
+                </div>
+                {isCapsLockOn && (
+                  <div style={{ fontSize: "11px", color: "#F59E0B", marginTop: "4px", display: "flex", alignItems: "center", gap: "4px", fontWeight: 600 }}>
+                    <ShieldAlert size={13} />
+                    <span>Caps Lock is ON</span>
+                  </div>
+                )}
+                <div className="login-forgot-row">
+                  <button
+                    type="button"
+                    className="login-forgot-btn"
+                    onClick={() => {
+                      setForgotEmail(email);
+                      setForgotError('');
+                      setForgotSuccess('');
+                      setIsForgotModalOpen(true);
+                    }}
+                  >
+                    Forgot Password?
+                  </button>
+                </div>
+              </div>
+
+              {/* Primary Orange CTA */}
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="btn-login-orange-cta"
+              >
+                {isLoading ? (
+                  <>
+                    <span className="spinner-sm" />
+                    <span>Signing in...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Login</span>
+                    <ArrowRight size={18} strokeWidth={2.5} />
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
+        </section>
       </div>
 
-      {/* ================================================================
-          FORGOT PASSWORD MODAL (Production-Ready)
-          ================================================================ */}
+      {/* Forgot Password Modal */}
       {isForgotModalOpen && (
         <div className="modal-backdrop-overlay" onClick={() => setIsForgotModalOpen(false)}>
           <div
@@ -414,10 +455,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onRequ
                   </div>
                 )}
 
-                <div className="form-field-group">
-                  <label htmlFor="forgot-email-input" className="form-field-label">Administrator Email</label>
-                  <div className="input-with-icon-wrap">
-                    <Mail className="input-icon" size={18} />
+                <div className="login-field-box">
+                  <label htmlFor="forgot-email-input" className="login-field-label">Administrator Email</label>
+                  <div className="login-input-container">
+                    <Mail className="login-input-icon" size={17} />
                     <input
                       id="forgot-email-input"
                       type="email"
@@ -425,7 +466,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onRequ
                       value={forgotEmail}
                       onChange={(e) => setForgotEmail(e.target.value)}
                       placeholder="admin@necl.com"
-                      className="form-text-input"
                     />
                   </div>
                 </div>

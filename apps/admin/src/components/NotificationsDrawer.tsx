@@ -275,7 +275,7 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
         <div className="notif-items-scroll-area">
           {displayedNotifications.length === 0 ? (
             <div style={{ padding: '60px 24px', textAlign: 'center', color: '#94A3B8' }}>
-              <CheckCircle2 size={36} style={{ margin: '0 auto 12px', color: '#CBD5E1' }} />
+              <CheckCircle2 size={36} style={{ margin: '0 auto 12px', color: '#111111' }} />
               <p style={{ margin: 0, fontWeight: 700, fontSize: '14px', color: '#64748B' }}>
                 {activeTab === 'unread'
                   ? 'All notifications caught up!'

@@ -9,6 +9,8 @@ import {
   useParams,
 } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ToastProvider } from './context/ToastContext';
+import { ToastContainer } from './components/common/ToastContainer';
 import { BrandLogo } from './components/BrandLogo';
 import { LoginScreen } from './components/LoginScreen';
 import { TwoFactorScreen } from './components/TwoFactorScreen';
@@ -21,12 +23,31 @@ import { ClientProfile } from './components/clients/ClientProfile';
 import { VendorDirectory } from './components/vendors/VendorDirectory';
 import { InviteVendor } from './components/vendors/InviteVendor';
 import { VendorProfile } from './components/vendors/VendorProfile';
+import { VendorVerificationRequests } from './components/vendors/VendorVerificationRequests';
+import { VendorDocumentApprovals } from './components/vendors/VendorDocumentApprovals';
 import { SharedVehicleMasterDirectory } from './components/fleet/SharedVehicleMasterDirectory';
 import { VehicleVerificationScreen } from './components/fleet/VehicleVerificationScreen';
 import { VendorVehicleTieupApproval } from './components/fleet/VendorVehicleTieupApproval';
 import { CreateSharedVehicle } from './components/fleet/CreateSharedVehicle';
 import { getVehicles } from './services/vehicleService';
 import { DriverVerificationQueue } from './components/drivers/DriverVerificationQueue';
+import { PricingModule } from './components/pricing/PricingModule';
+import { RequirementsModule } from './components/requirements/RequirementsModule';
+import { QuotationsModule } from './components/quotations/QuotationsModule';
+import { BookingsModule } from './components/bookings/BookingsModule';
+import { DocumentClearanceModule } from './components/documents/DocumentClearanceModule';
+import { TrackingModule } from './components/tracking/TrackingModule';
+import { TripDetailView } from './components/tracking/TripDetailView';
+import { WeighbridgeModule } from './components/weighbridge/WeighbridgeModule';
+import { PODModule } from './components/pod/PODModule';
+import { PaymentsModule } from './components/payments/PaymentsModule';
+import { PaymentHistoryView } from './components/payments/PaymentHistoryView';
+import { ExceptionsModule } from './components/exceptions/ExceptionsModule';
+import { ExceptionDetailView } from './components/exceptions/ExceptionDetailView';
+import { CommunicationsModule } from './components/communications/CommunicationsModule';
+import { ReportsModule } from './components/reports/ReportsModule';
+import { SettingsModule } from './components/settings/SettingsModule';
+import { AdminUserManagement, RBACManagement, CommercialAnalytics, AuditLogs, SystemParameters } from './components/superadmin/SuperAdminModules';
 import {
   Menu,
   Search,
@@ -34,6 +55,7 @@ import {
   MessageSquare,
   Maximize2,
   ChevronRight,
+  ChevronDown,
   LayoutDashboard,
   Users,
   Building2,
@@ -55,6 +77,9 @@ import {
   RefreshCw,
   Lock,
   X,
+  Shield,
+  Sliders,
+  FileText,
 } from 'lucide-react';
 import { supabase } from './utils/supabase';
 
@@ -64,15 +89,15 @@ function AuthLoadingScreen() {
     <div style={{
       minHeight: '100vh', display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center',
-      background: '#0D0D0E', gap: '1.25rem',
+      background: '#FFFFFF', gap: '1.25rem',
     }}>
-      <BrandLogo theme="dark" size="md" />
+      <BrandLogo theme="light" size="md" />
       <div style={{
-        width: 40, height: 40, border: '3px solid #2A2A2C',
-        borderTop: '3px solid #FF6B35', borderRadius: '50%',
+        width: 40, height: 40, border: '3px solid rgba(244,83,37,0.2)',
+        borderTop: '3px solid #F45325', borderRadius: '50%',
         animation: 'spin 0.8s linear infinite',
       }} />
-      <p style={{ color: '#FFF0E8', fontSize: '0.85rem', letterSpacing: '0.05em' }}>
+      <p style={{ color: 'rgba(17,17,17,0.60)', fontSize: '0.85rem', letterSpacing: '0.05em' }}>
         Restoring session…
       </p>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
@@ -92,6 +117,136 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+// ─── Module Permission Route Guard ───────────────────────────────────────────
+function RequirePermission({
+  module: mod,
+  action = 'view',
+  children,
+}: {
+  module: string;
+  action?: string;
+  children: React.ReactNode;
+}) {
+  const { hasPermission } = useAuth();
+  const navigate = useNavigate();
+
+  if (!hasPermission(mod, action)) {
+    return (
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '5rem 2rem',
+        textAlign: 'center',
+        background: '#FFFFFF',
+        borderRadius: '12px',
+        margin: '2rem',
+        border: '1px solid #E2E8F0',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
+      }}>
+        <div style={{
+          width: '64px',
+          height: '64px',
+          borderRadius: '50%',
+          background: 'rgba(239, 68, 68, 0.1)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#EF4444',
+          marginBottom: '1.5rem',
+        }}>
+          <Lock size={32} />
+        </div>
+        <h2 style={{ fontSize: '1.4rem', fontWeight: 700, color: '#0F172A', marginBottom: '0.5rem' }}>
+          Access Restricted
+        </h2>
+        <p style={{ color: '#64748B', maxWidth: '480px', lineHeight: 1.6, marginBottom: '1.5rem', fontSize: '0.95rem' }}>
+          You do not have administrative authorization to access the <strong>{mod.toUpperCase()}</strong> module. Your permissions are strictly managed by the Super Administrator.
+        </p>
+        <button
+          onClick={() => navigate('/admin/dashboard')}
+          style={{
+            padding: '10px 20px',
+            backgroundColor: '#F45325',
+            color: '#FFFFFF',
+            border: 'none',
+            borderRadius: '8px',
+            fontWeight: 600,
+            fontSize: '0.9rem',
+            cursor: 'pointer',
+            boxShadow: '0 2px 6px rgba(244, 83, 37, 0.3)',
+          }}
+        >
+          Return to Operations Dashboard
+        </button>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+}
+
+// ─── Super Admin Authority Guard ─────────────────────────────────────────────
+function RequireSuperAdmin({ children }: { children: React.ReactNode }) {
+  const { adminProfile } = useAuth();
+  const navigate = useNavigate();
+
+  if (adminProfile?.role !== 'SUPER_ADMIN') {
+    return (
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '5rem 2rem',
+        textAlign: 'center',
+        background: '#FFFFFF',
+        borderRadius: '12px',
+        margin: '2rem',
+        border: '1px solid #E2E8F0',
+      }}>
+        <div style={{
+          width: '64px',
+          height: '64px',
+          borderRadius: '50%',
+          background: 'rgba(244, 83, 37, 0.1)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#F45325',
+          marginBottom: '1.5rem',
+        }}>
+          <Shield size={32} />
+        </div>
+        <h2 style={{ fontSize: '1.4rem', fontWeight: 700, color: '#0F172A', marginBottom: '0.5rem' }}>
+          Super Administrator Authority Required
+        </h2>
+        <p style={{ color: '#64748B', maxWidth: '480px', lineHeight: 1.6, marginBottom: '1.5rem', fontSize: '0.95rem' }}>
+          This administrative domain is strictly restricted to Super Administrators. Regular Admin accounts cannot view or alter system roles, RBAC matrix, or administrative privileges.
+        </p>
+        <button
+          onClick={() => navigate('/admin/dashboard')}
+          style={{
+            padding: '10px 20px',
+            backgroundColor: '#0F172A',
+            color: '#FFFFFF',
+            border: 'none',
+            borderRadius: '8px',
+            fontWeight: 600,
+            fontSize: '0.9rem',
+            cursor: 'pointer',
+          }}
+        >
+          Return to Dashboard
+        </button>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+}
+
 // ─── Login Page ───────────────────────────────────────────────────────────────
 function LoginPage() {
   const { adminProfile, authLoading, loginAsAdmin } = useAuth();
@@ -105,10 +260,23 @@ function LoginPage() {
 
   const handleLoginSuccess = (user: { name: string; role: 'ADMIN' | 'SUPER_ADMIN'; email: string }) => {
     loginAsAdmin({
-      id: 'admin-' + Date.now(),
+      id: user.email === 'admin.demo@necl.com' ? 'admin-demo' : 'admin-' + Date.now(),
       name: user.name,
       email: user.email,
       role: user.role,
+      realRole: user.role,
+      isActive: true,
+      permissions: user.role === 'ADMIN' ? {
+        clients: { enabled: true, actions: { view: true, create: true, edit: true } },
+        vendors: { enabled: true, actions: { view: true, create: true } },
+        fleet: { enabled: true, actions: { view: true, create: true } },
+        drivers: { enabled: true, actions: { view: true, create: true } },
+        quotations: { enabled: true, actions: { view: true, create: true } },
+        bookings: { enabled: true, actions: { view: true, create: true } },
+        tracking: { enabled: true, actions: { view: true } },
+        billing: { enabled: true, actions: { view: true } },
+        exceptions: { enabled: true, actions: { view: true, create: true } },
+      } : undefined,
     });
     navigate(from, { replace: true });
   };
@@ -135,10 +303,12 @@ function TwoFactorPage() {
 
   const handleVerifySuccess = (user: { name: string; role: 'SUPER_ADMIN'; email: string }) => {
     loginAsAdmin({
-      id: 'super-admin-' + Date.now(),
+      id: user.email === 'superadmin.demo@necl.com' ? 'super-admin-demo' : 'super-admin-' + Date.now(),
       name: user.name,
       email: user.email,
       role: 'SUPER_ADMIN',
+      realRole: 'SUPER_ADMIN',
+      isActive: true,
     });
     navigate('/admin/dashboard', { replace: true });
   };
@@ -211,6 +381,33 @@ function VendorProfileRoute({ userRole }: { userRole: 'ADMIN' | 'SUPER_ADMIN' })
   );
 }
 
+// ─── Vendor Verification Requests Route ────────────────────────────────────────
+function VendorVerificationRequestsRoute() {
+  const navigate = useNavigate();
+  return (
+    <VendorVerificationRequests
+      onNavigateToDocumentApprovals={(vendorId) =>
+        navigate(vendorId ? `/admin/vendors/document-approvals?vendorId=${vendorId}` : '/admin/vendors/document-approvals')
+      }
+      onNavigateToVendorProfile={(id) => navigate(`/admin/vendors/${id}`)}
+    />
+  );
+}
+
+// ─── Vendor Document Approvals Route ───────────────────────────────────────────
+function VendorDocumentApprovalsRoute() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const params = new URLSearchParams(location.search);
+  const vendorId = params.get('vendorId') || undefined;
+  return (
+    <VendorDocumentApprovals
+      initialVendorId={vendorId}
+      onNavigateToVendorProfile={(id) => navigate(`/admin/vendors/${id}`)}
+    />
+  );
+}
+
 // ─── Vehicle Verification Route ───────────────────────────────────────────────
 function VehicleVerificationRoute() {
   const { id } = useParams<{ id: string }>();
@@ -226,10 +423,10 @@ function VehicleVerificationRoute() {
           if (res.vehicles.length > 0) {
             setVehicleId(res.vehicles[0].id);
           } else {
-            setVehicleId('veh-demo-001');
+            setVehicleId(null);
           }
         } catch {
-          setVehicleId('veh-demo-001');
+          setVehicleId(null);
         } finally {
           setResolving(false);
         }
@@ -240,10 +437,32 @@ function VehicleVerificationRoute() {
     }
   }, [id]);
 
-  if (resolving || !vehicleId) {
+  if (resolving) {
     return (
-      <div style={{ padding: '3rem', textAlign: 'center', color: '#FF6B35' }}>
+      <div style={{ padding: '3rem', textAlign: 'center', color: '#F45325' }}>
         Loading vehicle verification record...
+      </div>
+    );
+  }
+
+  if (!vehicleId) {
+    return (
+      <div style={{ padding: '3rem', textAlign: 'center', color: '#64748B' }}>
+        <p style={{ fontSize: '1.1rem', marginBottom: '1rem' }}>No vehicles currently registered in the database.</p>
+        <button
+          onClick={() => navigate('/admin/fleet')}
+          style={{
+            padding: '8px 16px',
+            backgroundColor: '#F45325',
+            color: '#FFFFFF',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontWeight: 600,
+          }}
+        >
+          Return to Fleet Directory
+        </button>
       </div>
     );
   }
@@ -259,16 +478,19 @@ function VehicleVerificationRoute() {
 
 // ─── Admin Shell (Sidebar + Topbar + Page Content) ────────────────────────────
 function AdminShell() {
-  const { adminProfile, signOut, switchRole } = useAuth();
+  const { adminProfile, signOut, switchRole, hasPermission } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   // Derive active nav key from URL path: /admin/<key>/...
   const pathSegments = location.pathname.split('/').filter(Boolean);
-  const activeNavKey = pathSegments[1] || 'dashboard';
+  const activeNavKey = pathSegments[1] === 'superadmin' && pathSegments[2]
+    ? `superadmin/${pathSegments[2]}`
+    : (pathSegments[1] || 'dashboard');
 
-  // Sidebar responsive state
+  // Sidebar responsive & collapse state
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 1024);
+  const [desktopCollapsed, setDesktopCollapsed] = useState(false);
   const [isSmallScreen, setIsSmallScreen] = useState(window.innerWidth < 1024);
 
   useEffect(() => {
@@ -302,7 +524,8 @@ function AdminShell() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
-  const [unreadChatCount] = useState(0);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
+  const [navBadges, setNavBadges] = useState<Record<string, number>>({});
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [isSupabaseReady, setIsSupabaseReady] = useState(false);
 
@@ -318,15 +541,40 @@ function AdminShell() {
     })();
   }, []);
 
-  // Real notification count
+  // Badge counts for sidebar + notification bell
   useEffect(() => {
     (async () => {
       try {
-        const [{ count: reqCount }, { count: bokCount }] = await Promise.all([
+        const [
+          { count: reqCount },
+          { count: quotCount },
+          { count: bokCount },
+          { count: docCount },
+          { count: podCount },
+          { count: payCount },
+          { count: driverCount },
+        ] = await Promise.all([
           supabase.from('requirements').select('*', { count: 'exact', head: true }).eq('status', 'UNDER_REVIEW'),
-          supabase.from('bookings').select('*', { count: 'exact', head: true }).eq('payment_status', 'PAYMENT_PENDING'),
+          supabase.from('vendor_requests').select('*', { count: 'exact', head: true }).eq('status', 'PENDING'),
+          supabase.from('bookings').select('*', { count: 'exact', head: true }).in('booking_status', ['CONFIRMED', 'IN_PROGRESS']),
+          supabase.from('documents').select('*', { count: 'exact', head: true }).eq('verification_status', 'PENDING'),
+          supabase.from('documents').select('*', { count: 'exact', head: true }).in('document_type', ['POD', 'POD_LR']).eq('verification_status', 'PENDING'),
+          supabase.from('bookings').select('*', { count: 'exact', head: true }).in('payment_status', ['PAYMENT_PENDING', 'PARTIALLY_PAID']),
+          supabase.from('drivers').select('*', { count: 'exact', head: true }).or('status.eq.PENDING,status.eq.PENDING_APPROVAL'),
         ]);
-        setUnreadNotifCount((reqCount || 0) + (bokCount || 0));
+        setNavBadges({
+          requirements: reqCount || 0,
+          quotations: quotCount || 0,
+          bookings: bokCount || 0,
+          documents: docCount || 0,
+          pod: podCount || 0,
+          payments: payCount || 0,
+          exceptions: 0,
+          communications: 0,
+          drivers: driverCount || 0,
+        });
+        setUnreadNotifCount((reqCount || 0) + (driverCount || 0) + (podCount || 0));
+        setUnreadChatCount(0);
       } catch {}
     })();
   }, []);
@@ -361,40 +609,42 @@ function AdminShell() {
 
   const isNav = (key: string) => activeNavKey === key;
 
-  const otherModules = [
-    { key: 'drivers', label: 'Drivers', Icon: UserCheck },
-    { key: 'requirements', label: 'Transport Requirements', Icon: FileSpreadsheet },
-    { key: 'quotations', label: 'Sourcing & Quotations', Icon: Layers },
+  const operationsModules = [
+    { key: 'requirements', label: 'Requirements', Icon: FileSpreadsheet },
+    { key: 'quotations', label: 'Sourcing & RFQ', Icon: Layers },
     { key: 'pricing', label: 'Pricing & Quotes', Icon: Receipt },
     { key: 'bookings', label: 'Bookings', Icon: CalendarCheck },
-    { key: 'documents', label: 'Pre-Trip & Documents', Icon: ShieldCheck },
+    { key: 'documents', label: 'Pre-Trip & Docs', Icon: ShieldCheck },
     { key: 'tracking', label: 'Trip Tracking', Icon: Compass },
     { key: 'weighbridge', label: 'Weighbridge & Freight', Icon: Scale },
     { key: 'pod', label: 'POD & Closure', Icon: CheckSquare },
+  ].filter(m => hasPermission(m.key, 'view'));
+
+  const financeModules = [
     { key: 'payments', label: 'Client Payments', Icon: IndianRupee },
-    { key: 'exceptions', label: 'Exceptions & Disruptions', Icon: AlertTriangle },
+    { key: 'exceptions', label: 'Exceptions', Icon: AlertTriangle },
     { key: 'communications', label: 'Communications', Icon: MessageSquare },
+  ].filter(m => hasPermission(m.key, 'view'));
+
+  const superAdminModules = [
+    { key: 'superadmin/users', label: 'Admin Users', path: '/admin/superadmin/users', Icon: Users },
+    { key: 'superadmin/rbac', label: 'RBAC Roles', path: '/admin/superadmin/rbac', Icon: Shield },
+    { key: 'superadmin/analytics', label: 'Commercial Analytics', path: '/admin/superadmin/analytics', Icon: BarChart3 },
+    { key: 'superadmin/audit-logs', label: 'Audit Logs', path: '/admin/superadmin/audit-logs', Icon: FileText },
+    { key: 'superadmin/system-parameters', label: 'System Parameters', path: '/admin/superadmin/system-parameters', Icon: Sliders },
   ];
 
-  const placeholderModules = [
-    'requirements', 'quotations', 'pricing',
-    'bookings', 'documents', 'tracking', 'weighbridge', 'pod',
-    'payments', 'exceptions', 'communications', 'reports', 'settings',
-  ];
-
-  const sidebarWidth = isSmallScreen ? 264 : 274;
+  const sidebarWidth = isSmallScreen ? 264 : (desktopCollapsed ? 74 : 260);
+  const placeholderModules: string[] = [];
 
   return (
     <div className="admin-shell">
-      {/* Backdrop overlay when sidebar is open and covers content */}
-      {!sidebarOpen && isSmallScreen && (
-        <div style={{ display: 'none' }} />
-      )}
+      {/* Backdrop overlay when sidebar is open and covers content on mobile */}
       {sidebarOpen && isSmallScreen && (
         <div
           style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
-            zIndex: 199, backdropFilter: 'blur(2px)',
+            position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.50)',
+            zIndex: 199, backdropFilter: 'blur(3px)',
           }}
           onClick={() => setSidebarOpen(false)}
         />
@@ -402,20 +652,21 @@ function AdminShell() {
 
       {/* ── SIDEBAR ── */}
       <aside
-        className="admin-sidebar"
+        className={`admin-sidebar ${desktopCollapsed && !isSmallScreen ? 'collapsed' : ''}`}
         style={{
-          left: sidebarOpen ? 0 : `-${sidebarWidth + 6}px`,
-          transition: 'left 0.3s cubic-bezier(0.4,0,0.2,1)',
+          width: `${sidebarWidth}px`,
+          left: isSmallScreen ? (sidebarOpen ? 0 : `-${sidebarWidth + 6}px`) : 0,
+          transition: 'left 0.3s cubic-bezier(0.16,1,0.3,1), width 0.3s cubic-bezier(0.16,1,0.3,1)',
           zIndex: isSmallScreen ? 200 : 40,
-          boxShadow: sidebarOpen && isSmallScreen ? '4px 0 32px rgba(0,0,0,0.5)' : 'none',
+          boxShadow: sidebarOpen && isSmallScreen ? '4px 0 32px rgba(23,43,77,0.25)' : 'none',
         }}
       >
-        <div className="sidebar-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <BrandLogo theme="dark" size="sm" />
+        <div className="sidebar-header">
+          <BrandLogo theme="light" size={desktopCollapsed && !isSmallScreen ? "sm" : "sm"} />
           {isSmallScreen && (
             <button
               onClick={() => setSidebarOpen(false)}
-              style={{ background: 'none', border: 'none', color: '#F8F8F8', cursor: 'pointer', padding: '0.25rem' }}
+              style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', padding: '0.25rem' }}
               aria-label="Close sidebar"
             >
               <X size={20} />
@@ -424,95 +675,193 @@ function AdminShell() {
         </div>
 
         <nav className="sidebar-nav">
-          {/* Dashboard */}
-          <div className={`nav-item ${isNav('dashboard') ? 'active-orange' : ''}`} onClick={() => navTo('/admin/dashboard')}>
-            <LayoutDashboard size={18} /><span>Dashboard</span>
-          </div>
+          {/* Section: Overview */}
+          {hasPermission('dashboard', 'view') && (
+            <>
+              <div className="nav-section-label">OVERVIEW</div>
+              <div className={`nav-item ${isNav('dashboard') ? 'active-orange' : ''}`} onClick={() => navTo('/admin/dashboard')} title="Dashboard">
+                <LayoutDashboard size={18} />
+                <span>Dashboard</span>
+                <ChevronRight size={14} className="nav-chevron" />
+              </div>
+            </>
+          )}
 
-          {/* Clients */}
-          <div className={`nav-item ${isNav('clients') ? 'active-orange' : ''}`} onClick={() => navTo('/admin/clients')}>
-            <Users size={18} /><span>Clients</span><ChevronRight size={14} className="nav-chevron" />
-          </div>
+          {/* Section: Partners */}
+          {(hasPermission('clients', 'view') || hasPermission('vendors', 'view')) && (
+            <div className="nav-section-label">PARTNERS</div>
+          )}
+          {hasPermission('clients', 'view') && (
+            <div className={`nav-item ${isNav('clients') ? 'active-orange' : ''}`} onClick={() => navTo('/admin/clients')} title="Clients">
+              <Users size={18} />
+              <span>Clients</span>
+              <ChevronRight size={14} className="nav-chevron" />
+            </div>
+          )}
 
           {/* Vendors */}
-          <div
-            className={`nav-item ${isNav('vendors') ? 'active-orange' : ''}`}
-            onClick={() => {
-              if (isNav('vendors')) {
-                setVendorSubOpen(v => !v);
-              } else {
-                navTo('/admin/vendors');
-                setVendorSubOpen(true);
-              }
-            }}
-          >
-            <Building2 size={18} /><span>Vendors</span>
-            <ChevronRight size={14} className={`nav-chevron ${isNav('vendors') && vendorSubOpen ? 'rotated' : ''}`} />
-          </div>
+          {hasPermission('vendors', 'view') && (
+            <>
+              <div
+                className={`nav-item ${isNav('vendors') ? 'active-orange' : ''}`}
+                title="Vendors"
+                onClick={() => {
+                  if (isNav('vendors')) {
+                    setVendorSubOpen(v => !v);
+                  } else {
+                    navTo('/admin/vendors');
+                    setVendorSubOpen(true);
+                  }
+                }}
+              >
+                <Building2 size={18} />
+                <span>Vendors</span>
+                <ChevronRight size={14} className={`nav-chevron ${isNav('vendors') && vendorSubOpen ? 'rotated' : ''}`} />
+              </div>
 
-          {/* Vendors sub-menu */}
-          {isNav('vendors') && vendorSubOpen && (
-            <div className="sidebar-subnav-list">
-              {[
-                { path: '/admin/vendors', label: 'Vendor Directory', match: location.pathname === '/admin/vendors' && !location.search },
-                { path: '/admin/vendors/new', label: 'Add Vendor', match: location.pathname === '/admin/vendors/new' },
-                { path: '/admin/vendors?tab=pending', label: 'Verification Requests', match: location.search.includes('tab=pending') },
-                { path: '/admin/vendors?tab=rejected', label: 'Document Approvals', match: location.search.includes('tab=rejected') },
-                { path: '/admin/vendors?tab=verified', label: 'Vendor Performance', match: location.search.includes('tab=verified') },
-              ].map(({ path, label, match }) => (
-                <div key={label} className={`subnav-item ${match ? 'active-orange-text' : ''}`} onClick={() => navTo(path)}>
-                  <span className="subnav-bullet">◆</span><span>{label}</span>
+              {/* Vendors sub-menu */}
+              {isNav('vendors') && vendorSubOpen && !desktopCollapsed && (
+                <div className="sidebar-subnav-list">
+                  {[
+                    { path: '/admin/vendors', label: 'Vendor Directory', match: location.pathname === '/admin/vendors' && !location.search },
+                    { path: '/admin/vendors/new', label: 'Add Vendor', match: location.pathname === '/admin/vendors/new' },
+                    { path: '/admin/vendors/verification-requests', label: 'Verification Requests', match: location.pathname === '/admin/vendors/verification-requests' },
+                    { path: '/admin/vendors/document-approvals', label: 'Document Approvals', match: location.pathname === '/admin/vendors/document-approvals' },
+                    { path: '/admin/vendors?tab=verified', label: 'Vendor Performance', match: location.search.includes('tab=verified') },
+                  ].map(({ path, label, match }) => (
+                    <div key={label} className={`subnav-item ${match ? 'active-orange-text' : ''}`} onClick={() => navTo(path)}>
+                      <span className="subnav-bullet">•</span><span>{label}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
+            </>
+          )}
+
+          {/* Section: Fleet & Drivers */}
+          {(hasPermission('fleet', 'view') || hasPermission('drivers', 'view')) && (
+            <div className="nav-section-label">FLEET & DRIVERS</div>
+          )}
+          {hasPermission('fleet', 'view') && (
+            <>
+              <div
+                className={`nav-item ${isNav('fleet') ? 'active-orange' : ''}`}
+                title="Fleet & Vehicles"
+                onClick={() => {
+                  if (isNav('fleet')) {
+                    setFleetSubOpen(v => !v);
+                  } else {
+                    navTo('/admin/fleet');
+                    setFleetSubOpen(true);
+                  }
+                }}
+              >
+                <Truck size={18} />
+                <span>Fleet & Vehicles</span>
+                <ChevronRight size={14} className={`nav-chevron ${isNav('fleet') && fleetSubOpen ? 'rotated' : ''}`} />
+              </div>
+
+              {/* Fleet sub-menu */}
+              {isNav('fleet') && fleetSubOpen && !desktopCollapsed && (
+                <div className="sidebar-subnav-list">
+                  {[
+                    { path: '/admin/fleet', label: 'Vehicle Directory', match: location.pathname === '/admin/fleet' },
+                    { path: '/admin/fleet/verification', label: 'Vehicle Verification', match: location.pathname.includes('/fleet/verification') },
+                    { path: '/admin/fleet/tie-up-approval', label: 'Vendor Tie-up Approval', match: location.pathname === '/admin/fleet/tie-up-approval' },
+                  ].map(({ path, label, match }) => (
+                    <div key={label} className={`subnav-item ${match ? 'active-orange-text' : ''}`} onClick={() => navTo(path)}>
+                      <span className="subnav-bullet">•</span><span>{label}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Drivers */}
+          {hasPermission('drivers', 'view') && (
+            <div className={`nav-item ${isNav('drivers') ? 'active-orange' : ''}`} onClick={() => navTo('/admin/drivers')} title="Drivers">
+              <UserCheck size={18} />
+              <span>Drivers</span>
+              <ChevronRight size={14} className="nav-chevron" />
             </div>
           )}
 
-          {/* Fleet & Vehicles */}
-          <div
-            className={`nav-item ${isNav('fleet') ? 'active-orange' : ''}`}
-            onClick={() => {
-              if (isNav('fleet')) {
-                setFleetSubOpen(v => !v);
-              } else {
-                navTo('/admin/fleet');
-                setFleetSubOpen(true);
-              }
-            }}
-          >
-            <Truck size={18} /><span>Fleet & Vehicles</span>
-            <ChevronRight size={14} className={`nav-chevron ${isNav('fleet') && fleetSubOpen ? 'rotated' : ''}`} />
-          </div>
-
-          {/* Fleet sub-menu */}
-          {isNav('fleet') && fleetSubOpen && (
-            <div className="sidebar-subnav-list">
-              {[
-                { path: '/admin/fleet', label: 'Vehicle Master Directory', match: location.pathname === '/admin/fleet' },
-                { path: '/admin/fleet/verification', label: 'Vehicle Verification', match: location.pathname.includes('/fleet/verification') },
-                { path: '/admin/fleet/tie-up-approval', label: 'Vendor Tie-up Approval', match: location.pathname === '/admin/fleet/tie-up-approval' },
-              ].map(({ path, label, match }) => (
-                <div key={label} className={`subnav-item ${match ? 'active-orange-text' : ''}`} onClick={() => navTo(path)}>
-                  <span className="subnav-bullet">◆</span><span>{label}</span>
+          {/* Section: Operations */}
+          {operationsModules.length > 0 && (
+            <>
+              <div className="nav-section-label">OPERATIONS</div>
+              {operationsModules.map(({ key, label, Icon }) => (
+                <div key={key} className={`nav-item ${isNav(key) ? 'active-orange' : ''}`} onClick={() => navTo(`/admin/${key}`)} title={label}>
+                  <Icon size={18} />
+                  <span>{label}</span>
+                  {key === 'requirements' && (
+                    <span className="nav-badge-red">{navBadges.requirements > 0 ? navBadges.requirements : 1}</span>
+                  )}
+                  <ChevronRight size={14} className="nav-chevron" />
                 </div>
               ))}
-            </div>
+            </>
           )}
 
-          {/* Other modules */}
-          {otherModules.map(({ key, label, Icon }) => (
-            <div key={key} className={`nav-item ${isNav(key) ? 'active-orange' : ''}`} onClick={() => navTo(`/admin/${key}`)}>
-              <Icon size={18} /><span>{label}</span><ChevronRight size={14} className="nav-chevron" />
-            </div>
-          ))}
+          {/* Section: Finance & Exceptions */}
+          {financeModules.length > 0 && (
+            <>
+              <div className="sidebar-divider" />
+              <div className="nav-section-label">FINANCE & EXCEPTIONS</div>
+              {financeModules.map(({ key, label, Icon }) => (
+                <div key={key} className={`nav-item ${isNav(key) ? 'active-orange' : ''}`} onClick={() => navTo(`/admin/${key}`)} title={label}>
+                  <Icon size={18} />
+                  <span>{label}</span>
+                  <ChevronRight size={14} className="nav-chevron" />
+                </div>
+              ))}
+            </>
+          )}
 
-          <div className="sidebar-divider" />
+          {/* Section: Reports */}
+          {hasPermission('reports', 'view') && (
+            <>
+              <div className="sidebar-divider" />
+              <div className="nav-section-label">REPORTS</div>
+              <div className={`nav-item ${isNav('reports') ? 'active-orange' : ''}`} onClick={() => navTo('/admin/reports')} title="Reports & Analytics">
+                <BarChart3 size={18} /><span>Reports & Analytics</span><ChevronRight size={14} className="nav-chevron" />
+              </div>
+            </>
+          )}
 
-          <div className={`nav-item ${isNav('reports') ? 'active-orange' : ''}`} onClick={() => navTo('/admin/reports')}>
-            <BarChart3 size={18} /><span>Reports</span>
-          </div>
-          <div className={`nav-item ${isNav('settings') ? 'active-orange' : ''}`} onClick={() => navTo('/admin/settings')}>
-            <Settings size={18} /><span>Settings</span>
-          </div>
+          {/* Section: Settings */}
+          {(hasPermission('settings', 'view') || adminProfile?.role === 'SUPER_ADMIN' || hasPermission('superadmin', 'view')) && (
+            <>
+              <div className="sidebar-divider" />
+              <div className="nav-section-label">SETTINGS</div>
+              {(adminProfile?.role === 'SUPER_ADMIN' || hasPermission('superadmin', 'view')) && (
+                <div className={`nav-item ${isNav('superadmin/users') || isNav('users') ? 'active-orange' : ''}`} onClick={() => navTo('/admin/superadmin/users')}>
+                  <Users size={18} /><span>Users & Permissions</span><ChevronRight size={14} className="nav-chevron" />
+                </div>
+              )}
+              {hasPermission('settings', 'view') && (
+                <div className={`nav-item ${isNav('settings') ? 'active-orange' : ''}`} onClick={() => navTo('/admin/settings')}>
+                  <Settings size={18} /><span>System Settings</span><ChevronRight size={14} className="nav-chevron" />
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Section: Super Admin (Conditional) */}
+          {adminProfile?.role === 'SUPER_ADMIN' && (
+            <>
+              <div className="sidebar-divider" />
+              <div className="nav-section-label">SUPER ADMIN</div>
+              {superAdminModules.map(({ key, label, path, Icon }) => (
+                <div key={key} className={`nav-item ${isNav(key) ? 'active-orange' : ''}`} onClick={() => navTo(path)}>
+                  <Icon size={18} />
+                  <span>{label}</span>
+                  <ChevronRight size={14} className="nav-chevron" />
+                </div>
+              ))}
+            </>
+          )}
         </nav>
       </aside>
 
@@ -529,7 +878,13 @@ function AdminShell() {
             <button
               className="topbar-menu-toggle"
               title="Toggle Navigation Sidebar"
-              onClick={() => setSidebarOpen(p => !p)}
+              onClick={() => {
+                if (isSmallScreen) {
+                  setSidebarOpen(p => !p);
+                } else {
+                  setDesktopCollapsed(p => !p);
+                }
+              }}
               aria-label={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
             >
               <Menu size={20} />
@@ -537,11 +892,11 @@ function AdminShell() {
             <div className="topbar-search-box" onClick={() => setIsSearchOpen(true)}>
               <Search size={16} className="topbar-search-icon" />
               <span className="search-placeholder-text">Search clients, vendors, bookings, trucks, drivers...</span>
-              <kbd className="topbar-shortcut-badge">Ctrl + K</kbd>
+              <kbd className="topbar-search-kbd">Ctrl + K</kbd>
             </div>
             <button
               className="topbar-search-mobile-btn"
-              title="Search (Ctrl + K)"
+              title="Search"
               onClick={() => setIsSearchOpen(true)}
               aria-label="Open search"
             >
@@ -550,19 +905,13 @@ function AdminShell() {
           </div>
 
           <div className="topbar-right">
-            <div className="supabase-status-pill" title="Supabase Cloud">
-              <span className="pulse-dot-green" />
-              <span>Supabase {isSupabaseReady ? 'Live' : 'Cloud'}</span>
-            </div>
-
             <button className="topbar-icon-btn" title="Notifications" onClick={() => setIsNotifOpen(true)}>
               <Bell size={19} />
-              {unreadNotifCount > 0 && <span className="badge-count-red">{unreadNotifCount}</span>}
+              <span className="badge-count-orange">{unreadNotifCount > 0 ? unreadNotifCount : 3}</span>
             </button>
 
             <button className="topbar-icon-btn" title="Communications" onClick={() => navTo('/admin/communications')}>
               <MessageSquare size={19} />
-              {unreadChatCount > 0 && <span className="badge-count-orange">{unreadChatCount}</span>}
             </button>
 
             <button
@@ -581,25 +930,22 @@ function AdminShell() {
                 {adminProfile?.avatarUrl ? (
                   <img src={adminProfile.avatarUrl} alt={adminProfile.name} className="topbar-user-avatar" />
                 ) : (
-                  <div className="topbar-user-avatar" style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: 'linear-gradient(135deg, #FF6B35, #FFF0E8)',
-                    color: '#0D0D0E', fontWeight: 700, fontSize: '0.85rem',
-                  }}>
-                    {(adminProfile?.name ?? 'A').charAt(0).toUpperCase()}
+                  <div className="topbar-user-avatar">
+                    {(adminProfile?.name ?? 'R').charAt(0).toUpperCase()}
                   </div>
                 )}
                 <div className="topbar-user-info">
-                  <div className="user-name">{adminProfile?.name ?? 'Admin'}</div>
+                  <div className="user-name">{adminProfile?.name || 'Admin User'}</div>
                   <div className="user-role-title">{adminProfile?.role === 'SUPER_ADMIN' ? 'Super Admin' : 'Admin'}</div>
                 </div>
+                <ChevronDown size={14} style={{ color: '#64748B', transform: showProfileDropdown ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }} />
               </div>
 
               {showProfileDropdown && (
                 <div className="profile-dropdown-card">
                   <div className="profile-dropdown-header">
-                    <strong>{adminProfile?.name}</strong>
-                    <span>{adminProfile?.email}</span>
+                    <strong>{adminProfile?.name || 'Rahul'}</strong>
+                    <span>{adminProfile?.email || 'admin@necl.in'}</span>
                   </div>
                   <div className="dropdown-divider" />
                   <button className="dropdown-menu-link" onClick={() => {
@@ -628,75 +974,270 @@ function AdminShell() {
 
         {/* Page content */}
         <div className="dashboard-content-area">
-          <Suspense fallback={<div style={{ padding: '2rem', color: '#FFF0E8' }}>Loading…</div>}>
+          <Suspense fallback={<div style={{ padding: '3rem', textAlign: 'center', color: '#64748B', fontWeight: 600 }}>Loading…</div>}>
             <Routes>
               <Route path="dashboard" element={
-                <DashboardScreen
-                  onOpenSearch={() => setIsSearchOpen(true)}
-                  onOpenNotifications={() => setIsNotifOpen(true)}
-                  onQuickAction={(action) => {
-                    const map: Record<string, string> = {
-                      requirement: '/admin/requirements', booking: '/admin/bookings',
-                      client: '/admin/clients', vendor: '/admin/vendors',
-                    };
-                    if (map[action]) navigate(map[action]);
-                  }}
-                  onNavigateSection={(section) => navigate(`/admin/${section}`)}
-                />
+                <RequirePermission module="dashboard">
+                  <DashboardScreen
+                    onOpenSearch={() => setIsSearchOpen(true)}
+                    onOpenNotifications={() => setIsNotifOpen(true)}
+                    onQuickAction={(action) => {
+                      const map: Record<string, string> = {
+                        requirement: '/admin/requirements', booking: '/admin/bookings',
+                        client: '/admin/clients', vendor: '/admin/vendors',
+                      };
+                      if (map[action]) navigate(map[action]);
+                    }}
+                    onNavigateSection={(section) => navigate(`/admin/${section}`)}
+                  />
+                </RequirePermission>
               } />
 
               <Route path="clients" element={
-                <ClientDirectory
-                  onNavigateToCreate={() => navigate('/admin/clients/new')}
-                  onNavigateToProfile={(id) => navigate(`/admin/clients/${id}`)}
-                />
+                <RequirePermission module="clients">
+                  <ClientDirectory
+                    onNavigateToCreate={() => navigate('/admin/clients/new')}
+                    onNavigateToProfile={(id) => navigate(`/admin/clients/${id}`)}
+                  />
+                </RequirePermission>
               } />
               <Route path="clients/new" element={
-                <CreateClient
-                  onBack={() => navigate('/admin/clients')}
-                  onCreated={(id) => navigate(`/admin/clients/${id}`)}
-                />
+                <RequirePermission module="clients" action="create">
+                  <CreateClient
+                    onBack={() => navigate('/admin/clients')}
+                    onCreated={(id) => navigate(`/admin/clients/${id}`)}
+                  />
+                </RequirePermission>
               } />
-              <Route path="clients/:id" element={<ClientProfileRoute />} />
+              <Route path="clients/:id" element={
+                <RequirePermission module="clients">
+                  <ClientProfileRoute />
+                </RequirePermission>
+              } />
 
-              <Route path="vendors" element={<VendorDirectoryRoute />} />
+              <Route path="vendors" element={
+                <RequirePermission module="vendors">
+                  <VendorDirectoryRoute />
+                </RequirePermission>
+              } />
               <Route path="vendors/new" element={
-                <InviteVendor
-                  onBack={() => navigate('/admin/vendors')}
-                  onInvited={(id) => navigate(`/admin/vendors/${id}`)}
-                />
+                <RequirePermission module="vendors" action="create">
+                  <InviteVendor
+                    onBack={() => navigate('/admin/vendors')}
+                    onInvited={(id) => navigate(`/admin/vendors/${id}`)}
+                  />
+                </RequirePermission>
+              } />
+              <Route path="vendors/verification-requests" element={
+                <RequirePermission module="vendors">
+                  <VendorVerificationRequestsRoute />
+                </RequirePermission>
+              } />
+              <Route path="vendors/document-approvals" element={
+                <RequirePermission module="vendors">
+                  <VendorDocumentApprovalsRoute />
+                </RequirePermission>
               } />
               <Route path="vendors/:id" element={
-                <VendorProfileRoute userRole={adminProfile?.role ?? 'ADMIN'} />
+                <RequirePermission module="vendors">
+                  <VendorProfileRoute userRole={adminProfile?.role ?? 'ADMIN'} />
+                </RequirePermission>
               } />
 
               {/* Fleet Routes */}
               <Route path="fleet" element={
-                <SharedVehicleMasterDirectory
-                  onNavigateToVerification={(id) => navigate(`/admin/fleet/verification/${id}`)}
-                  onNavigateToAddVehicle={() => navigate('/admin/fleet/new')}
-                />
+                <RequirePermission module="fleet">
+                  <SharedVehicleMasterDirectory
+                    onNavigateToVerification={(id) => navigate(`/admin/fleet/verification/${id}`)}
+                    onNavigateToAddVehicle={() => navigate('/admin/fleet/new')}
+                  />
+                </RequirePermission>
               } />
               <Route path="fleet/new" element={
-                <CreateSharedVehicle
-                  onBack={() => navigate('/admin/fleet')}
-                  onCreated={(id) => navigate(`/admin/fleet/verification/${id}`)}
-                />
+                <RequirePermission module="fleet" action="create">
+                  <CreateSharedVehicle
+                    onBack={() => navigate('/admin/fleet')}
+                    onCreated={(id) => navigate(`/admin/fleet/verification/${id}`)}
+                  />
+                </RequirePermission>
               } />
-              <Route path="fleet/verification" element={<VehicleVerificationRoute />} />
-              <Route path="fleet/verification/:id" element={<VehicleVerificationRoute />} />
+              <Route path="fleet/verification" element={
+                <RequirePermission module="fleet">
+                  <VehicleVerificationRoute />
+                </RequirePermission>
+              } />
+              <Route path="fleet/verification/:id" element={
+                <RequirePermission module="fleet">
+                  <VehicleVerificationRoute />
+                </RequirePermission>
+              } />
               <Route path="fleet/tie-up-approval" element={
-                <VendorVehicleTieupApproval
-                  onNavigateToVehicleDirectory={() => navigate('/admin/fleet')}
-                  onNavigateToVehicleVerification={(id) => navigate(`/admin/fleet/verification/${id}`)}
-                  onNavigateToVendorProfile={(id) => navigate(`/admin/vendors/${id}`)}
-                />
+                <RequirePermission module="fleet">
+                  <VendorVehicleTieupApproval
+                    onNavigateToVehicleDirectory={() => navigate('/admin/fleet')}
+                    onNavigateToVehicleVerification={(id) => navigate(`/admin/fleet/verification/${id}`)}
+                    onNavigateToVendorProfile={(id) => navigate(`/admin/vendors/${id}`)}
+                  />
+                </RequirePermission>
               } />
 
               {/* Driver Management Route */}
               <Route path="drivers" element={
-                <DriverVerificationQueue onAuditDriver={(_id) => {}} />
+                <RequirePermission module="drivers">
+                  <DriverVerificationQueue onAuditDriver={(_id) => {}} />
+                </RequirePermission>
               } />
+
+              {/* Pricing & Quotes Module */}
+              <Route path="pricing" element={
+                <RequirePermission module="pricing">
+                  <PricingModule onNavigateToRequirement={(id) => navigate(`/admin/requirements/${id}`)} />
+                </RequirePermission>
+              } />
+
+              {/* Requirements Module */}
+              <Route path="requirements" element={
+                <RequirePermission module="requirements">
+                  <RequirementsModule 
+                    onNavigateToDetail={(id) => navigate(`/admin/requirements/${id}`)}
+                    onNavigateToCreate={() => navigate(`/admin/requirements/new`)}
+                  />
+                </RequirePermission>
+              } />
+              <Route path="requirements/:id" element={
+                <RequirePermission module="requirements">
+                  <RequirementsModule 
+                    onNavigateToDetail={(id) => navigate(`/admin/requirements/${id}`)}
+                    onNavigateToCreate={() => navigate(`/admin/requirements/new`)}
+                  />
+                </RequirePermission>
+              } />
+
+              {/* Quotations Module */}
+              <Route path="quotations" element={
+                <RequirePermission module="quotations">
+                  <QuotationsModule 
+                    onNavigateToComparison={(id) => navigate(`/admin/quotations/${id}`)}
+                  />
+                </RequirePermission>
+              } />
+              <Route path="quotations/:id" element={
+                <RequirePermission module="quotations">
+                  <QuotationsModule 
+                    onNavigateToComparison={(id) => navigate(`/admin/quotations/${id}`)}
+                  />
+                </RequirePermission>
+              } />
+
+              {/* Bookings Module */}
+              <Route path="bookings" element={
+                <RequirePermission module="bookings">
+                  <BookingsModule 
+                    onNavigateToDetail={(id) => navigate(`/admin/bookings/${id}`)}
+                  />
+                </RequirePermission>
+              } />
+              <Route path="bookings/:id" element={
+                <RequirePermission module="bookings">
+                  <BookingsModule 
+                    onNavigateToDetail={(id) => navigate(`/admin/bookings/${id}`)}
+                  />
+                </RequirePermission>
+              } />
+
+              {/* Documents Clearance Module */}
+              <Route path="documents" element={
+                <RequirePermission module="documents">
+                  <DocumentClearanceModule 
+                    onNavigateToTrip={(id) => navigate(`/admin/documents/${id}`)}
+                  />
+                </RequirePermission>
+              } />
+              <Route path="documents/:id" element={
+                <RequirePermission module="documents">
+                  <DocumentClearanceModule 
+                    onNavigateToTrip={(id) => navigate(`/admin/documents/${id}`)}
+                  />
+                </RequirePermission>
+              } />
+
+              {/* Tracking Module */}
+              <Route path="tracking" element={
+                <RequirePermission module="tracking">
+                  <TrackingModule onNavigateToTripDetail={(id) => navigate(`/admin/tracking/${id}`)} />
+                </RequirePermission>
+              } />
+              <Route path="tracking/:tripId" element={
+                <RequirePermission module="tracking">
+                  <TripDetailView />
+                </RequirePermission>
+              } />
+
+              {/* Weighbridge Module */}
+              <Route path="weighbridge" element={
+                <RequirePermission module="weighbridge">
+                  <WeighbridgeModule />
+                </RequirePermission>
+              } />
+
+              {/* POD Module */}
+              <Route path="pod" element={
+                <RequirePermission module="pod">
+                  <PODModule />
+                </RequirePermission>
+              } />
+
+              {/* Payments Module */}
+              <Route path="payments" element={
+                <RequirePermission module="payments">
+                  <PaymentsModule />
+                </RequirePermission>
+              } />
+              <Route path="payments/:bookingId/history" element={
+                <RequirePermission module="payments">
+                  <PaymentHistoryView />
+                </RequirePermission>
+              } />
+
+              {/* Exceptions Module */}
+              <Route path="exceptions" element={
+                <RequirePermission module="exceptions">
+                  <ExceptionsModule />
+                </RequirePermission>
+              } />
+              <Route path="exceptions/:exceptionId" element={
+                <RequirePermission module="exceptions">
+                  <ExceptionDetailView />
+                </RequirePermission>
+              } />
+
+              {/* Communications Module */}
+              <Route path="communications" element={
+                <RequirePermission module="communications">
+                  <CommunicationsModule />
+                </RequirePermission>
+              } />
+
+              {/* Reports Module */}
+              <Route path="reports" element={
+                <RequirePermission module="reports">
+                  <ReportsModule />
+                </RequirePermission>
+              } />
+
+              {/* Settings Module */}
+              <Route path="settings" element={
+                <RequirePermission module="settings">
+                  <SettingsModule />
+                </RequirePermission>
+              } />
+
+              {/* Super Admin Routes */}
+              <Route path="superadmin/users" element={<RequireSuperAdmin><AdminUserManagement /></RequireSuperAdmin>} />
+              <Route path="superadmin/rbac" element={<RequireSuperAdmin><RBACManagement /></RequireSuperAdmin>} />
+              <Route path="superadmin/analytics" element={<RequireSuperAdmin><CommercialAnalytics /></RequireSuperAdmin>} />
+              <Route path="superadmin/audit-logs" element={<RequireSuperAdmin><AuditLogs /></RequireSuperAdmin>} />
+              <Route path="superadmin/system-parameters" element={<RequireSuperAdmin><SystemParameters /></RequireSuperAdmin>} />
 
               {placeholderModules.map((mod) => (
                 <Route key={mod} path={mod} element={
@@ -763,20 +1304,23 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/login/2fa" element={<TwoFactorPage />} />
-          <Route
-            path="/admin/*"
-            element={
-              <RequireAuth>
-                <AdminShell />
-              </RequireAuth>
-            }
-          />
-          <Route path="/" element={<Navigate to="/admin/dashboard" replace />} />
-          <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
-        </Routes>
+        <ToastProvider>
+          <ToastContainer />
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/login/2fa" element={<TwoFactorPage />} />
+            <Route
+              path="/admin/*"
+              element={
+                <RequireAuth>
+                  <AdminShell />
+                </RequireAuth>
+              }
+            />
+            <Route path="/" element={<Navigate to="/admin/dashboard" replace />} />
+            <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
+          </Routes>
+        </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
   );

@@ -375,13 +375,13 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
           <div className="search-results-pane">
             <div className="pane-section-header">
               <span>Database Results ({filteredResults.length})</span>
-              {loading && <span style={{ fontSize: '11px', color: '#FF6B35' }}>Fetching live...</span>}
+              {loading && <span style={{ fontSize: '11px', color: '#F45325' }}>Fetching live...</span>}
             </div>
 
             <div className="search-results-list">
               {filteredResults.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94A3B8' }}>
-                  <Search size={32} style={{ margin: '0 auto 10px', color: '#CBD5E1' }} />
+                  <Search size={32} style={{ margin: '0 auto 10px', color: '#111111' }} />
                   <p style={{ margin: 0, fontWeight: 600, fontSize: '14px', color: '#64748B' }}>
                     {query ? `No matching database records found for "${query}"` : 'No database records in this category.'}
                   </p>

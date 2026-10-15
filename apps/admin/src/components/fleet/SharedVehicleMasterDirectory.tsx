@@ -28,22 +28,21 @@ import {
   getVehicleStats,
   getVehicleTransporterCount,
 } from '../../services/vehicleService';
+import { formatDisplayId } from '../../utils/idGenerator';
 
 interface SharedVehicleMasterDirectoryProps {
   onNavigateToVerification: (vehicleId: string) => void;
   onNavigateToAddVehicle: () => void;
 }
 
-const ITEMS_PER_PAGE = 10;
-
-// Helper function to get expiry status
+// Helper function to get expiry status with semantic colors
 function getExpiryStatus(expiryDate: string | null): {
   status: 'VALID' | 'EXPIRING_SOON' | 'EXPIRED' | 'NO_DATE';
   color: string;
   label: string;
 } {
   if (!expiryDate) {
-    return { status: 'NO_DATE', color: 'text-gray-400', label: 'No Date' };
+    return { status: 'NO_DATE', color: 'doc-expiry-pill nodate', label: 'No Date' };
   }
 
   const today = new Date();
@@ -51,11 +50,11 @@ function getExpiryStatus(expiryDate: string | null): {
   const daysUntilExpiry = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
   if (daysUntilExpiry < 0) {
-    return { status: 'EXPIRED', color: 'text-red-600', label: 'Expired' };
+    return { status: 'EXPIRED', color: 'doc-expiry-pill expired', label: 'Expired' };
   } else if (daysUntilExpiry <= 30) {
-    return { status: 'EXPIRING_SOON', color: 'text-amber-600', label: `${daysUntilExpiry}d left` };
+    return { status: 'EXPIRING_SOON', color: 'doc-expiry-pill expiring', label: `${daysUntilExpiry}d left` };
   } else {
-    return { status: 'VALID', color: 'text-emerald-600', label: 'Valid' };
+    return { status: 'VALID', color: 'doc-expiry-pill valid', label: 'Valid' };
   }
 }
 
@@ -100,10 +99,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
-
-  // Selected vehicle drawer
-  const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // Fetch stats
   const fetchStats = async () => {
@@ -127,12 +123,10 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
 
       const filters: VehicleFilters = {};
 
-      // Apply search
       if (searchQuery.trim()) {
         filters.search = searchQuery.trim();
       }
 
-      // Apply verification status filter based on active tab
       if (activeTab === 'VERIFIED') {
         filters.verificationStatus = 'APPROVED';
       } else if (activeTab === 'PENDING') {
@@ -141,19 +135,17 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
         filters.verificationStatus = 'REJECTED';
       }
 
-      // Apply vehicle type filter
       if (vehicleTypeFilter !== 'ALL') {
         filters.vehicleType = vehicleTypeFilter;
       }
 
-      // Apply expiry warning filter
       if (expiryWarningFilter !== 'ALL') {
         filters.expiryWarning = expiryWarningFilter;
       }
 
       const pagination: PaginationParams = {
         page,
-        pageSize: ITEMS_PER_PAGE,
+        pageSize: itemsPerPage,
         sortBy: 'created_at',
         sortOrder: 'desc',
       };
@@ -164,7 +156,6 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
       setTotal(response.total);
       setTotalPages(response.totalPages);
 
-      // Fetch transporter counts for each vehicle
       const counts: Record<string, number> = {};
       for (const vehicle of response.vehicles) {
         const count = await getVehicleTransporterCount(vehicle.id);
@@ -180,33 +171,28 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
     }
   };
 
-  // Initial load
   useEffect(() => {
     fetchStats();
     fetchVehicles();
   }, []);
 
-  // Refetch when filters or pagination changes
   useEffect(() => {
     if (!loading) {
       fetchVehicles();
     }
-  }, [page, activeTab, vehicleTypeFilter, expiryWarningFilter]);
+  }, [page, itemsPerPage, activeTab, vehicleTypeFilter, expiryWarningFilter]);
 
-  // Handle search
   const handleSearch = () => {
     setPage(1);
     fetchVehicles();
   };
 
-  // Handle refresh
   const handleRefresh = () => {
     setPage(1);
     fetchStats();
     fetchVehicles(true);
   };
 
-  // Reset filters
   const handleResetFilters = () => {
     setSearchQuery('');
     setVehicleTypeFilter('ALL');
@@ -215,12 +201,10 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
     setPage(1);
   };
 
-  // Handle vehicle click
   const handleVehicleClick = (vehicleId: string) => {
     onNavigateToVerification(vehicleId);
   };
 
-  // Get overall document status
   const getOverallDocStatus = (vehicle: Vehicle): {
     status: 'APPROVED' | 'PENDING' | 'REJECTED' | 'MIXED';
     label: string;
@@ -238,147 +222,167 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
     const rejected = statuses.filter(s => s === 'REJECTED').length;
 
     if (approved === 4) {
-      return { status: 'APPROVED', label: 'All Verified', color: 'text-emerald-600 bg-emerald-50' };
+      return { status: 'APPROVED', label: 'All Verified', color: 'text-emerald-700 bg-emerald-50 border border-emerald-200' };
     } else if (rejected > 0) {
-      return { status: 'REJECTED', label: `${rejected} Rejected`, color: 'text-red-600 bg-red-50' };
+      return { status: 'REJECTED', label: `${rejected} Rejected`, color: 'text-rose-700 bg-rose-50 border border-rose-200' };
     } else if (pending > 0) {
-      return { status: 'PENDING', label: `${pending} Pending`, color: 'text-amber-600 bg-amber-50' };
+      return { status: 'PENDING', label: `${pending} Pending`, color: 'text-amber-700 bg-amber-50 border border-amber-200' };
     } else {
-      return { status: 'MIXED', label: 'Mixed', color: 'text-gray-600 bg-gray-50' };
+      return { status: 'MIXED', label: 'Mixed', color: 'text-slate-600 bg-slate-100 border border-slate-200' };
     }
   };
 
+  const handleExportCSV = () => {
+    if (vehicles.length === 0) return;
+    const headers = ['Vehicle ID', 'Registration Number', 'Vehicle Type', 'Make', 'Model', 'Rated Capacity', 'RC Expiry', 'Insurance Expiry'];
+    const rows = vehicles.map(v => [
+      formatDisplayId('VH', (v as any).vehicle_code || v.id, v.created_at),
+      v.registration_number,
+      v.vehicle_type,
+      v.make || '',
+      v.model || '',
+      v.rated_capacity_mt,
+      v.rc_expiry_date || '',
+      v.insurance_expiry_date || '',
+    ]);
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `vehicles_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+  };
+
   return (
-    <div className="min-h-screen bg-[#0D0D0E]">
-      {/* Header */}
-      <div className="border-b border-[#2A2A2C]">
-        <div className="px-8 py-6">
-          {/* Breadcrumbs */}
-          <div className="flex items-center gap-2 text-sm text-gray-400 mb-4">
+    <div className="cli-dir-wrapper">
+      {/* Header Banner */}
+      <div className="client-header-hero">
+        <div className="client-header-truck-bg">
+          <div className="client-header-truck-overlay" />
+        </div>
+
+        <div className="client-header-info">
+          <div className="client-header-breadcrumbs">
             <span>Fleet & Vehicles</span>
-            <ChevronDown size={14} className="rotate-[-90deg]" />
-            <span className="text-[#FF6B35]">Shared Vehicle Master</span>
+            <ChevronRight size={13} className="breadcrumb-chevron" />
+            <span className="breadcrumb-current">Shared Vehicle Master</span>
           </div>
+          <h1 className="client-directory-title">Shared Vehicle Master Directory</h1>
+          <p className="client-directory-desc">
+            Manage all registered and shared vehicles across vendors. Track verification status, capacity and availability.
+          </p>
+        </div>
 
-          {/* Title & Actions */}
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-semibold text-[#F8F8F8] mb-2">
-                Shared Vehicle Master Directory
-              </h1>
-              <p className="text-gray-400">
-                Manage all registered and shared vehicles across vendors. Track verification status, capacity and availability.
-              </p>
+        <div className="client-header-actions">
+          <button className="btn-create-orange" onClick={onNavigateToAddVehicle}>
+            <Plus size={16} strokeWidth={2.5} />
+            <span>Add Shared Vehicle</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 4 Equal-Width KPI Cards */}
+      <div className="client-kpi-bar">
+        {/* Total Vehicles */}
+        <div
+          className={`kpi-stat-card ${activeTab === 'ALL' ? 'active-border' : ''}`}
+          onClick={() => { setActiveTab('ALL'); setPage(1); }}
+        >
+          <div className="kpi-avatar-squircle orange">
+            <Truck size={20} />
+          </div>
+          <div className="kpi-body">
+            <div className="kpi-header-row">
+              <span className="kpi-title">Total Vehicles</span>
+              <ChevronRight size={14} className="kpi-chevron" />
             </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleRefresh}
-                disabled={refreshing}
-                className="flex items-center gap-2 px-4 py-2.5 bg-[#2A2A2C] text-[#F8F8F8] rounded-lg hover:bg-[#3A3A3C] transition-colors disabled:opacity-50"
-              >
-                <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
-                <span className="font-medium">Refresh</span>
-              </button>
-              <button
-                onClick={onNavigateToAddVehicle}
-                className="flex items-center gap-2 px-5 py-2.5 bg-[#FF6B35] text-[#0D0D0E] rounded-lg hover:bg-[#FFF0E8] transition-colors font-medium"
-              >
-                <Plus size={18} />
-                <span>Add Shared Vehicle</span>
-              </button>
+            <div className="kpi-value">
+              {loading ? <div className="kpi-bar-skeleton" /> : stats.totalVehicles}
+            </div>
+          </div>
+        </div>
+
+        {/* Verified Vehicles */}
+        <div
+          className={`kpi-stat-card ${activeTab === 'VERIFIED' ? 'active-border' : ''}`}
+          onClick={() => { setActiveTab('VERIFIED'); setPage(1); }}
+        >
+          <div className="kpi-avatar-squircle green">
+            <CheckCircle size={20} />
+          </div>
+          <div className="kpi-body">
+            <div className="kpi-header-row">
+              <span className="kpi-title">Verified Vehicles</span>
+              <ChevronRight size={14} className="kpi-chevron" />
+            </div>
+            <div className="kpi-value">
+              {loading ? <div className="kpi-bar-skeleton" /> : stats.verifiedVehicles}
+            </div>
+          </div>
+        </div>
+
+        {/* Pending Verification */}
+        <div
+          className={`kpi-stat-card ${activeTab === 'PENDING' ? 'active-border' : ''}`}
+          onClick={() => { setActiveTab('PENDING'); setPage(1); }}
+        >
+          <div className="kpi-avatar-squircle amber">
+            <Clock size={20} />
+          </div>
+          <div className="kpi-body">
+            <div className="kpi-header-row">
+              <span className="kpi-title">Pending Verification</span>
+              <ChevronRight size={14} className="kpi-chevron" />
+            </div>
+            <div className="kpi-value">
+              {loading ? <div className="kpi-bar-skeleton" /> : stats.pendingVerification}
+            </div>
+          </div>
+        </div>
+
+        {/* Rejected Vehicles */}
+        <div
+          className={`kpi-stat-card ${activeTab === 'REJECTED' ? 'active-border' : ''}`}
+          onClick={() => { setActiveTab('REJECTED'); setPage(1); }}
+        >
+          <div className="kpi-avatar-squircle red">
+            <XCircle size={20} />
+          </div>
+          <div className="kpi-body">
+            <div className="kpi-header-row">
+              <span className="kpi-title">Rejected Vehicles</span>
+              <ChevronRight size={14} className="kpi-chevron" />
+            </div>
+            <div className="kpi-value">
+              {loading ? <div className="kpi-bar-skeleton" /> : stats.rejectedVehicles}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="px-8 py-6">
-        <div className="grid grid-cols-4 gap-6">
-          {/* Total Vehicles */}
-          <div className="bg-[#1A1A1C] border border-[#2A2A2C] rounded-xl p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div className="p-3 bg-[#2A2A2C] rounded-lg">
-                <Truck size={24} className="text-[#FF6B35]" />
-              </div>
-            </div>
-            <div className="text-3xl font-semibold text-[#F8F8F8] mb-1">
-              {stats.totalVehicles}
-            </div>
-            <div className="text-sm text-gray-400">Total Vehicles</div>
-          </div>
-
-          {/* Verified Vehicles */}
-          <div className="bg-[#1A1A1C] border border-[#2A2A2C] rounded-xl p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div className="p-3 bg-emerald-500/10 rounded-lg">
-                <CheckCircle size={24} className="text-emerald-500" />
-              </div>
-              <div className="flex items-center gap-1 text-emerald-500 text-sm">
-                <TrendingUp size={16} />
-                <span>{stats.verifiedPercentage}%</span>
-              </div>
-            </div>
-            <div className="text-3xl font-semibold text-[#F8F8F8] mb-1">
-              {stats.verifiedVehicles}
-            </div>
-            <div className="text-sm text-gray-400">Verified Vehicles</div>
-          </div>
-
-          {/* Pending Verification */}
-          <div className="bg-[#1A1A1C] border border-[#2A2A2C] rounded-xl p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div className="p-3 bg-amber-500/10 rounded-lg">
-                <Clock size={24} className="text-amber-500" />
-              </div>
-              <div className="flex items-center gap-1 text-amber-500 text-sm">
-                <span>{stats.pendingPercentage}%</span>
-              </div>
-            </div>
-            <div className="text-3xl font-semibold text-[#F8F8F8] mb-1">
-              {stats.pendingVerification}
-            </div>
-            <div className="text-sm text-gray-400">Pending Verification</div>
-          </div>
-
-          {/* Rejected Vehicles */}
-          <div className="bg-[#1A1A1C] border border-[#2A2A2C] rounded-xl p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div className="p-3 bg-red-500/10 rounded-lg">
-                <XCircle size={24} className="text-red-500" />
-              </div>
-            </div>
-            <div className="text-3xl font-semibold text-[#F8F8F8] mb-1">
-              {stats.rejectedVehicles}
-            </div>
-            <div className="text-sm text-gray-400">Rejected Vehicles</div>
-          </div>
+      {/* Filters Bar Card */}
+      <div className="filters-bar-card">
+        <div className="filter-input-wrap">
+          <Search size={16} className="filter-search-icon" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+            placeholder="Search by vehicle no, make, model..."
+            className="filter-input"
+          />
         </div>
-      </div>
 
-      {/* Search & Filters */}
-      <div className="px-8 py-4 border-b border-[#2A2A2C]">
-        <div className="flex flex-wrap items-center gap-4">
-          {/* Search */}
-          <div className="flex-1 relative">
-            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              placeholder="Search by vehicle no, vendor name, vehicle type..."
-              className="w-full pl-12 pr-4 py-3 bg-[#1A1A1C] border border-[#2A2A2C] rounded-lg text-[#F8F8F8] placeholder-gray-500 focus:outline-none focus:border-[#FF6B35]"
-            />
-          </div>
-
-          {/* Vehicle Type Filter */}
+        <div className="filter-dropdown-wrap">
           <select
             value={vehicleTypeFilter}
             onChange={(e) => {
               setVehicleTypeFilter(e.target.value);
               setPage(1);
             }}
-            className="px-4 py-3 bg-[#1A1A1C] border border-[#2A2A2C] rounded-lg text-[#F8F8F8] focus:outline-none focus:border-[#FF6B35] min-w-[180px]"
+            className="filter-dropdown"
           >
             <option value="ALL">All Vehicle Types</option>
             <option value="10 Wheeler">10 Wheeler</option>
@@ -391,305 +395,199 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
             <option value="Trailer">Trailer</option>
             <option value="Container">Container</option>
           </select>
+          <ChevronDown size={14} className="dropdown-arrow-icon" />
+        </div>
 
-          {/* Expiry Warning Filter */}
+        <div className="filter-dropdown-wrap">
           <select
             value={expiryWarningFilter}
             onChange={(e) => {
               setExpiryWarningFilter(e.target.value as any);
               setPage(1);
             }}
-            className="px-4 py-3 bg-[#1A1A1C] border border-[#2A2A2C] rounded-lg text-[#F8F8F8] focus:outline-none focus:border-[#FF6B35] min-w-[200px]"
+            className="filter-dropdown"
           >
-            <option value="ALL">All Document Status</option>
-            <option value="EXPIRING_SOON">Expiring Soon (30 days)</option>
-            <option value="EXPIRED">Expired</option>
+            <option value="ALL">All Expiry Status</option>
+            <option value="EXPIRING_SOON">Expiring in 30 Days</option>
+            <option value="EXPIRED">Expired Documents</option>
           </select>
+          <ChevronDown size={14} className="dropdown-arrow-icon" />
+        </div>
 
-          {/* Filter Toggle */}
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="px-4 py-3 bg-[#1A1A1C] border border-[#2A2A2C] rounded-lg text-[#F8F8F8] hover:bg-[#2A2A2C] transition-colors flex items-center gap-2"
-          >
-            <Filter size={18} />
-            <span>More Filters</span>
-          </button>
+        <button onClick={handleResetFilters} className="btn-filter-reset" title="Reset filters">
+          <X size={14} />
+          <span>Reset</span>
+        </button>
 
-          {/* Reset Filters */}
-          {(searchQuery || vehicleTypeFilter !== 'ALL' || expiryWarningFilter !== 'ALL' || activeTab !== 'ALL') && (
+        <button onClick={handleSearch} className="btn-filter-search">
+          <Search size={14} />
+          <span>Search</span>
+        </button>
+      </div>
+
+      {/* Sub-bar: Status Tabs & Actions */}
+      <div className="table-sub-bar">
+        <div className="status-tabs-group">
+          {(['ALL', 'VERIFIED', 'PENDING', 'REJECTED'] as const).map((tab) => (
             <button
-              onClick={handleResetFilters}
-              className="px-4 py-3 bg-[#2A2A2C] text-[#F8F8F8] rounded-lg hover:bg-[#3A3A3C] transition-colors flex items-center gap-2"
+              key={tab}
+              onClick={() => {
+                setActiveTab(tab);
+                setPage(1);
+              }}
+              className={`status-tab-btn ${activeTab === tab ? 'active' : ''}`}
             >
-              <X size={18} />
-              <span>Reset</span>
+              {tab === 'ALL' && 'All Vehicles'}
+              {tab === 'VERIFIED' && 'Verified'}
+              {tab === 'PENDING' && 'Pending'}
+              {tab === 'REJECTED' && 'Rejected'}
             </button>
-          )}
+          ))}
+        </div>
 
-          {/* Export */}
-          <button className="px-4 py-3 bg-[#2A2A2C] text-[#F8F8F8] rounded-lg hover:bg-[#3A3A3C] transition-colors flex items-center gap-2">
-            <Download size={18} />
-            <span>Export</span>
+        <div className="table-actions-group">
+          <button className="btn-action-outline" onClick={handleExportCSV}>
+            <Download size={14} />
+            <span>Export CSV</span>
           </button>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="px-8 border-b border-[#2A2A2C] overflow-x-auto">
-        <div className="flex items-center gap-6 whitespace-nowrap">
-          <button
-            onClick={() => {
-              setActiveTab('ALL');
-              setPage(1);
-            }}
-            className={`px-1 py-4 border-b-2 transition-colors ${
-              activeTab === 'ALL'
-                ? 'border-[#FF6B35] text-[#FF6B35]'
-                : 'border-transparent text-gray-400 hover:text-[#F8F8F8]'
-            }`}
-          >
-            <span className="font-medium">All ({stats.totalVehicles})</span>
-          </button>
-          <button
-            onClick={() => {
-              setActiveTab('VERIFIED');
-              setPage(1);
-            }}
-            className={`px-1 py-4 border-b-2 transition-colors ${
-              activeTab === 'VERIFIED'
-                ? 'border-[#FF6B35] text-[#FF6B35]'
-                : 'border-transparent text-gray-400 hover:text-[#F8F8F8]'
-            }`}
-          >
-            <span className="font-medium">Verified ({stats.verifiedVehicles})</span>
-          </button>
-          <button
-            onClick={() => {
-              setActiveTab('PENDING');
-              setPage(1);
-            }}
-            className={`px-1 py-4 border-b-2 transition-colors ${
-              activeTab === 'PENDING'
-                ? 'border-[#FF6B35] text-[#FF6B35]'
-                : 'border-transparent text-gray-400 hover:text-[#F8F8F8]'
-            }`}
-          >
-            <span className="font-medium">Pending ({stats.pendingVerification})</span>
-          </button>
-          <button
-            onClick={() => {
-              setActiveTab('REJECTED');
-              setPage(1);
-            }}
-            className={`px-1 py-4 border-b-2 transition-colors ${
-              activeTab === 'REJECTED'
-                ? 'border-[#FF6B35] text-[#FF6B35]'
-                : 'border-transparent text-gray-400 hover:text-[#F8F8F8]'
-            }`}
-          >
-            <span className="font-medium">Rejected ({stats.rejectedVehicles})</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Table */}
-      <div className="px-8 py-6">
-        {loading && !refreshing ? (
-          <div className="bg-[#1A1A1C] border border-[#2A2A2C] rounded-xl p-12 text-center">
-            <RefreshCw size={32} className="text-[#FF6B35] animate-spin mx-auto mb-4" />
-            <p className="text-gray-400">Loading vehicles...</p>
+      {/* Vehicles Table Card */}
+      <div className="client-table-card">
+        {loading ? (
+          <div className="p-12 text-center">
+            <RefreshCw size={36} className="text-[#F05A22] spin mx-auto mb-3" />
+            <p className="text-slate-500 font-medium">Loading vehicle records...</p>
           </div>
         ) : error ? (
-          <div className="bg-[#1A1A1C] border border-red-500/20 rounded-xl p-12 text-center">
-            <XCircle size={32} className="text-red-500 mx-auto mb-4" />
-            <p className="text-red-400 mb-2">Failed to load vehicles</p>
-            <p className="text-gray-400 text-sm mb-4">{error}</p>
-            <button
-              onClick={handleRefresh}
-              className="px-4 py-2 bg-[#2A2A2C] text-[#F8F8F8] rounded-lg hover:bg-[#3A3A3C] transition-colors"
-            >
+          <div className="p-12 text-center">
+            <XCircle size={36} className="text-rose-500 mx-auto mb-3" />
+            <p className="text-rose-700 font-bold mb-1">Failed to load vehicles</p>
+            <p className="text-slate-500 text-sm mb-4">{error}</p>
+            <button onClick={handleRefresh} className="btn-filter-reset">
               Retry
             </button>
           </div>
         ) : vehicles.length === 0 ? (
-          <div className="bg-[#1A1A1C] border border-[#2A2A2C] rounded-xl p-12 text-center">
-            <Truck size={48} className="text-gray-600 mx-auto mb-4" />
-            <p className="text-[#F8F8F8] text-lg mb-2">No vehicles found</p>
-            <p className="text-gray-400 mb-6">
+          <div className="table-empty-state">
+            <div className="empty-state-icon-box">
+              <Truck size={32} />
+            </div>
+            <h4 className="empty-state-heading">No vehicles found</h4>
+            <p className="empty-state-text">
               {searchQuery || vehicleTypeFilter !== 'ALL' || expiryWarningFilter !== 'ALL'
                 ? 'Try adjusting your filters'
                 : 'Add your first shared vehicle to get started'}
             </p>
             {!searchQuery && vehicleTypeFilter === 'ALL' && expiryWarningFilter === 'ALL' && (
-              <button
-                onClick={onNavigateToAddVehicle}
-                className="px-6 py-2.5 bg-[#FF6B35] text-[#0D0D0E] rounded-lg hover:bg-[#FFF0E8] transition-colors font-medium"
-              >
-                Add Shared Vehicle
+              <button onClick={onNavigateToAddVehicle} className="btn-create-orange" style={{ margin: '0 auto' }}>
+                <Plus size={15} />
+                <span>Add Shared Vehicle</span>
               </button>
             )}
           </div>
         ) : (
           <>
-            <div className="bg-[#1A1A1C] border border-[#2A2A2C] rounded-xl overflow-x-auto">
-              <table className="w-full" style={{ minWidth: '1080px' }}>
-                <thead className="bg-[#0D0D0E] border-b border-[#2A2A2C]">
+            <div className="table-wrapper">
+              <table className="client-table" style={{ minWidth: '1080px' }}>
+                <thead>
                   <tr>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                      Vehicle No.
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                      Vehicle Type & Body
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                      Rated Capacity (MT)
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                      Min Capacity (MT)
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                      Linked Transporters
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                      RC Status
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                      Insurance Status
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                      Fitness Status
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                      Permit Status
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                      Overall Status
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                      Actions
-                    </th>
+                    <th>Vehicle No. ⇅</th>
+                    <th>Type & Body ⇅</th>
+                    <th>Rated Capacity ⇅</th>
+                    <th>Min Capacity ⇅</th>
+                    <th>Linked Transporters ⇅</th>
+                    <th>RC Status ⇅</th>
+                    <th>Insurance ⇅</th>
+                    <th>Fitness ⇅</th>
+                    <th>Permit ⇅</th>
+                    <th>Overall Status ⇅</th>
+                    <th style={{ textAlign: 'right' }}>Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#2A2A2C]">
-                  {vehicles.map((vehicle) => {
+                <tbody>
+                  {vehicles.map((vehicle, idx) => {
                     const rcStatus = getExpiryStatus(vehicle.rc_expiry_date);
                     const insuranceStatus = getExpiryStatus(vehicle.insurance_expiry_date);
                     const fitnessStatus = getExpiryStatus(vehicle.fitness_expiry_date);
                     const permitStatus = getExpiryStatus(vehicle.permit_expiry_date);
                     const overallStatus = getOverallDocStatus(vehicle);
                     const transporterCount = transporterCounts[vehicle.id] || 0;
+                    const colorThemes = ['peach', 'purple', 'orange', 'blue', 'teal', 'red'];
+                    const theme = colorThemes[idx % colorThemes.length];
 
                     return (
                       <tr
                         key={vehicle.id}
-                        className="hover:bg-[#2A2A2C]/30 transition-colors cursor-pointer"
                         onClick={() => handleVehicleClick(vehicle.id)}
+                        className="client-data-row"
+                        style={{ cursor: 'pointer' }}
                       >
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-[#2A2A2C] rounded-lg flex items-center justify-center">
-                              <Truck size={20} className="text-[#FF6B35]" />
+                        <td>
+                          <div className="client-info-cell">
+                            <div className={`client-avatar-squircle ${theme}`}>
+                              <Truck size={16} />
                             </div>
                             <div>
-                              <div className="text-[#F8F8F8] font-medium">{vehicle.registration_number}</div>
-                              {vehicle.make && vehicle.model && (
-                                <div className="text-xs text-gray-400">{vehicle.make} {vehicle.model}</div>
-                              )}
+                              <div className="client-name-bold font-mono">
+                                {vehicle.registration_number}
+                              </div>
+                              <div className="client-id-sub font-mono">
+                                {formatDisplayId('VH', (vehicle as any).vehicle_code || vehicle.id, vehicle.created_at)}
+                                {vehicle.make && vehicle.model ? ` • ${vehicle.make} ${vehicle.model}` : ''}
+                              </div>
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-[#F8F8F8]">{vehicle.vehicle_type}</div>
+                        <td>
+                          <div className="font-semibold text-slate-800">{vehicle.vehicle_type}</div>
                           {vehicle.body_type && (
-                            <div className="text-xs text-gray-400">{vehicle.body_type}</div>
+                            <div className="table-cell-sub">{vehicle.body_type}</div>
                           )}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-[#F8F8F8]">
-                          {vehicle.rated_capacity_mt} MT
+                        <td>
+                          <span className="mono-code">{vehicle.rated_capacity_mt} MT</span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-[#F8F8F8]">
-                          {vehicle.minimum_capacity_mt} MT
+                        <td>
+                          <span className="mono-code">{vehicle.minimum_capacity_mt} MT</span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-2">
-                            <Users size={16} className="text-gray-400" />
-                            <span className="text-[#F8F8F8]">{transporterCount}</span>
+                        <td>
+                          <div className="transporter-linked-badge">
+                            <Users size={13} className="transporter-icon" />
+                            <span>{transporterCount} linked</span>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-2">
-                            {vehicle.rc_verification_status === 'APPROVED' && (
-                              <CheckCircle size={16} className="text-emerald-500" />
-                            )}
-                            {vehicle.rc_verification_status === 'PENDING' && (
-                              <Clock size={16} className="text-amber-500" />
-                            )}
-                            {vehicle.rc_verification_status === 'REJECTED' && (
-                              <XCircle size={16} className="text-red-500" />
-                            )}
-                            <span className={rcStatus.color}>{rcStatus.label}</span>
-                          </div>
+                        <td>
+                          <span className={rcStatus.color}>{rcStatus.label}</span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-2">
-                            {vehicle.insurance_verification_status === 'APPROVED' && (
-                              <CheckCircle size={16} className="text-emerald-500" />
-                            )}
-                            {vehicle.insurance_verification_status === 'PENDING' && (
-                              <Clock size={16} className="text-amber-500" />
-                            )}
-                            {vehicle.insurance_verification_status === 'REJECTED' && (
-                              <XCircle size={16} className="text-red-500" />
-                            )}
-                            <span className={insuranceStatus.color}>{insuranceStatus.label}</span>
-                          </div>
+                        <td>
+                          <span className={insuranceStatus.color}>{insuranceStatus.label}</span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-2">
-                            {vehicle.fitness_verification_status === 'APPROVED' && (
-                              <CheckCircle size={16} className="text-emerald-500" />
-                            )}
-                            {vehicle.fitness_verification_status === 'PENDING' && (
-                              <Clock size={16} className="text-amber-500" />
-                            )}
-                            {vehicle.fitness_verification_status === 'REJECTED' && (
-                              <XCircle size={16} className="text-red-500" />
-                            )}
-                            <span className={fitnessStatus.color}>{fitnessStatus.label}</span>
-                          </div>
+                        <td>
+                          <span className={fitnessStatus.color}>{fitnessStatus.label}</span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-2">
-                            {vehicle.permit_verification_status === 'APPROVED' && (
-                              <CheckCircle size={16} className="text-emerald-500" />
-                            )}
-                            {vehicle.permit_verification_status === 'PENDING' && (
-                              <Clock size={16} className="text-amber-500" />
-                            )}
-                            {vehicle.permit_verification_status === 'REJECTED' && (
-                              <XCircle size={16} className="text-red-500" />
-                            )}
-                            <span className={permitStatus.color}>{permitStatus.label}</span>
-                          </div>
+                        <td>
+                          <span className={permitStatus.color}>{permitStatus.label}</span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${overallStatus.color}`}>
-                            {overallStatus.status === 'APPROVED' && <CheckCircle size={14} />}
-                            {overallStatus.status === 'PENDING' && <Clock size={14} />}
-                            {overallStatus.status === 'REJECTED' && <XCircle size={14} />}
+                        <td>
+                          <span className={`status-badge-pastel ${
+                            overallStatus.status === 'APPROVED' ? 'active' : overallStatus.status === 'PENDING' ? 'pending' : 'inactive'
+                          }`}>
                             {overallStatus.label}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td style={{ textAlign: 'right' }}>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               handleVehicleClick(vehicle.id);
                             }}
-                            className="p-2 hover:bg-[#2A2A2C] rounded-lg transition-colors group"
-                            title="Inspect Vehicle Vault"
+                            className="row-action-btn-circle"
+                            title="Inspect Vehicle Record"
+                            style={{ marginLeft: 'auto' }}
                           >
-                            <Eye size={18} className="text-gray-400 group-hover:text-[#FF6B35]" />
+                            <Eye size={14} />
                           </button>
                         </td>
                       </tr>
@@ -700,39 +598,31 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
             </div>
 
             {/* Pagination */}
-            <div className="flex items-center justify-between mt-6">
-              <div className="text-sm text-gray-400">
-                Showing {(page - 1) * ITEMS_PER_PAGE + 1} to {Math.min(page * ITEMS_PER_PAGE, total)} of {total} vehicles
+            <div className="pagination-row">
+              <div className="pagination-info">
+                Showing {(page - 1) * itemsPerPage + 1} to {Math.min(page * itemsPerPage, total)} of {total} vehicles
               </div>
-              <div className="flex items-center gap-2">
+              <div className="pagination-controls">
                 <button
                   onClick={() => setPage(Math.max(1, page - 1))}
                   disabled={page === 1}
-                  className="p-2 bg-[#1A1A1C] border border-[#2A2A2C] rounded-lg text-[#F8F8F8] hover:bg-[#2A2A2C] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="page-nav-btn"
                 >
-                  <ChevronLeft size={20} />
+                  <ChevronLeft size={14} />
                 </button>
                 <div className="flex items-center gap-1">
                   {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                     let pageNum;
-                    if (totalPages <= 5) {
-                      pageNum = i + 1;
-                    } else if (page <= 3) {
-                      pageNum = i + 1;
-                    } else if (page >= totalPages - 2) {
-                      pageNum = totalPages - 4 + i;
-                    } else {
-                      pageNum = page - 2 + i;
-                    }
+                    if (totalPages <= 5) pageNum = i + 1;
+                    else if (page <= 3) pageNum = i + 1;
+                    else if (page >= totalPages - 2) pageNum = totalPages - 4 + i;
+                    else pageNum = page - 2 + i;
+
                     return (
                       <button
                         key={pageNum}
                         onClick={() => setPage(pageNum)}
-                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                          page === pageNum
-                            ? 'bg-[#FF6B35] text-[#0D0D0E]'
-                            : 'bg-[#1A1A1C] border border-[#2A2A2C] text-[#F8F8F8] hover:bg-[#2A2A2C]'
-                        }`}
+                        className={`page-num-btn ${page === pageNum ? 'active' : ''}`}
                       >
                         {pageNum}
                       </button>
@@ -742,19 +632,23 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                 <button
                   onClick={() => setPage(Math.min(totalPages, page + 1))}
                   disabled={page === totalPages}
-                  className="p-2 bg-[#1A1A1C] border border-[#2A2A2C] rounded-lg text-[#F8F8F8] hover:bg-[#2A2A2C] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="page-nav-btn"
                 >
-                  <ChevronRight size={20} />
+                  <ChevronRight size={14} />
                 </button>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => {
+                    setItemsPerPage(parseInt(e.target.value));
+                    setPage(1);
+                  }}
+                  className="page-size-select ml-2"
+                >
+                  <option value="10">10 / page</option>
+                  <option value="25">25 / page</option>
+                  <option value="50">50 / page</option>
+                </select>
               </div>
-              <select
-                value={ITEMS_PER_PAGE}
-                className="px-3 py-1.5 bg-[#1A1A1C] border border-[#2A2A2C] rounded-lg text-[#F8F8F8] text-sm focus:outline-none focus:border-[#FF6B35]"
-              >
-                <option value="10">10 / page</option>
-                <option value="25">25 / page</option>
-                <option value="50">50 / page</option>
-              </select>
             </div>
           </>
         )}
@@ -762,4 +656,3 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
     </div>
   );
 };
-

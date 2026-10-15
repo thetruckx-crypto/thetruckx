@@ -1,4 +1,5 @@
 import React from 'react';
+import neclLogo from '../assets/images/necl-logo.png';
 
 interface BrandLogoProps {
   variant?: 'full' | 'mark';
@@ -25,20 +26,19 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
   };
 
   const h = heightMap[size] || 50;
-  const logoSrc = theme === 'dark' ? '/necl-logo-white.png' : '/necl-logo.png';
 
   return (
-    <div 
-      className={`brand-logo-container ${className}`} 
-      style={{ 
-        display: 'inline-flex', 
-        alignItems: 'center', 
+    <div
+      className={`brand-logo-container ${className}`}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
         justifyContent: 'center',
-        ...style 
+        ...style
       }}
     >
       <img
-        src={logoSrc}
+        src={neclLogo}
         alt={alt}
         style={{
           height: `${h}px`,
@@ -47,6 +47,7 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
           objectFit: 'contain',
           display: 'block',
           userSelect: 'none',
+          filter: theme === 'dark' ? 'brightness(0) invert(1)' : undefined,
         }}
         draggable={false}
       />
@@ -55,3 +56,4 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
 };
 
 export default BrandLogo;
+

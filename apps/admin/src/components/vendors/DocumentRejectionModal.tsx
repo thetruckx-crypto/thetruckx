@@ -9,6 +9,7 @@ import {
   Info
 } from 'lucide-react';
 import { supabase } from '../../utils/supabase';
+import { useToast } from '../../context/ToastContext';
 
 interface DocumentRejectionModalProps {
   isOpen: boolean;
@@ -44,6 +45,7 @@ export const DocumentRejectionModal: React.FC<DocumentRejectionModalProps> = ({
   document,
   onRejectSuccess,
 }) => {
+  const toast = useToast();
   const [selectedReasons, setSelectedReasons] = useState<string[]>(['Document is expired']);
   const [comments, setComments] = useState<string>('The transport license has expired. Please upload a valid and updated license.');
   const [notifyVendor, setNotifyVendor] = useState<boolean>(true);
@@ -159,7 +161,7 @@ export const DocumentRejectionModal: React.FC<DocumentRejectionModalProps> = ({
             <button
               type="button"
               className="btn-view-full-doc"
-              onClick={() => alert(`Previewing verified document: ${docFileName}`)}
+              onClick={() => toast.info(`Previewing verified document: ${docFileName}`)}
             >
               <ExternalLink size={14} />
               <span>View Full Document</span>

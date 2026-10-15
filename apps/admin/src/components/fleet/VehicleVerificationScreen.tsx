@@ -33,6 +33,8 @@ import {
   rejectVehicle,
   uploadVehicleDocument,
 } from '../../services/vehicleService';
+import { useToast } from '../../context/ToastContext';
+import { formatDisplayId } from '../../utils/idGenerator';
 
 interface VehicleVerificationScreenProps {
   vehicleId: string;
@@ -57,7 +59,7 @@ function getExpiryStatus(expiryDate: string | null): {
   if (!expiryDate) {
     return {
       status: 'NO_DATE',
-      color: 'text-gray-400',
+      color: 'text-[rgba(17,17,17,0.60)]',
       label: 'No Date',
       icon: <AlertTriangle size={16} />,
     };
@@ -70,21 +72,21 @@ function getExpiryStatus(expiryDate: string | null): {
   if (daysUntilExpiry < 0) {
     return {
       status: 'EXPIRED',
-      color: 'text-red-600',
+      color: 'text-[#F45325]',
       label: `Expired ${Math.abs(daysUntilExpiry)}d ago`,
       icon: <XCircle size={16} />,
     };
   } else if (daysUntilExpiry <= 30) {
     return {
       status: 'EXPIRING_SOON',
-      color: 'text-amber-600',
+      color: 'text-[#F45325]',
       label: `Expires in ${daysUntilExpiry}d`,
       icon: <Clock size={16} />,
     };
   } else {
     return {
       status: 'VALID',
-      color: 'text-emerald-600',
+      color: 'text-[#F45325]',
       label: 'Valid',
       icon: <CheckCircle size={16} />,
     };
@@ -133,6 +135,7 @@ export const VehicleVerificationScreen: React.FC<VehicleVerificationScreenProps>
 
   // Success toast
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const toast = useToast();
 
   // Fetch vehicle and documents
   const fetchVehicleData = async () => {
@@ -176,6 +179,7 @@ export const VehicleVerificationScreen: React.FC<VehicleVerificationScreenProps>
 
   // Show success message
   const showSuccess = (message: string) => {
+    toast.success(message);
     setSuccessMessage(message);
     setTimeout(() => setSuccessMessage(null), 3000);
   };
@@ -187,11 +191,11 @@ export const VehicleVerificationScreen: React.FC<VehicleVerificationScreenProps>
   ) => {
     try {
       setSaving(true);
-      await approveVehicleDocument(documentId, vehicleId, documentType, 'Admin'); // TODO: Get actual admin ID
+      await approveVehicleDocument(documentId, vehicleId, documentType, 'Admin');
       showSuccess(`${documentType} document approved successfully`);
       await fetchVehicleData();
     } catch (err: any) {
-      alert(`Failed to approve document: ${err.message}`);
+      toast.error(`Failed to approve document: ${err.message}`);
     } finally {
       setSaving(false);
     }
@@ -200,7 +204,7 @@ export const VehicleVerificationScreen: React.FC<VehicleVerificationScreenProps>
   // Handle reject document
   const handleRejectDocument = async () => {
     if (!rejectingDocument || !rejectionReason.trim()) {
-      alert('Please provide a rejection reason');
+      toast.warning('Please provide a rejection reason');
       return;
     }
 
@@ -211,14 +215,14 @@ export const VehicleVerificationScreen: React.FC<VehicleVerificationScreenProps>
         vehicleId,
         rejectingDocument.documentType,
         rejectionReason,
-        'Admin' // TODO: Get actual admin ID
+        'Admin'
       );
       showSuccess(`${rejectingDocument.documentType} document rejected`);
       setRejectingDocument(null);
       setRejectionReason('');
       await fetchVehicleData();
     } catch (err: any) {
-      alert(`Failed to reject document: ${err.message}`);
+      toast.error(`Failed to reject document: ${err.message}`);
     } finally {
       setSaving(false);
     }
@@ -230,12 +234,12 @@ export const VehicleVerificationScreen: React.FC<VehicleVerificationScreenProps>
 
     const newCapacity = parseFloat(capacityValue);
     if (isNaN(newCapacity) || newCapacity <= 0) {
-      alert('Please enter a valid capacity');
+      toast.warning('Please enter a valid capacity');
       return;
     }
 
     if (newCapacity > vehicle.rated_capacity_mt) {
-      alert('Minimum capacity cannot exceed rated capacity');
+      toast.warning('Minimum capacity cannot exceed rated capacity');
       return;
     }
 
@@ -246,7 +250,7 @@ export const VehicleVerificationScreen: React.FC<VehicleVerificationScreenProps>
       setEditingCapacity(false);
       await fetchVehicleData();
     } catch (err: any) {
-      alert(`Failed to update capacity: ${err.message}`);
+      toast.error(`Failed to update capacity: ${err.message}`);
     } finally {
       setSaving(false);
     }
@@ -263,7 +267,7 @@ export const VehicleVerificationScreen: React.FC<VehicleVerificationScreenProps>
       vehicle.fitness_verification_status !== 'APPROVED' ||
       vehicle.permit_verification_status !== 'APPROVED'
     ) {
-      alert('All documents must be approved before approving the vehicle');
+      toast.warning('All documents must be approved before approving the vehicle');
       return;
     }
 
@@ -273,11 +277,11 @@ export const VehicleVerificationScreen: React.FC<VehicleVerificationScreenProps>
 
     try {
       setSaving(true);
-      await approveVehicle(vehicleId, 'Admin'); // TODO: Get actual admin ID
+      await approveVehicle(vehicleId, 'Admin');
       showSuccess('Vehicle approved successfully');
       await fetchVehicleData();
     } catch (err: any) {
-      alert(`Failed to approve vehicle: ${err.message}`);
+      toast.error(`Failed to approve vehicle: ${err.message}`);
     } finally {
       setSaving(false);
     }
@@ -286,19 +290,19 @@ export const VehicleVerificationScreen: React.FC<VehicleVerificationScreenProps>
   // Handle reject vehicle
   const handleRejectVehicle = async () => {
     if (!vehicleRejectionReason.trim()) {
-      alert('Please provide a rejection reason');
+      toast.warning('Please provide a rejection reason');
       return;
     }
 
     try {
       setSaving(true);
-      await rejectVehicle(vehicleId, vehicleRejectionReason, 'Admin'); // TODO: Get actual admin ID
+      await rejectVehicle(vehicleId, vehicleRejectionReason, 'Admin');
       showSuccess('Vehicle rejected');
       setShowRejectVehicleModal(false);
       setVehicleRejectionReason('');
       await fetchVehicleData();
     } catch (err: any) {
-      alert(`Failed to reject vehicle: ${err.message}`);
+      toast.error(`Failed to reject vehicle: ${err.message}`);
     } finally {
       setSaving(false);
     }
@@ -323,31 +327,31 @@ export const VehicleVerificationScreen: React.FC<VehicleVerificationScreenProps>
     const expiryStatus = getExpiryStatus(expiryDate);
 
     return (
-      <div className="bg-[#1A1A1C] border border-[#2A2A2C] rounded-xl p-6">
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center gap-3">
+      <div className="vv-doc-card">
+        <div className="vv-doc-header">
+          <div className="vv-doc-title-group">
             <div
-              className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+              className={`vv-doc-status-icon-box ${
                 verificationStatus === 'APPROVED'
-                  ? 'bg-emerald-500/10'
+                  ? 'approved'
                   : verificationStatus === 'REJECTED'
-                  ? 'bg-red-500/10'
-                  : 'bg-amber-500/10'
+                  ? 'rejected'
+                  : 'pending'
               }`}
             >
-              {verificationStatus === 'APPROVED' && <CheckCircle size={24} className="text-emerald-500" />}
-              {verificationStatus === 'REJECTED' && <XCircle size={24} className="text-red-500" />}
-              {verificationStatus === 'PENDING' && <Clock size={24} className="text-amber-500" />}
+              {verificationStatus === 'APPROVED' && <CheckCircle size={22} />}
+              {verificationStatus === 'REJECTED' && <XCircle size={22} />}
+              {verificationStatus === 'PENDING' && <Clock size={22} />}
             </div>
             <div>
-              <h3 className="text-[#F8F8F8] font-medium">{title}</h3>
+              <h3 className="vv-doc-title">{title}</h3>
               <span
-                className={`inline-flex items-center gap-1.5 text-sm ${
+                className={`vv-doc-status-pill ${
                   verificationStatus === 'APPROVED'
-                    ? 'text-emerald-500'
+                    ? 'approved'
                     : verificationStatus === 'REJECTED'
-                    ? 'text-red-500'
-                    : 'text-amber-500'
+                    ? 'rejected'
+                    : 'pending'
                 }`}
               >
                 {verificationStatus === 'APPROVED' && 'Verified'}
@@ -359,42 +363,40 @@ export const VehicleVerificationScreen: React.FC<VehicleVerificationScreenProps>
           {document && (
             <button
               onClick={() => setPreviewDocument(document)}
-              className="p-2 hover:bg-[#2A2A2C] rounded-lg transition-colors group"
+              className="row-action-btn-circle"
               title="View Document"
             >
-              <Eye size={18} className="text-gray-400 group-hover:text-[#FF6B35]" />
+              <Eye size={16} />
             </button>
           )}
         </div>
 
         {additionalInfo && (
-          <div className="mb-3">
-            <span className="text-sm text-gray-400">{additionalInfo}</span>
+          <div className="vv-doc-extra-info">
+            <span>{additionalInfo}</span>
           </div>
         )}
 
         {expiryDate && (
-          <div className="flex items-center gap-2 mb-4">
-            <Calendar size={16} className="text-gray-400" />
-            <span className="text-sm text-gray-400">Valid Until:</span>
-            <span className={`text-sm font-medium ${expiryStatus.color}`}>
-              {formatDate(expiryDate)}
-            </span>
-            <span className={`text-xs ${expiryStatus.color}`}>({expiryStatus.label})</span>
+          <div className="vv-doc-expiry-row">
+            <Calendar size={15} />
+            <span>Valid Until:</span>
+            <strong className="vv-doc-expiry-val">{formatDate(expiryDate)}</strong>
+            <span className={`doc-expiry-pill ${expiryStatus.status.toLowerCase()}`}>({expiryStatus.label})</span>
           </div>
         )}
 
         {document ? (
-          <div className="flex items-center gap-2">
+          <div className="vv-doc-action-btns">
             {verificationStatus === 'PENDING' && (
               <>
                 <button
                   onClick={() => handleApproveDocument(document.id, documentType)}
                   disabled={saving}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                  className="vv-btn-approve-sm"
                 >
-                  <CheckCircle size={16} />
-                  <span className="font-medium">Approve</span>
+                  <CheckCircle size={15} />
+                  <span>Approve</span>
                 </button>
                 <button
                   onClick={() =>
@@ -404,34 +406,34 @@ export const VehicleVerificationScreen: React.FC<VehicleVerificationScreenProps>
                     })
                   }
                   disabled={saving}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                  className="vv-btn-reject-sm"
                 >
-                  <XCircle size={16} />
-                  <span className="font-medium">Reject</span>
+                  <XCircle size={15} />
+                  <span>Reject</span>
                 </button>
               </>
             )}
             {verificationStatus === 'REJECTED' && document.rejection_reason && (
-              <div className="w-full p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-                <p className="text-sm text-red-400">
-                  <span className="font-medium">Rejection Reason:</span> {document.rejection_reason}
+              <div className="w-full p-3 bg-rose-50 border border-rose-200 rounded-lg">
+                <p className="text-sm text-rose-700">
+                  <span className="font-semibold">Rejection Reason:</span> {document.rejection_reason}
                 </p>
               </div>
             )}
             {verificationStatus === 'APPROVED' && (
-              <div className="w-full flex items-center justify-center gap-2 text-emerald-500 text-sm">
+              <div className="w-full flex items-center justify-center gap-2 text-emerald-600 text-sm font-semibold">
                 <CheckCircle size={16} />
                 <span>Document verified and approved</span>
               </div>
             )}
           </div>
         ) : (
-          <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-            <div className="flex items-center gap-2 text-amber-500 text-sm mb-2">
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+            <div className="flex items-center gap-2 text-amber-700 text-sm mb-2 font-semibold">
               <AlertTriangle size={16} />
-              <span className="font-medium">Document not uploaded</span>
+              <span>Document not uploaded</span>
             </div>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-amber-600">
               This document needs to be uploaded before verification can proceed
             </p>
           </div>
@@ -442,10 +444,10 @@ export const VehicleVerificationScreen: React.FC<VehicleVerificationScreenProps>
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0D0D0E] flex items-center justify-center">
+      <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
-          <RefreshCw size={48} className="text-[#FF6B35] animate-spin mx-auto mb-4" />
-          <p className="text-gray-400">Loading vehicle data...</p>
+          <RefreshCw size={48} className="text-[#F45325] animate-spin mx-auto mb-4" />
+          <p className="text-[rgba(17,17,17,0.60)]">Loading vehicle data...</p>
         </div>
       </div>
     );
@@ -453,14 +455,14 @@ export const VehicleVerificationScreen: React.FC<VehicleVerificationScreenProps>
 
   if (error || !vehicle) {
     return (
-      <div className="min-h-screen bg-[#0D0D0E] flex items-center justify-center">
+      <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
-          <XCircle size={48} className="text-red-500 mx-auto mb-4" />
+          <XCircle size={48} className="text-[#F45325] mx-auto mb-4" />
           <p className="text-red-400 mb-2">Failed to load vehicle</p>
-          <p className="text-gray-400 text-sm mb-4">{error}</p>
+          <p className="text-[rgba(17,17,17,0.60)] text-sm mb-4">{error}</p>
           <button
             onClick={onBack}
-            className="px-6 py-2.5 bg-[#2A2A2C] text-[#F8F8F8] rounded-lg hover:bg-[#3A3A3C] transition-colors"
+            className="px-6 py-2.5 bg-white text-[#111111] rounded-lg hover:bg-white transition-colors"
           >
             Go Back
           </button>
@@ -470,11 +472,11 @@ export const VehicleVerificationScreen: React.FC<VehicleVerificationScreenProps>
   }
 
   return (
-    <div className="min-h-screen bg-[#0D0D0E]">
+    <div className="vehicle-verification-page-wrapper">
       {/* Success Toast */}
       {successMessage && (
         <div className="fixed top-6 right-6 z-50 animate-in slide-in-from-right">
-          <div className="bg-emerald-600 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-3">
+          <div className="bg-[#F45325] text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-3">
             <CheckCircle size={20} />
             <span className="font-medium">{successMessage}</span>
           </div>
@@ -482,88 +484,92 @@ export const VehicleVerificationScreen: React.FC<VehicleVerificationScreenProps>
       )}
 
       {/* Header */}
-      <div className="border-b border-[#2A2A2C]">
-        <div className="px-8 py-6">
-          {/* Breadcrumbs */}
-          <div className="flex items-center gap-2 text-sm text-gray-400 mb-4">
-            <button onClick={onBack} className="hover:text-[#FF6B35]">
-              Fleet & Vehicles
-            </button>
-            <span>/</span>
-            <button onClick={onBack} className="hover:text-[#FF6B35]">
-              Shared Vehicle Master
-            </button>
-            <span>/</span>
-            <span className="text-[#FF6B35]">Vehicle Verification</span>
-          </div>
+      <div className="vv-header-section">
+        {/* Breadcrumbs */}
+        <div className="vv-breadcrumbs">
+          <button onClick={onBack} className="hover:text-[#F45325]">
+            Fleet & Vehicles
+          </button>
+          <span>/</span>
+          <button onClick={onBack} className="hover:text-[#F45325]">
+            Shared Vehicle Master
+          </button>
+          <span>/</span>
+          <span className="text-[#F45325] font-semibold">Vehicle Verification</span>
+        </div>
 
-          {/* Title & Actions */}
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={onBack}
-                className="p-2 bg-[#1A1A1C] border border-[#2A2A2C] rounded-lg hover:bg-[#2A2A2C] transition-colors"
-              >
-                <ArrowLeft size={20} className="text-[#F8F8F8]" />
-              </button>
-              <div>
-                <h1 className="text-3xl font-semibold text-[#F8F8F8] mb-2">
-                  Vehicle Verification & Minimum Capacity Setup
-                </h1>
-                <p className="text-gray-400">
-                  Verify vehicle documents, set minimum capacity and manage verification status.
-                </p>
-              </div>
+        {/* Title & Actions */}
+        <div className="vv-title-row">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={onBack}
+              className="vv-back-btn"
+              title="Go Back"
+            >
+              <ArrowLeft size={18} />
+            </button>
+            <div>
+              <h1 className="vv-title">
+                Vehicle Verification & Minimum Capacity Setup
+              </h1>
+              <p className="vv-subtitle">
+                Verify vehicle documents, set minimum capacity and manage verification status.
+              </p>
             </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => onNavigateToTieups(vehicleId)}
-                className="flex items-center gap-2 px-4 py-2.5 bg-[#2A2A2C] text-[#F8F8F8] rounded-lg hover:bg-[#3A3A3C] transition-colors"
-              >
-                <Shield size={18} />
-                <span className="font-medium">View Tie-ups</span>
-              </button>
-            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => onNavigateToTieups(vehicleId)}
+              className="vv-btn-outline"
+            >
+              <Shield size={16} />
+              <span>View Tie-ups</span>
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Vehicle Info Card */}
-      <div className="px-8 py-6">
-        <div className="bg-[#1A1A1C] border border-[#2A2A2C] rounded-xl p-6 mb-6">
-          <div className="flex flex-wrap sm:flex-nowrap items-start gap-6">
-            <div className="w-24 h-24 bg-[#2A2A2C] rounded-xl flex items-center justify-center">
-              <Truck size={40} className="text-[#FF6B35]" />
+      {/* Main Body */}
+      <div className="vv-body-container">
+        {/* Vehicle Info Card */}
+        <div className="vv-card vv-overview-card">
+          <div className="vv-overview-top">
+            <div className="vv-truck-avatar">
+              <Truck size={36} />
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+            <div className="vv-overview-details">
+              <div className="vv-identity-row">
                 <div>
-                  <h2 className="text-2xl font-semibold text-[#F8F8F8] mb-2">{vehicle.registration_number}</h2>
-                  <div className="flex items-center gap-4 text-sm">
-                    <span className="text-gray-400">
+                  <h2 className="vv-reg-number font-mono">
+                    {vehicle.registration_number}{' '}
+                    <span style={{ fontSize: 13, color: '#64748B', fontWeight: 500 }}>
+                      ({formatDisplayId('VH', (vehicle as any).vehicle_code || vehicle.id, vehicle.created_at)})
+                    </span>
+                  </h2>
+                  <div className="vv-sub-meta">
+                    <span>
                       {vehicle.vehicle_type} • {vehicle.body_type || 'Body type not specified'}
                     </span>
                     {vehicle.make && vehicle.model && (
-                      <span className="text-gray-400">
-                        {vehicle.make} {vehicle.model}
+                      <span>
+                        • {vehicle.make} {vehicle.model}
                       </span>
                     )}
                     {vehicle.year_of_manufacture && (
-                      <span className="text-gray-400">Year: {vehicle.year_of_manufacture}</span>
+                      <span>• Year: {vehicle.year_of_manufacture}</span>
                     )}
                   </div>
                 </div>
                 <div
-                  className={`px-4 py-2 rounded-lg font-medium ${
+                  className={`status-pill ${
                     vehicle.verification_status === 'APPROVED'
-                      ? 'bg-emerald-500/10 text-emerald-500'
+                      ? 'verified'
                       : vehicle.verification_status === 'REJECTED'
-                      ? 'bg-red-500/10 text-red-500'
-                      : vehicle.verification_status === 'BLOCKED'
-                      ? 'bg-gray-500/10 text-gray-400'
-                      : 'bg-amber-500/10 text-amber-500'
+                      ? 'rejected'
+                      : 'pending'
                   }`}
                 >
+                  <span className="dot-indicator" />
                   {vehicle.verification_status === 'APPROVED' && 'Approved'}
                   {vehicle.verification_status === 'PENDING_DOCS' && 'Pending Verification'}
                   {vehicle.verification_status === 'REJECTED' && 'Rejected'}
@@ -571,20 +577,20 @@ export const VehicleVerificationScreen: React.FC<VehicleVerificationScreenProps>
                 </div>
               </div>
 
-              <div className="grid grid-cols-4 gap-6">
-                <div>
-                  <div className="text-sm text-gray-400 mb-1">Rated Capacity (MT)</div>
-                  <div className="text-xl font-semibold text-[#F8F8F8]">{vehicle.rated_capacity_mt} MT</div>
+              <div className="vv-metrics-grid">
+                <div className="vv-metric-item">
+                  <div className="vv-metric-label">Rated Capacity (MT)</div>
+                  <div className="vv-metric-val">{vehicle.rated_capacity_mt} MT</div>
                 </div>
-                <div>
-                  <div className="text-sm text-gray-400 mb-1">Minimum Capacity (MT)</div>
+                <div className="vv-metric-item">
+                  <div className="vv-metric-label">Minimum Capacity (MT)</div>
                   {editingCapacity ? (
                     <div className="flex items-center gap-2">
                       <input
                         type="number"
                         value={capacityValue}
                         onChange={(e) => setCapacityValue(e.target.value)}
-                        className="w-24 px-3 py-1.5 bg-[#0D0D0E] border border-[#2A2A2C] rounded-lg text-[#F8F8F8] focus:outline-none focus:border-[#FF6B35]"
+                        className="vv-capacity-input"
                         step="0.1"
                         min="0"
                         max={vehicle.rated_capacity_mt}
@@ -592,39 +598,42 @@ export const VehicleVerificationScreen: React.FC<VehicleVerificationScreenProps>
                       <button
                         onClick={handleUpdateCapacity}
                         disabled={saving}
-                        className="p-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                        className="vv-save-icon-btn"
+                        title="Save Capacity"
                       >
-                        <Save size={16} />
+                        <Save size={15} />
                       </button>
                       <button
                         onClick={() => {
                           setEditingCapacity(false);
                           setCapacityValue(vehicle.minimum_capacity_mt.toString());
                         }}
-                        className="p-1.5 bg-[#2A2A2C] text-[#F8F8F8] rounded-lg hover:bg-[#3A3A3C] transition-colors"
+                        className="vv-cancel-icon-btn"
+                        title="Cancel"
                       >
-                        <X size={16} />
+                        <X size={15} />
                       </button>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
-                      <div className="text-xl font-semibold text-[#F8F8F8]">{vehicle.minimum_capacity_mt} MT</div>
+                      <div className="vv-metric-val">{vehicle.minimum_capacity_mt} MT</div>
                       <button
                         onClick={() => setEditingCapacity(true)}
-                        className="p-1.5 hover:bg-[#2A2A2C] rounded-lg transition-colors"
+                        className="vv-edit-btn"
+                        title="Edit Minimum Capacity"
                       >
-                        <Edit2 size={16} className="text-gray-400" />
+                        <Edit2 size={14} />
                       </button>
                     </div>
                   )}
                 </div>
-                <div>
-                  <div className="text-sm text-gray-400 mb-1">RC Number</div>
-                  <div className="text-lg font-medium text-[#F8F8F8]">{vehicle.rc_number || '-'}</div>
+                <div className="vv-metric-item">
+                  <div className="vv-metric-label">RC Number</div>
+                  <div className="vv-metric-val mono">{vehicle.rc_number || '-'}</div>
                 </div>
-                <div>
-                  <div className="text-sm text-gray-400 mb-1">GPS Installed</div>
-                  <div className="text-lg font-medium text-[#F8F8F8]">
+                <div className="vv-metric-item">
+                  <div className="vv-metric-label">GPS Installed</div>
+                  <div className="vv-metric-val">
                     {vehicle.gps_installed ? 'Yes' : 'No'}
                   </div>
                 </div>
@@ -634,34 +643,32 @@ export const VehicleVerificationScreen: React.FC<VehicleVerificationScreenProps>
         </div>
 
         {/* Verification Details Tab */}
-        <div className="mb-6 overflow-x-auto">
-          <div className="flex items-center gap-6 border-b border-[#2A2A2C] whitespace-nowrap">
-            <button className="px-1 py-4 border-b-2 border-[#FF6B35] text-[#FF6B35] font-medium">
-              Verification Details
-            </button>
-            <button className="px-1 py-4 border-b-2 border-transparent text-gray-400 hover:text-[#F8F8F8]">
-              Documents
-            </button>
-            <button className="px-1 py-4 border-b-2 border-transparent text-gray-400 hover:text-[#F8F8F8]">
-              Capacity & Availability
-            </button>
-            <button
-              onClick={() => onNavigateToTieups(vehicleId)}
-              className="px-1 py-4 border-b-2 border-transparent text-gray-400 hover:text-[#F8F8F8]"
-            >
-              Vendor Tie-ups
-            </button>
-          </div>
+        <div className="vv-tabs-bar">
+          <button className="vv-tab-btn active">
+            Verification Details
+          </button>
+          <button className="vv-tab-btn">
+            Documents
+          </button>
+          <button className="vv-tab-btn">
+            Capacity & Availability
+          </button>
+          <button
+            onClick={() => onNavigateToTieups(vehicleId)}
+            className="vv-tab-btn"
+          >
+            Vendor Tie-ups
+          </button>
         </div>
 
         {/* Document Verification Section */}
-        <div className="mb-6">
-          <h3 className="text-xl font-semibold text-[#F8F8F8] mb-4">Document Verification</h3>
-          <p className="text-gray-400 mb-6">
+        <div className="vv-docs-section">
+          <h3 className="vv-section-title">Document Verification</h3>
+          <p className="vv-section-desc">
             Upload and verify all mandatory vehicle documents. All documents must be verified before approving the vehicle.
           </p>
 
-          <div className="grid grid-cols-2 gap-6">
+          <div className="vv-docs-grid">
             <DocumentCard
               title="RC Certificate"
               documentType="RC"
@@ -703,9 +710,9 @@ export const VehicleVerificationScreen: React.FC<VehicleVerificationScreenProps>
         </div>
 
         {/* Verification Actions */}
-        <div className="bg-[#1A1A1C] border border-[#2A2A2C] rounded-xl p-6">
-          <h3 className="text-lg font-semibold text-[#F8F8F8] mb-4">Verification Actions</h3>
-          <div className="flex items-center gap-4">
+        <div className="vv-card vv-actions-card">
+          <h3 className="vv-card-heading">Verification Actions</h3>
+          <div className="vv-actions-buttons">
             <button
               onClick={handleApproveVehicle}
               disabled={
@@ -715,28 +722,28 @@ export const VehicleVerificationScreen: React.FC<VehicleVerificationScreenProps>
                 vehicle.fitness_verification_status !== 'APPROVED' ||
                 vehicle.permit_verification_status !== 'APPROVED'
               }
-              className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn-approve-primary"
             >
-              <CheckCircle size={20} />
-              <span className="font-medium">Save & Approve Vehicle</span>
+              <CheckCircle size={18} />
+              <span>Save & Approve Vehicle</span>
             </button>
             <button
               onClick={() => setShowRejectVehicleModal(true)}
               disabled={saving}
-              className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+              className="btn-reject-secondary"
             >
-              <XCircle size={20} />
-              <span className="font-medium">Reject Vehicle</span>
+              <XCircle size={18} />
+              <span>Reject Vehicle</span>
             </button>
           </div>
           {vehicle.rc_verification_status !== 'APPROVED' ||
           vehicle.insurance_verification_status !== 'APPROVED' ||
           vehicle.fitness_verification_status !== 'APPROVED' ||
           vehicle.permit_verification_status !== 'APPROVED' ? (
-            <p className="text-sm text-amber-500 mt-3 flex items-center gap-2">
+            <div className="vv-alert-warning">
               <Info size={16} />
-              All documents must be approved before you can approve the vehicle
-            </p>
+              <span>All documents must be approved before you can approve the vehicle</span>
+            </div>
           ) : null}
         </div>
       </div>
@@ -744,24 +751,24 @@ export const VehicleVerificationScreen: React.FC<VehicleVerificationScreenProps>
       {/* Document Preview Modal */}
       {previewDocument && (
         <div
-          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-6"
+          className="drawer-overlay fixed inset-0 flex items-center justify-center z-50 p-6"
           onClick={() => setPreviewDocument(null)}
         >
           <div
-            className="bg-[#1A1A1C] border border-[#2A2A2C] rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
+            className="vv-modal-dialog max-w-4xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between p-6 border-b border-[#2A2A2C]">
-              <h3 className="text-xl font-semibold text-[#F8F8F8]">Document Preview</h3>
+            <div className="flex items-center justify-between p-6 border-b border-slate-200">
+              <h3 className="text-xl font-semibold text-slate-900">Document Preview</h3>
               <button
                 onClick={() => setPreviewDocument(null)}
-                className="p-2 hover:bg-[#2A2A2C] rounded-lg transition-colors"
+                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
               >
-                <X size={20} className="text-gray-400" />
+                <X size={20} className="text-slate-500" />
               </button>
             </div>
             <div className="p-6">
-              <div className="aspect-video bg-[#0D0D0E] rounded-lg flex items-center justify-center">
+              <div className="aspect-video bg-slate-50 rounded-lg flex items-center justify-center border border-slate-200">
                 <iframe
                   src={previewDocument.file_url}
                   className="w-full h-full rounded-lg"
@@ -769,15 +776,15 @@ export const VehicleVerificationScreen: React.FC<VehicleVerificationScreenProps>
                 />
               </div>
               <div className="mt-4 flex items-center justify-between">
-                <div className="text-sm text-gray-400">
-                  <span className="font-medium text-[#F8F8F8]">{previewDocument.document_type}</span> •{' '}
+                <div className="text-sm text-slate-500">
+                  <span className="font-semibold text-slate-800">{previewDocument.document_type}</span> •{' '}
                   Uploaded {formatDate(previewDocument.created_at)}
                 </div>
                 <a
                   href={previewDocument.file_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-2 px-4 py-2 bg-[#2A2A2C] text-[#F8F8F8] rounded-lg hover:bg-[#3A3A3C] transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-800 rounded-lg hover:bg-slate-200 transition-colors font-medium text-sm"
                 >
                   <ExternalLink size={16} />
                   <span>Open in New Tab</span>
@@ -790,36 +797,36 @@ export const VehicleVerificationScreen: React.FC<VehicleVerificationScreenProps>
 
       {/* Reject Document Modal */}
       {rejectingDocument && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-6">
-          <div className="bg-[#1A1A1C] border border-[#2A2A2C] rounded-xl max-w-lg w-full">
-            <div className="flex items-center justify-between p-6 border-b border-[#2A2A2C]">
-              <h3 className="text-xl font-semibold text-[#F8F8F8]">Reject Document</h3>
+        <div className="drawer-overlay fixed inset-0 flex items-center justify-center z-50 p-6" onClick={() => setRejectingDocument(null)}>
+          <div className="vv-modal-dialog max-w-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-6 border-b border-slate-200">
+              <h3 className="text-xl font-semibold text-slate-900">Reject Document</h3>
               <button
                 onClick={() => {
                   setRejectingDocument(null);
                   setRejectionReason('');
                 }}
-                className="p-2 hover:bg-[#2A2A2C] rounded-lg transition-colors"
+                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
               >
-                <X size={20} className="text-gray-400" />
+                <X size={20} className="text-slate-500" />
               </button>
             </div>
             <div className="p-6">
-              <p className="text-gray-400 mb-4">
-                Please provide a reason for rejecting the {rejectingDocument.documentType} document. This will be visible
+              <p className="text-slate-600 mb-4 text-sm leading-relaxed">
+                Please provide a reason for rejecting the <strong className="text-slate-900">{rejectingDocument.documentType}</strong> document. This will be visible
                 to the vendor.
               </p>
               <textarea
                 value={rejectionReason}
                 onChange={(e) => setRejectionReason(e.target.value)}
                 placeholder="Enter rejection reason..."
-                className="w-full h-32 px-4 py-3 bg-[#0D0D0E] border border-[#2A2A2C] rounded-lg text-[#F8F8F8] placeholder-gray-500 focus:outline-none focus:border-[#FF6B35] resize-none"
+                className="w-full h-32 px-4 py-3 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 resize-none text-sm"
               />
               <div className="flex items-center gap-3 mt-6">
                 <button
                   onClick={handleRejectDocument}
                   disabled={saving || !rejectionReason.trim()}
-                  className="flex-1 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                  className="flex-1 px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm shadow-sm"
                 >
                   {saving ? 'Rejecting...' : 'Confirm Rejection'}
                 </button>
@@ -828,7 +835,7 @@ export const VehicleVerificationScreen: React.FC<VehicleVerificationScreenProps>
                     setRejectingDocument(null);
                     setRejectionReason('');
                   }}
-                  className="px-6 py-3 bg-[#2A2A2C] text-[#F8F8F8] rounded-lg hover:bg-[#3A3A3C] transition-colors font-medium"
+                  className="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors font-medium text-sm"
                 >
                   Cancel
                 </button>
@@ -840,22 +847,22 @@ export const VehicleVerificationScreen: React.FC<VehicleVerificationScreenProps>
 
       {/* Reject Vehicle Modal */}
       {showRejectVehicleModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-6">
-          <div className="bg-[#1A1A1C] border border-[#2A2A2C] rounded-xl max-w-lg w-full">
-            <div className="flex items-center justify-between p-6 border-b border-[#2A2A2C]">
-              <h3 className="text-xl font-semibold text-[#F8F8F8]">Reject Vehicle</h3>
+        <div className="drawer-overlay fixed inset-0 flex items-center justify-center z-50 p-6" onClick={() => setShowRejectVehicleModal(false)}>
+          <div className="vv-modal-dialog max-w-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-6 border-b border-slate-200">
+              <h3 className="text-xl font-semibold text-slate-900">Reject Vehicle</h3>
               <button
                 onClick={() => {
                   setShowRejectVehicleModal(false);
                   setVehicleRejectionReason('');
                 }}
-                className="p-2 hover:bg-[#2A2A2C] rounded-lg transition-colors"
+                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
               >
-                <X size={20} className="text-gray-400" />
+                <X size={20} className="text-slate-500" />
               </button>
             </div>
             <div className="p-6">
-              <p className="text-gray-400 mb-4">
+              <p className="text-slate-600 mb-4 text-sm leading-relaxed">
                 Please provide a reason for rejecting this vehicle. This action will prevent the vehicle from being used
                 in operations.
               </p>
@@ -863,13 +870,13 @@ export const VehicleVerificationScreen: React.FC<VehicleVerificationScreenProps>
                 value={vehicleRejectionReason}
                 onChange={(e) => setVehicleRejectionReason(e.target.value)}
                 placeholder="Enter rejection reason..."
-                className="w-full h-32 px-4 py-3 bg-[#0D0D0E] border border-[#2A2A2C] rounded-lg text-[#F8F8F8] placeholder-gray-500 focus:outline-none focus:border-[#FF6B35] resize-none"
+                className="w-full h-32 px-4 py-3 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 resize-none text-sm"
               />
               <div className="flex items-center gap-3 mt-6">
                 <button
                   onClick={handleRejectVehicle}
                   disabled={saving || !vehicleRejectionReason.trim()}
-                  className="flex-1 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                  className="flex-1 px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm shadow-sm"
                 >
                   {saving ? 'Rejecting...' : 'Confirm Rejection'}
                 </button>
@@ -878,7 +885,7 @@ export const VehicleVerificationScreen: React.FC<VehicleVerificationScreenProps>
                     setShowRejectVehicleModal(false);
                     setVehicleRejectionReason('');
                   }}
-                  className="px-6 py-3 bg-[#2A2A2C] text-[#F8F8F8] rounded-lg hover:bg-[#3A3A3C] transition-colors font-medium"
+                  className="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors font-medium text-sm"
                 >
                   Cancel
                 </button>

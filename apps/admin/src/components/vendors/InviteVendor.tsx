@@ -2,18 +2,20 @@ import React, { useState } from 'react';
 import {
   ArrowLeft,
   Send,
-  Building2,
-  User,
-  Phone,
-  Mail,
-  MapPin,
-  Truck,
   Calendar,
   Globe,
   Info,
   AlertTriangle,
-  CheckCircle2,
-  FileText
+  ChevronRight,
+  Truck,
+  Building2,
+  Mail,
+  Phone,
+  FileText,
+  Clock,
+  ShieldCheck,
+  X,
+  Plus
 } from 'lucide-react';
 import { supabase } from '../../utils/supabase';
 
@@ -34,14 +36,30 @@ export const InviteVendor: React.FC<InviteVendorProps> = ({ onBack, onInvited })
     designation: 'Owner',
     email: '',
     mobile: '',
-    address: '',
-    operatingLanes: '',
-    vehicleTypes: '40 MT Multi-Axle Trailer',
     vehicleCount: '',
     fleetCapacity: '',
-    invitationMessage: 'You are invited to join North Eastern Carriers as a trusted transport partner. Please register and complete your profile to start receiving transport requirements.',
+    invitationMessage: 'You are invited to join North Eastern Carriers as a trusted transport partner.',
     validDays: '7 Days',
   });
+
+  // Dynamic tags for Operating Cities and Vehicle Types
+  const [operatingLanes, setOperatingLanes] = useState<string[]>([
+    'Hyderabad',
+    'Vijayawada',
+    'Visakhapatnam',
+    'Nagpur',
+  ]);
+  const [newLaneInput, setNewLaneInput] = useState('');
+  const [showAddLane, setShowAddLane] = useState(false);
+
+  const [vehicleTypes, setVehicleTypes] = useState<string[]>([
+    'FTL',
+    'PTL',
+    'Container',
+    'Project Cargo',
+  ]);
+  const [newVehicleInput, setNewVehicleInput] = useState('');
+  const [showAddVehicle, setShowAddVehicle] = useState(false);
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -50,6 +68,30 @@ export const InviteVendor: React.FC<InviteVendorProps> = ({ onBack, onInvited })
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  const removeLane = (lane: string) => {
+    setOperatingLanes(operatingLanes.filter((l) => l !== lane));
+  };
+
+  const addLane = () => {
+    if (newLaneInput.trim() && !operatingLanes.includes(newLaneInput.trim())) {
+      setOperatingLanes([...operatingLanes, newLaneInput.trim()]);
+      setNewLaneInput('');
+      setShowAddLane(false);
+    }
+  };
+
+  const removeVehicleType = (type: string) => {
+    setVehicleTypes(vehicleTypes.filter((t) => t !== type));
+  };
+
+  const addVehicleType = () => {
+    if (newVehicleInput.trim() && !vehicleTypes.includes(newVehicleInput.trim())) {
+      setVehicleTypes([...vehicleTypes, newVehicleInput.trim()]);
+      setNewVehicleInput('');
+      setShowAddVehicle(false);
+    }
   };
 
   const validate = async (): Promise<boolean> => {
@@ -88,29 +130,37 @@ export const InviteVendor: React.FC<InviteVendorProps> = ({ onBack, onInvited })
       errs.mobile = '10-digit Mobile Number is required.';
     }
 
-    // Check duplicate mobile in vendor_users
+    // Server-side check for duplicate mobile in vendor_users
     if (!errs.mobile) {
-      const { data: existingUser } = await supabase
-        .from('vendor_users')
-        .select('id')
-        .eq('mobile', cleanMobile)
-        .maybeSingle();
+      try {
+        const { data: existingUser } = await supabase
+          .from('vendor_users')
+          .select('id')
+          .eq('mobile', cleanMobile)
+          .maybeSingle();
 
-      if (existingUser) {
-        errs.mobile = 'A vendor contact with this mobile number is already registered.';
+        if (existingUser) {
+          errs.mobile = 'A vendor contact with this mobile number already exists.';
+        }
+      } catch (e) {
+        // Ignore network timeout on check
       }
     }
 
-    // Check duplicate GSTIN if provided
+    // Server-side check for duplicate GSTIN
     if (formData.gstin.trim() && !errs.gstin) {
-      const { data: existingGst } = await supabase
-        .from('vendor_companies')
-        .select('id')
-        .eq('gstin', formData.gstin.trim().toUpperCase())
-        .maybeSingle();
+      try {
+        const { data: existingGst } = await supabase
+          .from('vendor_companies')
+          .select('id')
+          .eq('gstin', formData.gstin.trim().toUpperCase())
+          .maybeSingle();
 
-      if (existingGst) {
-        errs.gstin = 'A vendor company with this GSTIN is already registered.';
+        if (existingGst) {
+          errs.gstin = 'A vendor company with this GSTIN is already registered.';
+        }
+      } catch (e) {
+        // Ignore network timeout on check
       }
     }
 
@@ -128,49 +178,51 @@ export const InviteVendor: React.FC<InviteVendorProps> = ({ onBack, onInvited })
       // 1. Insert Vendor Company Record into database
       const { data: comp, error: compErr } = await supabase
         .from('vendor_companies')
-        .insert([{
-          vendor_name: formData.businessName.trim(),
-          pan: formData.pan.trim().toUpperCase() || null,
-          gstin: formData.gstin.trim().toUpperCase() || null,
-          address: formData.address.trim() || formData.operatingLanes.trim() || 'Transport Hub',
-          status: 'PENDING',
-          onboarding_source: 'INVITED',
-        }])
+        .insert([
+          {
+            vendor_name: formData.businessName.trim(),
+            pan: formData.pan.trim().toUpperCase() || null,
+            gstin: formData.gstin.trim().toUpperCase() || null,
+            address: operatingLanes.join(', ') || 'Transport Hub',
+            status: 'PENDING',
+            onboarding_source: 'INVITED',
+          },
+        ])
         .select()
         .single();
 
       if (compErr) throw compErr;
 
       // 2. Insert Primary Contact Person into vendor_users
-      const { error: userErr } = await supabase
-        .from('vendor_users')
-        .insert([{
+      const { error: userErr } = await supabase.from('vendor_users').insert([
+        {
           vendor_id: comp.id,
           full_name: formData.contactName.trim(),
           email: formData.email.trim(),
           mobile: formData.mobile.replace(/\D/g, ''),
           status: 'PENDING',
-        }]);
+        },
+      ]);
 
       if (userErr) throw userErr;
 
-      // 3. Dispatch simulated notification event / toast
       showToast(`✅ Invitation sent to ${formData.contactName} (${formData.businessName})!`);
 
       setTimeout(() => {
         onInvited(comp.id);
-      }, 900);
-
+      }, 1000);
     } catch (err: any) {
-      console.error('Failed to provision vendor invitation:', err);
-      setErrors({ global: err.message || 'Database error occurred while sending vendor invitation.' });
+      console.error('Failed to create vendor invitation:', err);
+      setErrors({
+        global: err.message || 'Database error occurred while sending vendor invitation.',
+      });
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="invite-vendor-page-wrapper">
+    <div className="cli-dir-wrapper">
       {/* Toast Alert */}
       {toastMessage && (
         <div className="operational-toast">
@@ -178,441 +230,604 @@ export const InviteVendor: React.FC<InviteVendorProps> = ({ onBack, onInvited })
         </div>
       )}
 
-      {/* Top Header Bar */}
-      <header className="page-nav-header">
-        <div className="breadcrumbs-row">
-          <span className="crumb-root">Vendors</span>
-          <span className="crumb-sep">›</span>
-          <span className="crumb-active">Add Vendor</span>
+      {/* Header Banner */}
+      <div className="client-header-hero">
+        <div className="client-header-truck-bg">
+          <div className="client-header-truck-overlay" />
         </div>
-        <div className="page-title-row">
-          <div>
-            <h1 className="main-page-title">Add Vendor</h1>
-            <p className="main-page-subtitle">
-              Send an invitation to a transport vendor to register on the platform.
-            </p>
+
+        <div className="client-header-info">
+          <div className="client-header-breadcrumbs">
+            <span>Vendors</span>
+            <ChevronRight size={13} className="breadcrumb-chevron" />
+            <span className="breadcrumb-current">Add Vendor</span>
           </div>
-          <button className="btn-back-link" onClick={onBack}>
+          <h1 className="client-directory-title">Add Vendor</h1>
+          <p className="client-directory-desc">
+            Invite a transport partner to join your operations.
+          </p>
+        </div>
+
+        <div className="client-header-actions">
+          <button
+            type="button"
+            className="btn-form-cancel"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+            onClick={onBack}
+          >
             <ArrowLeft size={16} />
             <span>Back to Vendor Directory</span>
           </button>
         </div>
-      </header>
+      </div>
 
-      {/* Main 2-Column Split: Left Form (70%), Right Process Guide (30%) */}
-      <div className="invite-vendor-layout">
-        {/* Left Form Surface */}
-        <form onSubmit={handleSubmit} className="invite-form-column">
-          {errors.global && (
-            <div className="rejection-error-alert" style={{ marginBottom: '16px' }}>
-              <AlertTriangle size={16} />
-              <span>{errors.global}</span>
-            </div>
-          )}
+      {errors.global && (
+        <div className="rejection-error-alert" style={{ marginBottom: '16px' }}>
+          <AlertTriangle size={16} />
+          <span>{errors.global}</span>
+        </div>
+      )}
 
-          {/* Section 1: Vendor Company Information */}
-          <div className="invite-section-card">
-            <div className="section-card-header">
-              <div className="step-circle-badge">1</div>
-              <div>
-                <h3 className="section-title">Vendor Company Information</h3>
-                <p className="section-subtitle">Enter the transport vendor's business details.</p>
-              </div>
-            </div>
-
-            <div className="form-fields-grid">
-              {/* Business Name */}
-              <div className="form-field-group">
-                <label className="field-label">
-                  Business Name <span className="req-star">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Enter vendor business name"
-                  value={formData.businessName}
-                  onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
-                  className={`field-input ${errors.businessName ? 'input-error' : ''}`}
-                />
-                {errors.businessName && <span className="field-error-text">{errors.businessName}</span>}
-              </div>
-
-              {/* Vendor Type */}
-              <div className="form-field-group">
-                <label className="field-label">
-                  Vendor Type <span className="req-star">*</span>
-                </label>
-                <select
-                  value={formData.vendorType}
-                  onChange={(e) => setFormData({ ...formData, vendorType: e.target.value })}
-                  className="field-input"
-                >
-                  <option value="Fleet Owner">Fleet Owner</option>
-                  <option value="Broker / Aggregator">Broker / Aggregator</option>
-                  <option value="Fleet Operator">Fleet Operator</option>
-                  <option value="Independent Truck Owner">Independent Truck Owner</option>
-                </select>
-              </div>
-
-              {/* GSTIN */}
-              <div className="form-field-group">
-                <div className="field-label-row">
-                  <label className="field-label">GSTIN (Optional)</label>
-                  <span className="field-char-badge">{formData.gstin.length}/15</span>
+      {/* Main 2-Column Grid Matching Reference Image 3 */}
+      <form onSubmit={handleSubmit}>
+        <div className="add-vendor-form-grid">
+          {/* Left Column (Cards 1, 2, 3) */}
+          <div className="add-vendor-left-col">
+            {/* Card 1: Vendor Company Information */}
+            <div className="vendor-form-card">
+              <div className="vendor-card-header">
+                <div className="step-num-circle">1</div>
+                <div>
+                  <h3 className="card-title-text">Vendor Company Information</h3>
+                  <p className="card-subtitle-text">Enter the transport vendor's business details.</p>
                 </div>
-                <input
-                  type="text"
-                  maxLength={15}
-                  placeholder="Enter GSTIN (e.g. 36AAACS1234A1Z9)"
-                  value={formData.gstin}
-                  onChange={(e) => setFormData({ ...formData, gstin: e.target.value.toUpperCase() })}
-                  className={`field-input ${errors.gstin ? 'input-error' : ''}`}
-                />
-                {errors.gstin && <span className="field-error-text">{errors.gstin}</span>}
               </div>
 
-              {/* PAN Number */}
-              <div className="form-field-group">
-                <div className="field-label-row">
-                  <label className="field-label">PAN Number (Optional)</label>
-                  <span className="field-char-badge">{formData.pan.length}/10</span>
-                </div>
-                <input
-                  type="text"
-                  maxLength={10}
-                  placeholder="Enter PAN number (e.g. AAACS1234A)"
-                  value={formData.pan}
-                  onChange={(e) => setFormData({ ...formData, pan: e.target.value.toUpperCase() })}
-                  className={`field-input ${errors.pan ? 'input-error' : ''}`}
-                />
-                {errors.pan && <span className="field-error-text">{errors.pan}</span>}
-              </div>
-
-              {/* Year of Establishment */}
-              <div className="form-field-group">
-                <label className="field-label">Year of Establishment (Optional)</label>
-                <div className="input-with-icon">
-                  <Calendar size={16} className="input-icon-left" />
+              <div className="form-two-col">
+                <div className="form-field-group">
+                  <label>
+                    Business Name <span className="required-star">*</span>
+                  </label>
                   <input
                     type="text"
-                    placeholder="e.g. 2018"
-                    value={formData.establishmentYear}
-                    onChange={(e) => setFormData({ ...formData, establishmentYear: e.target.value })}
-                    className="field-input with-left-icon"
+                    required
+                    placeholder="Enter vendor business name"
+                    value={formData.businessName}
+                    onChange={(e) =>
+                      setFormData({ ...formData, businessName: e.target.value })
+                    }
+                    className={`field-input-box ${errors.businessName ? 'input-error' : ''}`}
                   />
+                  {errors.businessName && (
+                    <span className="field-error-text" style={{ color: '#EF4444', fontSize: '11.5px' }}>
+                      {errors.businessName}
+                    </span>
+                  )}
+                </div>
+
+                <div className="form-field-group">
+                  <label>
+                    Vendor Type <span className="required-star">*</span>
+                  </label>
+                  <select
+                    value={formData.vendorType}
+                    onChange={(e) =>
+                      setFormData({ ...formData, vendorType: e.target.value })
+                    }
+                    className="field-input-box"
+                  >
+                    <option value="Fleet Owner">Fleet Owner</option>
+                    <option value="Broker / Aggregator">Broker / Aggregator</option>
+                    <option value="Fleet Operator">Fleet Operator</option>
+                    <option value="Independent Truck Owner">Independent Truck Owner</option>
+                  </select>
                 </div>
               </div>
 
-              {/* Website */}
-              <div className="form-field-group">
-                <label className="field-label">Website (Optional)</label>
-                <div className="input-with-icon">
-                  <Globe size={16} className="input-icon-left" />
+              <div className="form-two-col">
+                <div className="form-field-group">
+                  <label>GSTIN (Optional)</label>
                   <input
                     type="text"
-                    placeholder="https://www.example.com"
-                    value={formData.website}
-                    onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-                    className="field-input with-left-icon"
+                    maxLength={15}
+                    placeholder="e.g. 36AAAA0000A1Z5"
+                    value={formData.gstin}
+                    onChange={(e) =>
+                      setFormData({ ...formData, gstin: e.target.value.toUpperCase() })
+                    }
+                    className={`field-input-box ${errors.gstin ? 'input-error' : ''}`}
                   />
+                  {errors.gstin && (
+                    <span className="field-error-text" style={{ color: '#EF4444', fontSize: '11.5px' }}>
+                      {errors.gstin}
+                    </span>
+                  )}
                 </div>
-              </div>
 
-              {/* Registered Address */}
-              <div className="form-field-group" style={{ gridColumn: '1 / -1' }}>
-                <label className="field-label">Registered Address</label>
-                <textarea
-                  rows={2}
-                  placeholder="Enter registered business address"
-                  value={formData.address}
-                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                  className="field-input"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Section 2: Primary Contact Person */}
-          <div className="invite-section-card">
-            <div className="section-card-header">
-              <div className="step-circle-badge">2</div>
-              <div>
-                <h3 className="section-title">Primary Contact Person</h3>
-                <p className="section-subtitle">Enter the main contact person who will receive the invitation.</p>
-              </div>
-            </div>
-
-            <div className="form-fields-grid">
-              {/* Contact Person Name */}
-              <div className="form-field-group">
-                <label className="field-label">
-                  Contact Person Name <span className="req-star">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Enter full name"
-                  value={formData.contactName}
-                  onChange={(e) => setFormData({ ...formData, contactName: e.target.value })}
-                  className={`field-input ${errors.contactName ? 'input-error' : ''}`}
-                />
-                {errors.contactName && <span className="field-error-text">{errors.contactName}</span>}
-              </div>
-
-              {/* Designation */}
-              <div className="form-field-group">
-                <label className="field-label">
-                  Designation <span className="req-star">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Enter designation (e.g. Owner, Fleet Manager)"
-                  value={formData.designation}
-                  onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
-                  className={`field-input ${errors.designation ? 'input-error' : ''}`}
-                />
-                {errors.designation && <span className="field-error-text">{errors.designation}</span>}
-              </div>
-
-              {/* Email Address */}
-              <div className="form-field-group">
-                <label className="field-label">
-                  Email Address <span className="req-star">*</span>
-                </label>
-                <div className="input-with-icon">
-                  <Mail size={16} className="input-icon-left" />
+                <div className="form-field-group">
+                  <label>PAN Number (Optional)</label>
                   <input
-                    type="email"
-                    required
-                    placeholder="Enter email address"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className={`field-input with-left-icon ${errors.email ? 'input-error' : ''}`}
-                  />
-                </div>
-                {errors.email && <span className="field-error-text">{errors.email}</span>}
-              </div>
-
-              {/* Mobile Number with +91 indicator */}
-              <div className="form-field-group">
-                <label className="field-label">
-                  Mobile Number <span className="req-star">*</span>
-                </label>
-                <div className="mobile-input-group">
-                  <span className="country-code-pill">🇮🇳 +91</span>
-                  <input
-                    type="tel"
-                    required
+                    type="text"
                     maxLength={10}
-                    placeholder="Enter 10 digit mobile number"
-                    value={formData.mobile}
-                    onChange={(e) => setFormData({ ...formData, mobile: e.target.value.replace(/\D/g, '') })}
-                    className={`field-input mobile-input ${errors.mobile ? 'input-error' : ''}`}
+                    placeholder="e.g. AAAAA1234A"
+                    value={formData.pan}
+                    onChange={(e) =>
+                      setFormData({ ...formData, pan: e.target.value.toUpperCase() })
+                    }
+                    className={`field-input-box ${errors.pan ? 'input-error' : ''}`}
                   />
+                  {errors.pan && (
+                    <span className="field-error-text" style={{ color: '#EF4444', fontSize: '11.5px' }}>
+                      {errors.pan}
+                    </span>
+                  )}
                 </div>
-                {errors.mobile && <span className="field-error-text">{errors.mobile}</span>}
+              </div>
+
+              <div className="form-two-col" style={{ marginBottom: 0 }}>
+                <div className="form-field-group">
+                  <label>Year of Establishment (Optional)</label>
+                  <div className="field-input-icon-wrap">
+                    <Calendar size={16} className="field-leading-icon" />
+                    <input
+                      type="text"
+                      placeholder="Select year"
+                      value={formData.establishmentYear}
+                      onChange={(e) =>
+                        setFormData({ ...formData, establishmentYear: e.target.value })
+                      }
+                      className="field-input-box"
+                    />
+                  </div>
+                </div>
+
+                <div className="form-field-group">
+                  <label>Website (Optional)</label>
+                  <div className="field-input-icon-wrap">
+                    <Globe size={16} className="field-leading-icon" />
+                    <input
+                      type="text"
+                      placeholder="https://www.example.com"
+                      value={formData.website}
+                      onChange={(e) =>
+                        setFormData({ ...formData, website: e.target.value })
+                      }
+                      className="field-input-box"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Section 3: Operating Details (Optional) */}
-          <div className="invite-section-card">
-            <div className="section-card-header">
-              <div className="step-circle-badge">3</div>
-              <div>
-                <h3 className="section-title">Operating Details (Optional)</h3>
-                <p className="section-subtitle">Provide initial operating details to understand the vendor profile.</p>
+            {/* Card 2: Primary Contact Person */}
+            <div className="vendor-form-card">
+              <div className="vendor-card-header">
+                <div className="step-num-circle">2</div>
+                <div>
+                  <h3 className="card-title-text">Primary Contact Person</h3>
+                  <p className="card-subtitle-text">
+                    Enter the main contact person who will receive the invitation.
+                  </p>
+                </div>
+              </div>
+
+              <div className="form-two-col">
+                <div className="form-field-group">
+                  <label>
+                    Contact Person Name <span className="required-star">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Enter full name"
+                    value={formData.contactName}
+                    onChange={(e) =>
+                      setFormData({ ...formData, contactName: e.target.value })
+                    }
+                    className={`field-input-box ${errors.contactName ? 'input-error' : ''}`}
+                  />
+                  {errors.contactName && (
+                    <span className="field-error-text" style={{ color: '#EF4444', fontSize: '11.5px' }}>
+                      {errors.contactName}
+                    </span>
+                  )}
+                </div>
+
+                <div className="form-field-group">
+                  <label>
+                    Designation <span className="required-star">*</span>
+                  </label>
+                  <select
+                    value={formData.designation}
+                    onChange={(e) =>
+                      setFormData({ ...formData, designation: e.target.value })
+                    }
+                    className="field-input-box"
+                  >
+                    <option value="Owner">Owner</option>
+                    <option value="Managing Director">Managing Director</option>
+                    <option value="Fleet Manager">Fleet Manager</option>
+                    <option value="Operations Head">Operations Head</option>
+                    <option value="Dispatcher">Dispatcher</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-two-col" style={{ marginBottom: 0 }}>
+                <div className="form-field-group">
+                  <label>
+                    Email Address <span className="required-star">*</span>
+                  </label>
+                  <div className="field-input-icon-wrap">
+                    <Mail size={16} className="field-leading-icon" />
+                    <input
+                      type="email"
+                      required
+                      placeholder="Enter email address"
+                      value={formData.email}
+                      onChange={(e) =>
+                        setFormData({ ...formData, email: e.target.value })
+                      }
+                      className={`field-input-box ${errors.email ? 'input-error' : ''}`}
+                    />
+                  </div>
+                  {errors.email && (
+                    <span className="field-error-text" style={{ color: '#EF4444', fontSize: '11.5px' }}>
+                      {errors.email}
+                    </span>
+                  )}
+                </div>
+
+                <div className="form-field-group">
+                  <label>
+                    Mobile Number <span className="required-star">*</span>
+                  </label>
+                  <div className="field-prefix-wrap">
+                    <span className="prefix-badge">🇮🇳 +91</span>
+                    <input
+                      type="tel"
+                      required
+                      maxLength={10}
+                      placeholder="Enter 10 digit mobile number"
+                      value={formData.mobile}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          mobile: e.target.value.replace(/\D/g, ''),
+                        })
+                      }
+                      className={`prefix-input ${errors.mobile ? 'input-error' : ''}`}
+                    />
+                  </div>
+                  {errors.mobile && (
+                    <span className="field-error-text" style={{ color: '#EF4444', fontSize: '11.5px' }}>
+                      {errors.mobile}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
-            <div className="form-fields-grid">
+            {/* Card 3: Operating Details */}
+            <div className="vendor-form-card">
+              <div className="vendor-card-header">
+                <div className="step-num-circle">3</div>
+                <div>
+                  <h3 className="card-title-text">Operating Details</h3>
+                  <p className="card-subtitle-text">
+                    Provide initial operating details to understand the vendor profile.
+                  </p>
+                </div>
+              </div>
+
               {/* Operating Cities / Lanes */}
-              <div className="form-field-group">
-                <label className="field-label">Operating Cities / Lanes (Optional)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Hyderabad - Bengaluru, Mumbai - Delhi"
-                  value={formData.operatingLanes}
-                  onChange={(e) => setFormData({ ...formData, operatingLanes: e.target.value })}
-                  className="field-input"
-                />
+              <div className="form-field-group" style={{ marginBottom: '16px' }}>
+                <label>Operating Cities / Lanes</label>
+                <div className="tags-box-container">
+                  {operatingLanes.map((lane) => (
+                    <span key={lane} className="tag-badge-pill">
+                      {lane}
+                      <span
+                        className="tag-close-btn"
+                        onClick={() => removeLane(lane)}
+                        title="Remove lane"
+                      >
+                        <X size={12} />
+                      </span>
+                    </span>
+                  ))}
+                  {showAddLane ? (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <input
+                        type="text"
+                        placeholder="City/Lane..."
+                        value={newLaneInput}
+                        onChange={(e) => setNewLaneInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            addLane();
+                          }
+                        }}
+                        style={{
+                          height: '26px',
+                          padding: '0 6px',
+                          border: '1px solid #CBD5E1',
+                          borderRadius: '4px',
+                          fontSize: '12px',
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={addLane}
+                        className="add-tag-btn"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="add-tag-btn"
+                      onClick={() => setShowAddLane(true)}
+                    >
+                      + Add More
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Vehicle Types */}
-              <div className="form-field-group">
-                <label className="field-label">Vehicle Types</label>
-                <select
-                  value={formData.vehicleTypes}
-                  onChange={(e) => setFormData({ ...formData, vehicleTypes: e.target.value })}
-                  className="field-input"
-                >
-                  <option value="40 MT Multi-Axle Trailer">40 MT Multi-Axle Trailer</option>
-                  <option value="35 MT High-Bed Trailer">35 MT High-Bed Trailer</option>
-                  <option value="32ft Multi-Axle Container">32ft Multi-Axle Container</option>
-                  <option value="16 Wheeler 25 MT">16 Wheeler 25 MT</option>
-                  <option value="Open Body Truck">Open Body Truck</option>
-                </select>
+              <div className="form-field-group" style={{ marginBottom: '16px' }}>
+                <label>
+                  Vehicle Types <span className="required-star">*</span>
+                </label>
+                <div className="tags-box-container">
+                  {vehicleTypes.map((type) => (
+                    <span key={type} className="tag-badge-pill">
+                      {type}
+                      <span
+                        className="tag-close-btn"
+                        onClick={() => removeVehicleType(type)}
+                        title="Remove vehicle type"
+                      >
+                        <X size={12} />
+                      </span>
+                    </span>
+                  ))}
+                  {showAddVehicle ? (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <input
+                        type="text"
+                        placeholder="Vehicle type..."
+                        value={newVehicleInput}
+                        onChange={(e) => setNewVehicleInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            addVehicleType();
+                          }
+                        }}
+                        style={{
+                          height: '26px',
+                          padding: '0 6px',
+                          border: '1px solid #CBD5E1',
+                          borderRadius: '4px',
+                          fontSize: '12px',
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={addVehicleType}
+                        className="add-tag-btn"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="add-tag-btn"
+                      onClick={() => setShowAddVehicle(true)}
+                    >
+                      + Add More
+                    </button>
+                  )}
+                </div>
               </div>
 
-              {/* No. of Vehicles (Approx) */}
-              <div className="form-field-group">
-                <label className="field-label">No. of Vehicles (Approx)</label>
-                <input
-                  type="number"
-                  placeholder="Enter number of vehicles"
-                  value={formData.vehicleCount}
-                  onChange={(e) => setFormData({ ...formData, vehicleCount: e.target.value })}
-                  className="field-input"
-                />
-              </div>
+              <div className="form-two-col" style={{ marginBottom: 0 }}>
+                <div className="form-field-group">
+                  <label>No. of Vehicles (Approx)</label>
+                  <div className="field-input-icon-wrap">
+                    <Truck size={16} className="field-leading-icon" />
+                    <input
+                      type="number"
+                      placeholder="Enter number of vehicles"
+                      value={formData.vehicleCount}
+                      onChange={(e) =>
+                        setFormData({ ...formData, vehicleCount: e.target.value })
+                      }
+                      className="field-input-box"
+                    />
+                  </div>
+                </div>
 
-              {/* Fleet Capacity (MT) (Approx) */}
-              <div className="form-field-group">
-                <label className="field-label">Fleet Capacity (MT) (Approx)</label>
-                <input
-                  type="number"
-                  placeholder="Enter total capacity in MT"
-                  value={formData.fleetCapacity}
-                  onChange={(e) => setFormData({ ...formData, fleetCapacity: e.target.value })}
-                  className="field-input"
-                />
+                <div className="form-field-group">
+                  <label>Fleet Capacity (MT) (Approx)</label>
+                  <div className="field-input-icon-wrap">
+                    <Building2 size={16} className="field-leading-icon" />
+                    <input
+                      type="number"
+                      placeholder="Enter total capacity in MT"
+                      value={formData.fleetCapacity}
+                      onChange={(e) =>
+                        setFormData({ ...formData, fleetCapacity: e.target.value })
+                      }
+                      className="field-input-box"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Section 4: Invitation Settings */}
-          <div className="invite-section-card">
-            <div className="section-card-header">
-              <div className="step-circle-badge">4</div>
-              <div>
-                <h3 className="section-title">Invitation Settings</h3>
-                <p className="section-subtitle">Configure the invitation and access settings.</p>
-              </div>
-            </div>
-
-            <div className="form-fields-grid" style={{ gridTemplateColumns: '1fr 220px' }}>
-              {/* Invitation Message */}
-              <div className="form-field-group">
-                <div className="field-label-row">
-                  <label className="field-label">Invitation Message (Optional)</label>
-                  <span className="field-char-badge">{formData.invitationMessage.length}/500</span>
+          {/* Right Column (Cards 4, 5 & Actions) */}
+          <div className="add-vendor-right-col">
+            {/* Card 4: Invitation Settings */}
+            <div className="vendor-form-card">
+              <div className="vendor-card-header">
+                <div className="step-num-circle">4</div>
+                <div>
+                  <h3 className="card-title-text">Invitation Settings</h3>
+                  <p className="card-subtitle-text">
+                    Configure the invitation and access settings.
+                  </p>
                 </div>
-                <textarea
-                  rows={3}
-                  maxLength={500}
-                  value={formData.invitationMessage}
-                  onChange={(e) => setFormData({ ...formData, invitationMessage: e.target.value })}
-                  className="field-input"
-                />
               </div>
 
-              {/* Valid For (Days) */}
+              <div className="form-field-group" style={{ marginBottom: '14px' }}>
+                <label>Invitation Message (Optional)</label>
+                <textarea
+                  className="invitation-textarea"
+                  rows={4}
+                  maxLength={500}
+                  placeholder="Enter invitation message"
+                  value={formData.invitationMessage}
+                  onChange={(e) =>
+                    setFormData({ ...formData, invitationMessage: e.target.value })
+                  }
+                />
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    marginTop: '4px',
+                    alignItems: 'center',
+                  }}
+                >
+                  <span style={{ fontSize: '11px', color: '#64748B' }}>
+                    You are invited to join North Eastern Carriers as a trusted transport partner.
+                  </span>
+                  <span className="char-counter-text">
+                    {formData.invitationMessage.length}/500
+                  </span>
+                </div>
+              </div>
+
               <div className="form-field-group">
-                <label className="field-label">Valid For (Days)</label>
+                <label>
+                  Valid For <span className="required-star">*</span>
+                </label>
                 <select
                   value={formData.validDays}
-                  onChange={(e) => setFormData({ ...formData, validDays: e.target.value })}
-                  className="field-input"
+                  onChange={(e) =>
+                    setFormData({ ...formData, validDays: e.target.value })
+                  }
+                  className="field-input-box"
                 >
                   <option value="7 Days">7 Days</option>
                   <option value="14 Days">14 Days</option>
                   <option value="30 Days">30 Days</option>
                 </select>
-                <span className="field-hint-text">The invitation link will be valid for the selected period.</span>
+                <span style={{ fontSize: '11.5px', color: '#64748B', marginTop: '4px' }}>
+                  The invitation link will be valid for the selected period.
+                </span>
               </div>
             </div>
-          </div>
 
-          {/* Bottom Action Buttons */}
-          <div className="invite-form-actions">
-            <button type="button" className="btn-cancel-flat" onClick={onBack} disabled={isSubmitting}>
-              Cancel
-            </button>
-            <button type="submit" className="btn-send-invitation-orange" disabled={isSubmitting}>
-              <Send size={15} />
-              <span>{isSubmitting ? 'Creating vendor...' : 'Send Invitation'}</span>
-            </button>
-          </div>
-        </form>
-
-        {/* Right Info Sidebar (Matching Image 1) */}
-        <aside className="invite-sidebar-column">
-          {/* 1. Invitation Process Card */}
-          <div className="invite-sidebar-card">
-            <h4 className="sidebar-card-title">Invitation Process</h4>
-            <div className="sidebar-process-steps">
-              <div className="process-step-item">
-                <div className="process-step-num active">1</div>
-                <div className="process-step-body">
-                  <div className="process-step-title">Fill vendor details</div>
-                  <div className="process-step-desc">Enter business and contact information</div>
+            {/* Card 5: Invitation Process */}
+            <div className="vendor-form-card">
+              <div className="vendor-card-header">
+                <div className="step-num-circle">5</div>
+                <div>
+                  <h3 className="card-title-text">Invitation Process</h3>
+                  <p className="card-subtitle-text">
+                    The vendor will receive an email and SMS with the registration link.
+                  </p>
                 </div>
               </div>
 
-              <div className="process-step-item">
-                <div className="process-step-num">2</div>
-                <div className="process-step-body">
-                  <div className="process-step-title">Send invitation</div>
-                  <div className="process-step-desc">Vendor will receive an email/SMS with registration link</div>
+              <div className="process-steps-container">
+                <div className="process-step-item">
+                  <div className="step-small-num">1</div>
+                  <div>
+                    <h5 className="step-info-title">Fill vendor details</h5>
+                    <p className="step-info-desc">Enter business and contact information</p>
+                  </div>
+                </div>
+
+                <div className="process-step-item">
+                  <div className="step-small-num">2</div>
+                  <div>
+                    <h5 className="step-info-title">Send invitation</h5>
+                    <p className="step-info-desc">Vendor will receive an email/SMS with registration link</p>
+                  </div>
+                </div>
+
+                <div className="process-step-item">
+                  <div className="step-small-num">3</div>
+                  <div>
+                    <h5 className="step-info-title">Vendor registration</h5>
+                    <p className="step-info-desc">Vendor completes registration and uploads documents</p>
+                  </div>
+                </div>
+
+                <div className="process-step-item">
+                  <div className="step-small-num">4</div>
+                  <div>
+                    <h5 className="step-info-title">Verification</h5>
+                    <p className="step-info-desc">Admin verifies documents and approves the vendor</p>
+                  </div>
+                </div>
+
+                <div className="process-step-item">
+                  <div className="step-small-num">5</div>
+                  <div>
+                    <h5 className="step-info-title">Start operations</h5>
+                    <p className="step-info-desc">Approved vendor can receive RFQs and submit quotations</p>
+                  </div>
                 </div>
               </div>
 
-              <div className="process-step-item">
-                <div className="process-step-num">3</div>
-                <div className="process-step-body">
-                  <div className="process-step-title">Vendor registration</div>
-                  <div className="process-step-desc">Vendor completes registration and uploads documents</div>
+              {/* Important Notes Callout */}
+              <div className="important-notes-alert">
+                <div className="notes-alert-header">
+                  <Info size={16} />
+                  <span>Important Notes</span>
                 </div>
+                <ul className="notes-alert-list">
+                  <li>Email or mobile number must be unique.</li>
+                  <li>Vendor will be able to register only through the invitation link.</li>
+                  <li>Vendor needs to complete document upload for verification.</li>
+                  <li>Unverified vendors cannot receive RFQs or submit quotations.</li>
+                  <li>You will be notified once the vendor completes registration.</li>
+                </ul>
               </div>
+            </div>
 
-              <div className="process-step-item">
-                <div className="process-step-num">4</div>
-                <div className="process-step-body">
-                  <div className="process-step-title">Verification</div>
-                  <div className="process-step-desc">Admin verifies documents and approves the vendor</div>
-                </div>
-              </div>
-
-              <div className="process-step-item">
-                <div className="process-step-num">5</div>
-                <div className="process-step-body">
-                  <div className="process-step-title">Start operations</div>
-                  <div className="process-step-desc">Approved vendor can receive RFQs and submit quotations</div>
-                </div>
-              </div>
+            {/* Bottom Action Buttons */}
+            <div className="form-bottom-actions-row">
+              <button
+                type="button"
+                className="btn-form-cancel"
+                onClick={onBack}
+                disabled={isSubmitting}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="btn-send-invitation"
+                disabled={isSubmitting}
+              >
+                <Send size={15} />
+                <span>{isSubmitting ? 'Sending...' : 'Send Invitation'}</span>
+              </button>
             </div>
           </div>
-
-          {/* 2. Invitation Message Callout */}
-          <div className="invitation-tip-card">
-            <div className="tip-icon-wrap">
-              <Mail size={18} />
-            </div>
-            <div>
-              <div className="tip-title">Invitation Message</div>
-              <div className="tip-text">
-                The vendor will receive an email and SMS with the registration link and your message.
-              </div>
-            </div>
-          </div>
-
-          {/* 3. Important Notes Card */}
-          <div className="invite-sidebar-card">
-            <div className="important-notes-header">
-              <Info size={16} className="notes-icon" />
-              <span className="sidebar-card-title">Important Notes</span>
-            </div>
-            <ul className="important-notes-list">
-              <li>Email or Mobile number must be unique.</li>
-              <li>Vendor will be able to register only through the invitation link.</li>
-              <li>Vendor needs to complete document upload for verification.</li>
-              <li>Unverified vendors cannot receive RFQs or submit quotations.</li>
-              <li>You will be notified once the vendor completes registration.</li>
-            </ul>
-          </div>
-        </aside>
-      </div>
+        </div>
+      </form>
     </div>
   );
 };

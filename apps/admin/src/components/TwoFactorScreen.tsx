@@ -2,17 +2,17 @@ import React, { useState, useRef, useEffect } from 'react';
 import { BrandLogo } from './BrandLogo';
 import { supabase } from '../utils/supabase';
 import {
-  Truck,
+  MapPin,
   ShieldCheck,
   Users,
   TrendingUp,
   Shield,
-  Info,
   ArrowRight,
   ArrowLeft,
   KeyRound,
   X,
-  ShieldAlert
+  ShieldAlert,
+  HelpCircle,
 } from 'lucide-react';
 
 interface TwoFactorScreenProps {
@@ -27,22 +27,25 @@ export const TwoFactorScreen: React.FC<TwoFactorScreenProps> = ({
   onBackToLogin,
 }) => {
   const [digits, setDigits] = useState<string[]>(['', '', '', '', '', '']);
-  const [rememberDevice, setRememberDevice] = useState<boolean>(true);
+  const [rememberDevice, setRememberDevice] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [showBackupModal, setShowBackupModal] = useState<boolean>(false);
   const [backupCodeInput, setBackupCodeInput] = useState<string>('');
   const [backupLoading, setBackupLoading] = useState<boolean>(false);
   const [backupError, setBackupError] = useState<string>('');
-  const [resendCountdown, setResendCountdown] = useState<number>(45);
+  const [resendCountdown, setResendCountdown] = useState<number>(38);
   const [resendNotice, setResendNotice] = useState<string>('');
+  const [isResending, setIsResending] = useState<boolean>(false);
 
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
+  // Focus first input on mount
   useEffect(() => {
     inputRefs.current[0]?.focus();
   }, []);
 
+  // Resend countdown timer
   useEffect(() => {
     if (resendCountdown <= 0) return;
     const timer = setInterval(() => {
@@ -50,6 +53,36 @@ export const TwoFactorScreen: React.FC<TwoFactorScreenProps> = ({
     }, 1000);
     return () => clearInterval(timer);
   }, [resendCountdown]);
+
+  // Escape key closes backup modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && showBackupModal) {
+        setShowBackupModal(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showBackupModal]);
+
+  const maskEmail = (rawEmail: string): string => {
+    if (!rawEmail) return 'your account';
+    const parts = rawEmail.split('@');
+    if (parts.length !== 2) return rawEmail;
+    const [name, domain] = parts;
+    if (name.length <= 2) {
+      return `${name[0]}*@${domain}`;
+    }
+    const visibleStart = name.slice(0, 2);
+    const visibleEnd = name.slice(-1);
+    return `${visibleStart}••••${visibleEnd}@${domain}`;
+  };
+
+  const formatTimer = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
 
   const handleDigitChange = (index: number, value: string) => {
     const cleanVal = value.replace(/\D/g, '').slice(-1);
@@ -79,9 +112,23 @@ export const TwoFactorScreen: React.FC<TwoFactorScreenProps> = ({
       newDigits[i] = pasted[i];
     }
     setDigits(newDigits);
+    setErrorMessage('');
 
     const nextIdx = Math.min(pasted.length, 5);
     inputRefs.current[nextIdx]?.focus();
+  };
+
+  const handleResend = () => {
+    if (resendCountdown > 0 || isResending) return;
+    setIsResending(true);
+    setResendCountdown(45);
+    setResendNotice('Open your authenticator app (Google Authenticator, Authy, etc.) to view the latest 6-digit rolling code.');
+    setTimeout(() => {
+      setIsResending(false);
+    }, 500);
+    setTimeout(() => {
+      setResendNotice('');
+    }, 5000);
   };
 
   const handleVerify = async (e?: React.FormEvent) => {
@@ -96,30 +143,23 @@ export const TwoFactorScreen: React.FC<TwoFactorScreenProps> = ({
     setIsLoading(true);
     setErrorMessage('');
 
-    // Allow quick test codes 123456 or 000000 for development review
-    if (code === '123456' || code === '000000') {
-      onVerifySuccess({
-        name: 'Pavani (Super Admin)',
-        role: 'SUPER_ADMIN',
-        email: email || 'superadmin@necl.com',
-      });
-      return;
-    }
-
     try {
+      // Development testing mode support (disabled in production)
+      const mock2FaCode = (import.meta as any).env?.VITE_MOCK_OTP_CODE;
+      if (mock2FaCode && code === mock2FaCode && ((import.meta as any).env?.DEV || (import.meta as any).env?.MODE !== 'production')) {
+        const { data: { session: devSession } } = await supabase.auth.getSession();
+        onVerifySuccess({
+          name: devSession?.user?.user_metadata?.name || devSession?.user?.email?.split('@')[0] || 'Super Admin',
+          role: 'SUPER_ADMIN',
+          email: devSession?.user?.email || email,
+        });
+        return;
+      }
+
       // Get current session to access the user
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session?.user) {
-        // Fallback for pre-filled demo account without remote session
-        if (email.toLowerCase().includes('superadmin')) {
-          onVerifySuccess({
-            name: 'Pavani (Super Admin)',
-            role: 'SUPER_ADMIN',
-            email: email,
-          });
-          return;
-        }
         throw new Error('No active session. Please log in again.');
       }
 
@@ -127,18 +167,12 @@ export const TwoFactorScreen: React.FC<TwoFactorScreenProps> = ({
       const { data: factors } = await supabase.auth.mfa.listFactors();
       
       if (!factors || factors.totp.length === 0) {
-        // No MFA enrolled - for development, allow login
-        // TODO: In production, enforce MFA enrollment for SUPER_ADMIN role
-        console.warn('No MFA factors enrolled for this user');
-        onVerifySuccess({
-          name: session.user.user_metadata?.name || 'Super Admin',
-          role: 'SUPER_ADMIN',
-          email: session.user.email || email,
-        });
-        return;
+        throw new Error(
+          'Two-Factor Authentication is required for Super Administrators, but no authenticator is enrolled. Please contact IT Security.'
+        );
       }
 
-      // Get the TOTP factor (should be only one)
+      // Get the TOTP factor
       const factor = factors.totp[0];
 
       // Create challenge for the factor
@@ -162,7 +196,6 @@ export const TwoFactorScreen: React.FC<TwoFactorScreenProps> = ({
       }
 
       if (verifyData) {
-        // MFA verification successful
         onVerifySuccess({
           name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Super Admin',
           role: 'SUPER_ADMIN',
@@ -188,11 +221,10 @@ export const TwoFactorScreen: React.FC<TwoFactorScreenProps> = ({
     setBackupError('');
 
     try {
-      // In production, implement proper backup code verification
-      // For now, show a helpful message
+      // Backup recovery verification guidance
       setBackupError(
-        'Backup code verification requires account recovery through your administrator. ' +
-        'Please contact NECL system administrator for emergency access recovery.'
+        'Backup code verification requires emergency account recovery through your system administrator. ' +
+        'Please contact NECL IT Security Support for access reset.'
       );
     } finally {
       setBackupLoading(false);
@@ -207,16 +239,20 @@ export const TwoFactorScreen: React.FC<TwoFactorScreenProps> = ({
       {/* Edge-to-edge Content Container */}
       <div className="login-content-wrapper">
         {/* Left Branding Content */}
-        <section className="login-branding-section" aria-label="North Eastern Carriers Two-Factor Security">
+        <section className="twofa-branding-section" aria-label="North Eastern Carriers Overview">
+          {/* Logo & Tagline */}
           <div className="hero-brand-header">
-            <BrandLogo theme="dark" size="lg" alt="North Eastern Carriers" />
-            <div className="brand-orange-bar" />
+            <BrandLogo theme="dark" size="md" alt="North Eastern Carriers" />
+            <div className="hero-logo-tagline">
+              LOGISTICS &nbsp;|&nbsp; PEOPLE &nbsp;|&nbsp; PROGRESS
+            </div>
+            <div className="hero-accent-line" />
           </div>
 
-          <div className="hero-headline-group">
+          {/* Heading Group */}
+          <div className="twofa-headline-group">
             <h1 className="hero-main-title">
-              Secure<br />
-              Logistics<br />
+              Secure Logistics<br />
               Across <span className="highlight-orange">India</span>
             </h1>
             <p className="hero-subtitle">
@@ -224,28 +260,38 @@ export const TwoFactorScreen: React.FC<TwoFactorScreenProps> = ({
             </p>
           </div>
 
-          <div className="hero-features-strip" role="list">
-            <div className="feature-item" role="listitem">
-              <Truck size={22} className="feature-orange-icon" />
-              <div className="feature-title">Pan India<br />Coverage</div>
+          {/* 4 Feature Items as a properly aligned vertical list */}
+          <div className="twofa-features-vertical-list" role="list">
+            <div className="twofa-feature-item" role="listitem">
+              <div className="twofa-feature-icon-box">
+                <MapPin size={18} />
+              </div>
+              <span className="twofa-feature-text">Pan India Coverage</span>
             </div>
-            <div className="feature-divider" />
-            <div className="feature-item" role="listitem">
-              <ShieldCheck size={22} className="feature-orange-icon" />
-              <div className="feature-title">Safe & Secure<br />Transport</div>
+
+            <div className="twofa-feature-item" role="listitem">
+              <div className="twofa-feature-icon-box">
+                <ShieldCheck size={18} />
+              </div>
+              <span className="twofa-feature-text">Safe & Secure Transport</span>
             </div>
-            <div className="feature-divider" />
-            <div className="feature-item" role="listitem">
-              <Users size={22} className="feature-orange-icon" />
-              <div className="feature-title">Trusted<br />Network</div>
+
+            <div className="twofa-feature-item" role="listitem">
+              <div className="twofa-feature-icon-box">
+                <Users size={18} />
+              </div>
+              <span className="twofa-feature-text">Trusted Network</span>
             </div>
-            <div className="feature-divider" />
-            <div className="feature-item" role="listitem">
-              <TrendingUp size={22} className="feature-orange-icon" />
-              <div className="feature-title">Real Time<br />Tracking</div>
+
+            <div className="twofa-feature-item" role="listitem">
+              <div className="twofa-feature-icon-box">
+                <TrendingUp size={18} />
+              </div>
+              <span className="twofa-feature-text">Real-Time Tracking</span>
             </div>
           </div>
 
+          {/* Bottom Tagline & Accent Line */}
           <div className="hero-footer-tagline">
             <div className="orange-accent-dash" />
             <span className="quote-text">“Your Cargo, Our Commitment”</span>
@@ -253,170 +299,173 @@ export const TwoFactorScreen: React.FC<TwoFactorScreenProps> = ({
         </section>
 
         {/* Right Floating 2FA Card */}
-        <section className="login-card-floating-wrapper" aria-label="Two Factor Authentication">
-          <div className="login-card-container">
+        <section className="login-card-floating-wrapper" aria-label="Two Factor Authentication Form">
+          <div className="twofa-card-container">
+            {/* Centered Brand Logo */}
             <div className="form-brand-center">
-              <BrandLogo theme="light" size="lg" alt="North Eastern Carriers" />
+              <BrandLogo theme="light" size="sm" alt="North Eastern Carriers" />
             </div>
 
-            <div className="form-heading-group">
-              <h2 className="form-title">Two-Factor Authentication</h2>
-              <p className="form-desc">Enter the 6-digit verification code for {email}</p>
-            </div>
-
-            {/* Security Alert Banner */}
-            <div className="twofa-alert-banner">
-              <Shield className="alert-shield-icon" size={20} />
-              <span>For your security, Super Admin access requires 2-step verification.</span>
-            </div>
-
-          {errorMessage && (
-            <div className="form-alert-error" role="alert">
-              <ShieldAlert size={16} />
-              <span>{errorMessage}</span>
-            </div>
-          )}
-
-          {/* 6 OTP Boxes Form */}
-          <form onSubmit={handleVerify} className="login-form-element">
-            <div className="otp-digit-boxes-row">
-              {digits.map((digit, idx) => (
-                <input
-                  key={idx}
-                  ref={(el) => (inputRefs.current[idx] = el)}
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={1}
-                  value={digit}
-                  onChange={(e) => handleDigitChange(idx, e.target.value)}
-                  onKeyDown={(e) => handleKeyDown(idx, e)}
-                  onPaste={handlePaste}
-                  className={`otp-digit-box ${digit ? 'filled' : ''}`}
-                  aria-label={`Digit ${idx + 1}`}
-                />
-              ))}
-            </div>
-
-            <div className="otp-helper-row">
-              <p className="otp-helper-subtext">
-                Enter the 6-digit TOTP code generated by your authenticator app.
+            {/* Form Heading & Masked Account Identifier */}
+            <div className="twofa-card-heading-group">
+              <h2 className="twofa-card-title">Two-Factor Authentication</h2>
+              <p className="twofa-card-subtitle">
+                Enter the 6-digit verification code for <strong className="twofa-email-highlight">{maskEmail(email)}</strong>
               </p>
-              <div className="otp-resend-container">
-                {resendCountdown > 0 ? (
-                  <span className="otp-resend-timer">
-                    Resend code in <strong>{resendCountdown}s</strong>
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    className="btn-resend-code-link"
-                    onClick={() => {
-                      setResendCountdown(60);
-                      setResendNotice('New verification code sent to your registered channel.');
-                      setTimeout(() => setResendNotice(''), 4000);
-                    }}
-                  >
-                    Resend Code
-                  </button>
-                )}
-              </div>
             </div>
 
-            {resendNotice && (
-              <div className="form-alert-info" role="status">
-                <span>{resendNotice}</span>
+            {/* Compact Security Info Row */}
+            <div className="twofa-compact-security-row">
+              <Shield size={16} className="twofa-security-shield-icon" />
+              <span>Verify your identity to continue to the Super Admin panel.</span>
+            </div>
+
+            {/* Error Message */}
+            {errorMessage && (
+              <div className="form-alert-error" role="alert" aria-live="assertive">
+                <ShieldAlert size={16} />
+                <span>{errorMessage}</span>
               </div>
             )}
 
-            {/* Remember Device Checkbox */}
-            <div className="remember-device-row">
-              <label className="checkbox-container">
-                <input
-                  type="checkbox"
-                  checked={rememberDevice}
-                  onChange={(e) => setRememberDevice(e.target.checked)}
-                />
-                <span className="checkbox-label">Remember this device for 30 days</span>
-              </label>
-              <span title="Avoids 2FA on this trusted browser for 30 days">
-                <Info size={16} className="info-icon" />
-              </span>
-            </div>
+            {/* 6 OTP Boxes Form */}
+            <form onSubmit={handleVerify} className="twofa-form-element" noValidate>
+              <div className="otp-digit-boxes-row" role="group" aria-label="6-digit verification code">
+                {digits.map((digit, idx) => (
+                  <input
+                    key={idx}
+                    ref={(el) => (inputRefs.current[idx] = el)}
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={1}
+                    value={digit}
+                    onChange={(e) => handleDigitChange(idx, e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(idx, e)}
+                    onPaste={handlePaste}
+                    className={`twofa-otp-input ${digit ? 'filled' : ''}`}
+                    aria-label={`Digit ${idx + 1} of 6`}
+                  />
+                ))}
+              </div>
 
-            {/* Helper Note - Remove auto-fill in production */}
-            <div className="twofa-mock-helper-box">
-              <Info size={16} className="info-icon" style={{ marginRight: '8px' }} />
-              <span style={{ fontSize: '13px', color: '#64748b' }}>
-                Enter the 6-digit code from your authenticator app (Google Authenticator, Authy, etc.)
-              </span>
-            </div>
+              {/* OTP Instructions and Resend Timer */}
+              <div className="twofa-instructions-timer-row">
+                <span className="twofa-instructions-text">
+                  Enter the 6-digit code generated by your authenticator app.
+                </span>
+                <div className="twofa-resend-wrap">
+                  {resendCountdown > 0 ? (
+                    <span className="twofa-countdown-text">
+                      Resend code in <strong>{formatTimer(resendCountdown)}</strong>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="twofa-resend-btn"
+                      onClick={handleResend}
+                      disabled={isResending}
+                    >
+                      Resend code
+                    </button>
+                  )}
+                </div>
+              </div>
 
-            {/* Verify CTA */}
-            <button
-              type="submit"
-              disabled={isLoading || digits.join('').length < 6}
-              className="btn-login-orange-cta"
-            >
-              {isLoading ? (
-                <>
-                  <span className="spinner-sm" />
-                  <span>Verifying Code...</span>
-                </>
-              ) : (
-                <>
-                  <span>Verify & Continue</span>
-                  <ArrowRight size={18} strokeWidth={2.5} />
-                </>
+              {resendNotice && (
+                <div className="form-alert-info" role="status" aria-live="polite">
+                  <span>{resendNotice}</span>
+                </div>
               )}
-            </button>
 
-            {/* Footer Navigation Options */}
-            <div className="twofa-card-footer">
+              {/* Remember Device Checkbox */}
+              <div className="twofa-remember-device-row">
+                <label className="twofa-checkbox-label">
+                  <input
+                    type="checkbox"
+                    className="twofa-checkbox-input"
+                    checked={rememberDevice}
+                    onChange={(e) => setRememberDevice(e.target.checked)}
+                  />
+                  <span>Remember this device for 30 days</span>
+                </label>
+                <div className="twofa-tooltip-wrapper" title="Avoids 2FA on this trusted browser for 30 days">
+                  <HelpCircle size={15} className="twofa-tooltip-icon" />
+                </div>
+              </div>
+
+              {/* Primary Action Button */}
               <button
-                type="button"
-                className="twofa-backup-link"
-                onClick={() => {
-                  setBackupError('');
-                  setBackupCodeInput('');
-                  setShowBackupModal(true);
-                }}
+                type="submit"
+                disabled={isLoading || digits.join('').length < 6}
+                className="btn-twofa-primary-cta"
               >
-                <KeyRound size={15} />
-                <span>Lost device? Use backup recovery code</span>
+                {isLoading ? (
+                  <>
+                    <span className="spinner-sm" />
+                    <span>Verifying...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Verify & Continue</span>
+                    <ArrowRight size={18} strokeWidth={2.5} />
+                  </>
+                )}
               </button>
 
-              <button
-                type="button"
-                className="twofa-back-login-btn"
-                onClick={onBackToLogin}
-              >
-                <ArrowLeft size={16} />
-                <span>Back to Login</span>
-              </button>
-            </div>
-          </form>
-        </div>
-      </section>
+              {/* Recovery and Back Buttons */}
+              <div className="twofa-secondary-actions-row">
+                <button
+                  type="button"
+                  className="twofa-secondary-btn"
+                  onClick={onBackToLogin}
+                >
+                  <ArrowLeft size={15} />
+                  <span>Back to Login</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="twofa-secondary-btn recovery"
+                  onClick={() => {
+                    setBackupError('');
+                    setBackupCodeInput('');
+                    setShowBackupModal(true);
+                  }}
+                >
+                  <KeyRound size={15} />
+                  <span>Use backup recovery code</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </section>
       </div>
 
       {/* Backup Code Modal */}
       {showBackupModal && (
         <div className="modal-backdrop-overlay" onClick={() => setShowBackupModal(false)}>
-          <div className="forgot-password-modal-card" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="forgot-password-modal-card"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="backup-modal-title"
+          >
             <div className="modal-header-row">
-              <h3 className="modal-card-title">Backup Recovery Code</h3>
+              <h3 id="backup-modal-title" className="modal-card-title">Backup Recovery Code</h3>
               <button
                 type="button"
                 className="modal-close-icon-btn"
                 onClick={() => setShowBackupModal(false)}
-                aria-label="Close"
+                aria-label="Close dialog"
               >
                 <X size={18} />
               </button>
             </div>
 
             <p className="modal-card-desc">
-              Enter one of your 8-character single-use emergency recovery codes.
+              Enter one of your 8-character single-use emergency backup recovery codes.
             </p>
 
             <form onSubmit={handleBackupVerify} className="forgot-form-element">
@@ -452,7 +501,7 @@ export const TwoFactorScreen: React.FC<TwoFactorScreenProps> = ({
                 </button>
                 <button
                   type="submit"
-                  disabled={backupLoading}
+                  disabled={backupLoading || !backupCodeInput.trim()}
                   className="btn-login-orange-cta"
                 >
                   {backupLoading ? 'Verifying...' : 'Verify Backup Code'}

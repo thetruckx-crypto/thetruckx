@@ -22,6 +22,7 @@ import {
   ExternalLink,
   Shield,
   History,
+  RotateCcw,
 } from 'lucide-react';
 import {
   getVendorVehicleTieupRequests,
@@ -31,6 +32,8 @@ import {
   getTieupStats,
   getTieupAuthorizationDocument,
 } from '../../services/vehicleService';
+import { supabase } from '../../utils/supabase';
+import { useToast } from '../../context/ToastContext';
 
 interface VendorVehicleTieupApprovalProps {
   onNavigateToVehicleDirectory: () => void;
@@ -65,6 +68,7 @@ export const VendorVehicleTieupApproval: React.FC<VendorVehicleTieupApprovalProp
   onNavigateToVehicleVerification,
   onNavigateToVendorProfile,
 }) => {
+  const toast = useToast();
   // State
   const [tieupRequests, setTieupRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -146,10 +150,32 @@ export const VendorVehicleTieupApproval: React.FC<VendorVehicleTieupApprovalProp
     }
   };
 
-  // Initial load
+  // Initial load & Realtime sync
   useEffect(() => {
     fetchStats();
     fetchTieupRequests();
+
+    const channel = supabase
+      .channel('vendor_vehicle_tieup_realtime_sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'vendor_vehicle_links' },
+        () => {
+          fetchStats();
+          fetchTieupRequests();
+        }
+      )
+      .subscribe();
+
+    const pollInterval = setInterval(() => {
+      fetchStats();
+      fetchTieupRequests();
+    }, 10000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(pollInterval);
+    };
   }, []);
 
   // Refetch when tab changes
@@ -181,7 +207,7 @@ export const VendorVehicleTieupApproval: React.FC<VendorVehicleTieupApprovalProp
       setReviewingTieup(tieupData);
       setAuthDocument(authDoc);
     } catch (err: any) {
-      alert(`Failed to load tie-up details: ${err.message}`);
+      toast.error(`Failed to load tie-up details: ${err.message}`);
     } finally {
       setLoadingReview(false);
     }
@@ -189,6 +215,7 @@ export const VendorVehicleTieupApproval: React.FC<VendorVehicleTieupApprovalProp
 
   // Show success message
   const showSuccess = (message: string) => {
+    toast.success(message);
     setSuccessMessage(message);
     setTimeout(() => setSuccessMessage(null), 3000);
   };
@@ -199,12 +226,12 @@ export const VendorVehicleTieupApproval: React.FC<VendorVehicleTieupApprovalProp
 
     // Validation checks
     if (reviewingTieup.vehicle?.verification_status !== 'APPROVED') {
-      alert('Vehicle must be approved before approving the tie-up');
+      toast.warning('Vehicle must be approved before approving the tie-up');
       return;
     }
 
     if (reviewingTieup.vendor?.status !== 'APPROVED') {
-      alert('Vendor must be approved before approving the tie-up');
+      toast.warning('Vendor must be approved before approving the tie-up');
       return;
     }
 
@@ -214,14 +241,14 @@ export const VendorVehicleTieupApproval: React.FC<VendorVehicleTieupApprovalProp
 
     try {
       setSaving(true);
-      await approveVendorVehicleTieup(reviewingTieup.id, 'Admin'); // TODO: Get actual admin ID
+      await approveVendorVehicleTieup(reviewingTieup.id, 'Admin');
       showSuccess('Vendor-vehicle tie-up approved successfully');
       setReviewingTieup(null);
       setAuthDocument(null);
       await fetchStats();
       await fetchTieupRequests();
     } catch (err: any) {
-      alert(`Failed to approve tie-up: ${err.message}`);
+      toast.error(`Failed to approve tie-up: ${err.message}`);
     } finally {
       setSaving(false);
     }
@@ -230,13 +257,13 @@ export const VendorVehicleTieupApproval: React.FC<VendorVehicleTieupApprovalProp
   // Handle reject tie-up
   const handleRejectTieup = async () => {
     if (!reviewingTieup || !rejectionReason.trim()) {
-      alert('Please provide a rejection reason');
+      toast.warning('Please provide a rejection reason');
       return;
     }
 
     try {
       setSaving(true);
-      await rejectVendorVehicleTieup(reviewingTieup.id, rejectionReason, 'Admin'); // TODO: Get actual admin ID
+      await rejectVendorVehicleTieup(reviewingTieup.id, rejectionReason, 'Admin');
       showSuccess('Vendor-vehicle tie-up rejected');
       setShowRejectModal(false);
       setRejectionReason('');
@@ -245,7 +272,7 @@ export const VendorVehicleTieupApproval: React.FC<VendorVehicleTieupApprovalProp
       await fetchStats();
       await fetchTieupRequests();
     } catch (err: any) {
-      alert(`Failed to reject tie-up: ${err.message}`);
+      toast.error(`Failed to reject tie-up: ${err.message}`);
     } finally {
       setSaving(false);
     }
@@ -256,417 +283,403 @@ export const VendorVehicleTieupApproval: React.FC<VendorVehicleTieupApprovalProp
   const totalPages = Math.ceil(tieupRequests.length / ITEMS_PER_PAGE);
 
   return (
-    <div className="min-h-screen bg-[#0D0D0E]">
-      {/* Success Toast */}
+    <div className="cli-dir-wrapper">
+      {/* Toast Alert */}
       {successMessage && (
-        <div className="fixed top-6 right-6 z-50 animate-in slide-in-from-right">
-          <div className="bg-emerald-600 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-3">
-            <CheckCircle size={20} />
-            <span className="font-medium">{successMessage}</span>
-          </div>
+        <div className="toast-success">
+          <CheckCircle size={16} />
+          <span>{successMessage}</span>
         </div>
       )}
 
-      {/* Header */}
-      <div className="border-b border-[#2A2A2C]">
-        <div className="px-8 py-6">
-          {/* Breadcrumbs */}
-          <div className="flex items-center gap-2 text-sm text-gray-400 mb-4">
-            <button onClick={onNavigateToVehicleDirectory} className="hover:text-[#FF6B35]">
-              Fleet & Vehicles
-            </button>
-            <ChevronDown size={14} className="rotate-[-90deg]" />
-            <span className="text-[#FF6B35]">Vendor–Vehicle Tie-up Approval</span>
-          </div>
+      {/* Header Banner */}
+      <div className="client-header-hero">
+        <div className="client-header-truck-bg">
+          <div className="client-header-truck-overlay" />
+        </div>
 
-          {/* Title & Actions */}
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-semibold text-[#F8F8F8] mb-2">Vendor–Vehicle Tie-up Approval</h1>
-              <p className="text-gray-400">
-                Review and approve vehicles linked by vendors for operations.
-              </p>
+        <div className="client-header-info">
+          <div className="client-header-breadcrumbs">
+            <span style={{ cursor: 'pointer' }} onClick={onNavigateToVehicleDirectory}>Fleet & Vehicles</span>
+            <ChevronRight size={13} className="breadcrumb-chevron" />
+            <span className="breadcrumb-current">Vendor–Vehicle Tie-up Approval</span>
+          </div>
+          <h1 className="client-directory-title">Vendor–Vehicle Tie-up Approvals</h1>
+          <p className="client-directory-desc">
+            Review, verify and approve vehicles linked by vendors for transport and brokerage operations.
+          </p>
+        </div>
+
+        <div className="client-header-actions">
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="btn-action-outline"
+          >
+            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+            <span>Refresh</span>
+          </button>
+          <button
+            onClick={onNavigateToVehicleDirectory}
+            className="btn-create-orange"
+          >
+            <Truck size={16} strokeWidth={2.5} />
+            <span>Vehicle Directory</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 4 Equal-Width Pastel KPI Cards */}
+      <div className="client-kpi-bar">
+        {/* Pending Approval */}
+        <div
+          className={`kpi-stat-card ${activeTab === 'PENDING' ? 'active-border' : ''}`}
+          onClick={() => { setActiveTab('PENDING'); setPage(1); }}
+        >
+          <div className="kpi-avatar-squircle amber">
+            <Clock size={20} />
+          </div>
+          <div className="kpi-body">
+            <div className="kpi-header-row">
+              <span className="kpi-title">Pending Approval</span>
+              <ChevronRight size={14} className="kpi-chevron" />
             </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleRefresh}
-                disabled={refreshing}
-                className="flex items-center gap-2 px-4 py-2.5 bg-[#2A2A2C] text-[#F8F8F8] rounded-lg hover:bg-[#3A3A3C] transition-colors disabled:opacity-50"
-              >
-                <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
-                <span className="font-medium">Refresh</span>
-              </button>
-              <button
-                onClick={onNavigateToVehicleDirectory}
-                className="flex items-center gap-2 px-5 py-2.5 bg-[#FF6B35] text-[#0D0D0E] rounded-lg hover:bg-[#FFF0E8] transition-colors font-medium"
-              >
-                <Truck size={18} />
-                <span>Vehicle Directory</span>
-              </button>
+            <div className="kpi-value">{loading ? '—' : stats.pendingApproval}</div>
+          </div>
+        </div>
+
+        {/* Approved Tie-ups */}
+        <div
+          className={`kpi-stat-card ${activeTab === 'APPROVED' ? 'active-border' : ''}`}
+          onClick={() => { setActiveTab('APPROVED'); setPage(1); }}
+        >
+          <div className="kpi-avatar-squircle green">
+            <CheckCircle size={20} />
+          </div>
+          <div className="kpi-body">
+            <div className="kpi-header-row">
+              <span className="kpi-title">Approved Tie-ups</span>
+              <ChevronRight size={14} className="kpi-chevron" />
             </div>
+            <div className="kpi-value">{loading ? '—' : stats.approvedTieups}</div>
+          </div>
+        </div>
+
+        {/* Rejected Tie-ups */}
+        <div
+          className={`kpi-stat-card ${activeTab === 'REJECTED' ? 'active-border' : ''}`}
+          onClick={() => { setActiveTab('REJECTED'); setPage(1); }}
+        >
+          <div className="kpi-avatar-squircle red">
+            <XCircle size={20} />
+          </div>
+          <div className="kpi-body">
+            <div className="kpi-header-row">
+              <span className="kpi-title">Rejected Tie-ups</span>
+              <ChevronRight size={14} className="kpi-chevron" />
+            </div>
+            <div className="kpi-value">{loading ? '—' : stats.rejectedTieups}</div>
+          </div>
+        </div>
+
+        {/* Total Tie-ups */}
+        <div
+          className={`kpi-stat-card ${activeTab === 'ALL' ? 'active-border' : ''}`}
+          onClick={() => { setActiveTab('ALL'); setPage(1); }}
+        >
+          <div className="kpi-avatar-squircle orange">
+            <Shield size={20} />
+          </div>
+          <div className="kpi-body">
+            <div className="kpi-header-row">
+              <span className="kpi-title">Total Tie-ups</span>
+              <ChevronRight size={14} className="kpi-chevron" />
+            </div>
+            <div className="kpi-value">{loading ? '—' : stats.totalTieups}</div>
           </div>
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="px-8 py-6">
-        <div className="grid grid-cols-4 gap-6">
-          {/* Pending Approval */}
-          <div className="bg-[#1A1A1C] border border-[#2A2A2C] rounded-xl p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div className="p-3 bg-amber-500/10 rounded-lg">
-                <Clock size={24} className="text-amber-500" />
-              </div>
-            </div>
-            <div className="text-3xl font-semibold text-[#F8F8F8] mb-1">{stats.pendingApproval}</div>
-            <div className="text-sm text-gray-400">Pending Approval</div>
-          </div>
-
-          {/* Approved Tie-ups */}
-          <div className="bg-[#1A1A1C] border border-[#2A2A2C] rounded-xl p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div className="p-3 bg-emerald-500/10 rounded-lg">
-                <CheckCircle size={24} className="text-emerald-500" />
-              </div>
-            </div>
-            <div className="text-3xl font-semibold text-[#F8F8F8] mb-1">{stats.approvedTieups}</div>
-            <div className="text-sm text-gray-400">Approved Tie-ups</div>
-          </div>
-
-          {/* Rejected Tie-ups */}
-          <div className="bg-[#1A1A1C] border border-[#2A2A2C] rounded-xl p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div className="p-3 bg-red-500/10 rounded-lg">
-                <XCircle size={24} className="text-red-500" />
-              </div>
-            </div>
-            <div className="text-3xl font-semibold text-[#F8F8F8] mb-1">{stats.rejectedTieups}</div>
-            <div className="text-sm text-gray-400">Rejected Tie-ups</div>
-          </div>
-
-          {/* Total Tie-ups */}
-          <div className="bg-[#1A1A1C] border border-[#2A2A2C] rounded-xl p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div className="p-3 bg-[#2A2A2C] rounded-lg">
-                <Shield size={24} className="text-[#FF6B35]" />
-              </div>
-            </div>
-            <div className="text-3xl font-semibold text-[#F8F8F8] mb-1">{stats.totalTieups}</div>
-            <div className="text-sm text-gray-400">Total Tie-ups</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Search & Filters */}
-      <div className="px-8 py-4 border-b border-[#2A2A2C]">
-        <div className="flex flex-wrap items-center gap-4">
-          {/* Search */}
-          <div className="flex-1 relative">
-            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              placeholder="Search by vendor name, vehicle no..."
-              className="w-full pl-12 pr-4 py-3 bg-[#1A1A1C] border border-[#2A2A2C] rounded-lg text-[#F8F8F8] placeholder-gray-500 focus:outline-none focus:border-[#FF6B35]"
-            />
-          </div>
-
-          {/* Reset Search */}
+      {/* Search and Filters Bar Card */}
+      <div className="filters-bar-card">
+        <div className="filter-input-wrap">
+          <Search size={16} className="filter-search-icon" />
+          <input
+            type="text"
+            className="filter-input"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+            placeholder="Search by vendor name, vehicle registration number..."
+          />
           {searchQuery && (
             <button
+              className="filter-clear-btn"
               onClick={() => {
                 setSearchQuery('');
                 setPage(1);
               }}
-              className="px-4 py-3 bg-[#2A2A2C] text-[#F8F8F8] rounded-lg hover:bg-[#3A3A3C] transition-colors flex items-center gap-2"
+              aria-label="Clear search"
             >
-              <X size={18} />
-              <span>Reset</span>
+              <X size={14} />
             </button>
           )}
         </div>
+
+        <button onClick={handleSearch} className="btn-filter-search">
+          <Search size={14} />
+          <span>Search</span>
+        </button>
+
+        {searchQuery && (
+          <button
+            onClick={() => {
+              setSearchQuery('');
+              setPage(1);
+            }}
+            className="btn-filter-reset"
+          >
+            <RotateCcw size={14} />
+            <span>Reset</span>
+          </button>
+        )}
       </div>
 
-      {/* Tabs */}
-      <div className="px-8 border-b border-[#2A2A2C] overflow-x-auto">
-        <div className="flex items-center gap-6 whitespace-nowrap">
-          <button
-            onClick={() => {
-              setActiveTab('ALL');
-              setPage(1);
-            }}
-            className={`px-1 py-4 border-b-2 transition-colors ${
-              activeTab === 'ALL'
-                ? 'border-[#FF6B35] text-[#FF6B35]'
-                : 'border-transparent text-gray-400 hover:text-[#F8F8F8]'
-            }`}
-          >
-            <span className="font-medium">All Requests ({stats.totalTieups})</span>
-          </button>
-          <button
-            onClick={() => {
-              setActiveTab('PENDING');
-              setPage(1);
-            }}
-            className={`px-1 py-4 border-b-2 transition-colors ${
-              activeTab === 'PENDING'
-                ? 'border-[#FF6B35] text-[#FF6B35]'
-                : 'border-transparent text-gray-400 hover:text-[#F8F8F8]'
-            }`}
-          >
-            <span className="font-medium">Pending ({stats.pendingApproval})</span>
-          </button>
-          <button
-            onClick={() => {
-              setActiveTab('APPROVED');
-              setPage(1);
-            }}
-            className={`px-1 py-4 border-b-2 transition-colors ${
-              activeTab === 'APPROVED'
-                ? 'border-[#FF6B35] text-[#FF6B35]'
-                : 'border-transparent text-gray-400 hover:text-[#F8F8F8]'
-            }`}
-          >
-            <span className="font-medium">Approved ({stats.approvedTieups})</span>
-          </button>
-          <button
-            onClick={() => {
-              setActiveTab('REJECTED');
-              setPage(1);
-            }}
-            className={`px-1 py-4 border-b-2 transition-colors ${
-              activeTab === 'REJECTED'
-                ? 'border-[#FF6B35] text-[#FF6B35]'
-                : 'border-transparent text-gray-400 hover:text-[#F8F8F8]'
-            }`}
-          >
-            <span className="font-medium">Rejected ({stats.rejectedTieups})</span>
-          </button>
+      {/* Sub-bar: Status Tabs & Actions */}
+      <div className="table-sub-bar">
+        <div className="status-tabs-group">
+          {(['ALL', 'PENDING', 'APPROVED', 'REJECTED'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => {
+                setActiveTab(tab);
+                setPage(1);
+              }}
+              className={`status-tab-btn ${activeTab === tab ? 'active' : ''}`}
+            >
+              {tab === 'ALL' && `All Requests (${stats.totalTieups})`}
+              {tab === 'PENDING' && `Pending (${stats.pendingApproval})`}
+              {tab === 'APPROVED' && `Approved (${stats.approvedTieups})`}
+              {tab === 'REJECTED' && `Rejected (${stats.rejectedTieups})`}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Table */}
-      <div className="px-8 py-6">
-        {loading && !refreshing ? (
-          <div className="bg-[#1A1A1C] border border-[#2A2A2C] rounded-xl p-12 text-center">
-            <RefreshCw size={32} className="text-[#FF6B35] animate-spin mx-auto mb-4" />
-            <p className="text-gray-400">Loading tie-up requests...</p>
-          </div>
-        ) : error ? (
-          <div className="bg-[#1A1A1C] border border-red-500/20 rounded-xl p-12 text-center">
-            <XCircle size={32} className="text-red-500 mx-auto mb-4" />
-            <p className="text-red-400 mb-2">Failed to load tie-up requests</p>
-            <p className="text-gray-400 text-sm mb-4">{error}</p>
-            <button
-              onClick={handleRefresh}
-              className="px-4 py-2 bg-[#2A2A2C] text-[#F8F8F8] rounded-lg hover:bg-[#3A3A3C] transition-colors"
-            >
-              Retry
-            </button>
-          </div>
-        ) : tieupRequests.length === 0 ? (
-          <div className="bg-[#1A1A1C] border border-[#2A2A2C] rounded-xl p-12 text-center">
-            <Shield size={48} className="text-gray-600 mx-auto mb-4" />
-            <p className="text-[#F8F8F8] text-lg mb-2">No tie-up requests found</p>
-            <p className="text-gray-400">
-              {searchQuery ? 'Try adjusting your search' : 'Tie-up requests will appear here when vendors link vehicles'}
-            </p>
-          </div>
-        ) : (
-          <>
-            <div className="bg-[#1A1A1C] border border-[#2A2A2C] rounded-xl overflow-x-auto">
-              <table className="w-full" style={{ minWidth: '960px' }}>
-                <thead className="bg-[#0D0D0E] border-b border-[#2A2A2C]">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                      Vehicle No.
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                      Vehicle Type
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                      Capacity (MT)
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                      Vendor Name
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                      Request Date
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#2A2A2C]">
-                  {paginatedRequests.map((request) => (
-                    <tr
-                      key={request.id}
-                      className="hover:bg-[#2A2A2C]/30 transition-colors cursor-pointer"
-                      onClick={() => handleReviewTieup(request.id)}
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-[#2A2A2C] rounded-lg flex items-center justify-center">
-                            <Truck size={20} className="text-[#FF6B35]" />
+      {/* Table Card */}
+      <div className="client-table-card">
+        <div className="table-wrapper">
+          {loading && !refreshing ? (
+            <div className="empty-loading-state">
+              <RefreshCw size={24} className="spin-icon" />
+              <p>Loading tie-up requests...</p>
+            </div>
+          ) : error ? (
+            <div className="table-empty-state">
+              <div className="empty-state-icon-box" style={{ background: '#FEE2E2', color: '#DC2626' }}>
+                <AlertTriangle size={32} />
+              </div>
+              <h4 className="empty-state-heading">Failed to load tie-up requests</h4>
+              <p className="empty-state-text">{error}</p>
+              <button onClick={handleRefresh} className="btn-filter-reset" style={{ margin: '0 auto' }}>
+                <RefreshCw size={14} /> Retry
+              </button>
+            </div>
+          ) : tieupRequests.length === 0 ? (
+            <div className="table-empty-state">
+              <div className="empty-state-icon-box">
+                <Truck size={32} />
+              </div>
+              <h4 className="empty-state-heading">No tie-up requests found</h4>
+              <p className="empty-state-text">
+                {searchQuery ? 'Try adjusting your search query.' : 'Tie-up requests will appear here when vendors link vehicles to operations.'}
+              </p>
+            </div>
+          ) : (
+            <table className="client-table">
+              <thead>
+                <tr>
+                  <th>Vehicle Registration ⇅</th>
+                  <th>Vehicle Type ⇅</th>
+                  <th>Capacity (MT) ⇅</th>
+                  <th>Vendor Partner ⇅</th>
+                  <th>Request Date ⇅</th>
+                  <th>Tie-up Status ⇅</th>
+                  <th style={{ textAlign: 'right', paddingRight: '16px' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedRequests.map((request) => (
+                  <tr
+                    key={request.id}
+                    className="client-data-row"
+                    onClick={() => handleReviewTieup(request.id)}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <td>
+                      <div className="client-info-cell">
+                        <div className="kpi-avatar-squircle orange" style={{ width: '34px', height: '34px' }}>
+                          <Truck size={16} />
+                        </div>
+                        <div>
+                          <div className="client-name-bold" style={{ fontFamily: 'monospace' }}>
+                            {request.vehicle?.registration_number || '—'}
                           </div>
-                          <div>
-                            <div className="text-[#F8F8F8] font-medium">
-                              {request.vehicle?.registration_number || '-'}
-                            </div>
+                          <div className="client-id-sub">
+                            {request.vehicle?.make ? `${request.vehicle.make} ${request.vehicle.model || ''}` : 'Commercial Vehicle'}
                           </div>
                         </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-[#F8F8F8]">
-                        {request.vehicle?.vehicle_type || '-'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-[#F8F8F8]">
-                        {request.vehicle?.rated_capacity_mt || '-'} MT
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <Building2 size={16} className="text-gray-400" />
-                          <span className="text-[#F8F8F8]">{request.vendor?.vendor_name || '-'}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-gray-400">
-                        {formatDate(request.requested_at)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${
-                            request.status === 'APPROVED'
-                              ? 'bg-emerald-500/10 text-emerald-500'
-                              : request.status === 'REJECTED'
-                              ? 'bg-red-500/10 text-red-500'
-                              : 'bg-amber-500/10 text-amber-500'
-                          }`}
-                        >
-                          {request.status === 'APPROVED' && <CheckCircle size={14} />}
-                          {request.status === 'REJECTED' && <XCircle size={14} />}
-                          {request.status === 'PENDING' && <Clock size={14} />}
-                          {request.status}
+                      </div>
+                    </td>
+                    <td>
+                      <span className="vendor-type-pill">{request.vehicle?.vehicle_type || '—'}</span>
+                    </td>
+                    <td>
+                      <span style={{ fontWeight: 600, color: '#172B4D' }}>
+                        {request.vehicle?.rated_capacity_mt || '—'} MT
+                      </span>
+                    </td>
+                    <td>
+                      <div
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}
+                        onClick={(e) => {
+                          if (request.vendor?.id) {
+                            e.stopPropagation();
+                            onNavigateToVendorProfile(request.vendor.id);
+                          }
+                        }}
+                      >
+                        <Building2 size={15} color="#F05A22" />
+                        <span style={{ fontWeight: 600, color: '#172B4D', textDecoration: 'underline' }}>
+                          {request.vendor?.vendor_name || '—'}
                         </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      </div>
+                    </td>
+                    <td>
+                      <span style={{ fontSize: '12.5px', color: '#64748B' }}>
+                        {formatDate(request.requested_at)}
+                      </span>
+                    </td>
+                    <td>
+                      {request.status === 'APPROVED' && (
+                        <span className="status-pill-green">✓ Approved</span>
+                      )}
+                      {request.status === 'PENDING' && (
+                        <span className="status-pill-amber">⏳ Pending</span>
+                      )}
+                      {request.status === 'REJECTED' && (
+                        <span className="status-pill-red">✕ Rejected</span>
+                      )}
+                    </td>
+                    <td style={{ textAlign: 'right', paddingRight: '16px' }}>
+                      <div className="row-actions-group" style={{ justifyContent: 'flex-end' }}>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             handleReviewTieup(request.id);
                           }}
-                          className="p-2 hover:bg-[#2A2A2C] rounded-lg transition-colors group"
-                          title="Review Tie-up"
+                          className="row-action-btn-circle"
+                          title="Review Tie-up Request"
                         >
-                          <Eye size={18} className="text-gray-400 group-hover:text-[#FF6B35]" />
+                          <Eye size={14} />
                         </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-6">
-                <div className="text-sm text-gray-400">
-                  Showing {(page - 1) * ITEMS_PER_PAGE + 1} to{' '}
-                  {Math.min(page * ITEMS_PER_PAGE, tieupRequests.length)} of {tieupRequests.length} requests
-                </div>
-                <div className="flex items-center gap-2">
+        {/* Pagination Bar */}
+        {totalPages > 1 && (
+          <div className="client-pagination-bar">
+            <div className="pagination-info">
+              Showing {(page - 1) * ITEMS_PER_PAGE + 1} to{' '}
+              {Math.min(page * ITEMS_PER_PAGE, tieupRequests.length)} of {tieupRequests.length} requests
+            </div>
+            <div className="pagination-controls">
+              <button
+                onClick={() => setPage(Math.max(1, page - 1))}
+                disabled={page === 1}
+                className="pagination-btn"
+              >
+                &lt;
+              </button>
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (page <= 3) {
+                  pageNum = i + 1;
+                } else if (page >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = page - 2 + i;
+                }
+                return (
                   <button
-                    onClick={() => setPage(Math.max(1, page - 1))}
-                    disabled={page === 1}
-                    className="p-2 bg-[#1A1A1C] border border-[#2A2A2C] rounded-lg text-[#F8F8F8] hover:bg-[#2A2A2C] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    key={pageNum}
+                    onClick={() => setPage(pageNum)}
+                    className={`pagination-btn ${page === pageNum ? 'active' : ''}`}
                   >
-                    <ChevronLeft size={20} />
+                    {pageNum}
                   </button>
-                  <div className="flex items-center gap-1">
-                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                      let pageNum;
-                      if (totalPages <= 5) {
-                        pageNum = i + 1;
-                      } else if (page <= 3) {
-                        pageNum = i + 1;
-                      } else if (page >= totalPages - 2) {
-                        pageNum = totalPages - 4 + i;
-                      } else {
-                        pageNum = page - 2 + i;
-                      }
-                      return (
-                        <button
-                          key={pageNum}
-                          onClick={() => setPage(pageNum)}
-                          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                            page === pageNum
-                              ? 'bg-[#FF6B35] text-[#0D0D0E]'
-                              : 'bg-[#1A1A1C] border border-[#2A2A2C] text-[#F8F8F8] hover:bg-[#2A2A2C]'
-                          }`}
-                        >
-                          {pageNum}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <button
-                    onClick={() => setPage(Math.min(totalPages, page + 1))}
-                    disabled={page === totalPages}
-                    className="p-2 bg-[#1A1A1C] border border-[#2A2A2C] rounded-lg text-[#F8F8F8] hover:bg-[#2A2A2C] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <ChevronRight size={20} />
-                  </button>
-                </div>
-              </div>
-            )}
-          </>
+                );
+              })}
+              <button
+                onClick={() => setPage(Math.min(totalPages, page + 1))}
+                disabled={page === totalPages}
+                className="pagination-btn"
+              >
+                &gt;
+              </button>
+            </div>
+          </div>
         )}
       </div>
 
       {/* Review Drawer */}
       {reviewingTieup && (
         <div
-          className="fixed inset-0 bg-black/80 flex items-center justify-end z-50"
+          className="drawer-overlay"
           onClick={() => {
             setReviewingTieup(null);
             setAuthDocument(null);
           }}
         >
           <div
-            className="bg-[#1A1A1C] w-full max-w-2xl h-full overflow-y-auto"
+            className="tieup-review-drawer"
             onClick={(e) => e.stopPropagation()}
           >
             {loadingReview ? (
-              <div className="flex items-center justify-center h-full">
-                <RefreshCw size={32} className="text-[#FF6B35] animate-spin" />
+              <div className="flex items-center justify-center h-full" style={{ padding: '80px', textAlign: 'center' }}>
+                <RefreshCw size={32} className="text-[#F45325] animate-spin" />
               </div>
             ) : (
               <>
                 {/* Header */}
-                <div className="sticky top-0 bg-[#1A1A1C] border-b border-[#2A2A2C] px-8 py-6 z-10">
+                <div className="tieup-drawer-header">
                   <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-2xl font-semibold text-[#F8F8F8]">Review Vendor–Vehicle Tie-up</h2>
+                    <h2 className="text-2xl font-semibold text-[#111111]">Review Vendor–Vehicle Tie-up</h2>
                     <button
                       onClick={() => {
                         setReviewingTieup(null);
                         setAuthDocument(null);
                       }}
-                      className="p-2 hover:bg-[#2A2A2C] rounded-lg transition-colors"
+                      className="p-2 hover:bg-white rounded-lg transition-colors"
                     >
-                      <X size={20} className="text-gray-400" />
+                      <X size={20} className="text-[rgba(17,17,17,0.60)]" />
                     </button>
                   </div>
                   <div
-                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium ${
+                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm border ${
                       reviewingTieup.status === 'APPROVED'
-                        ? 'bg-emerald-500/10 text-emerald-500'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                         : reviewingTieup.status === 'REJECTED'
-                        ? 'bg-red-500/10 text-red-500'
-                        : 'bg-amber-500/10 text-amber-500'
+                        ? 'bg-rose-50 text-rose-700 border-rose-200'
+                        : 'bg-amber-50 text-amber-700 border-amber-200'
                     }`}
                   >
                     {reviewingTieup.status === 'APPROVED' && <CheckCircle size={16} />}
@@ -677,35 +690,35 @@ export const VendorVehicleTieupApproval: React.FC<VendorVehicleTieupApprovalProp
                 </div>
 
                 {/* Content */}
-                <div className="px-8 py-6 space-y-6">
+                <div className="tieup-drawer-content">
                   {/* Vendor Details */}
-                  <div className="bg-[#0D0D0E] border border-[#2A2A2C] rounded-xl p-6">
-                    <h3 className="text-lg font-semibold text-[#F8F8F8] mb-4 flex items-center gap-2">
-                      <Building2 size={20} className="text-[#FF6B35]" />
+                  <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-6">
+                    <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
+                      <Building2 size={20} className="text-[#F45325]" />
                       Vendor Information
                     </h3>
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
-                        <span className="text-gray-400">Vendor Name</span>
-                        <span className="text-[#F8F8F8] font-medium">
+                        <span className="text-slate-500">Vendor Name</span>
+                        <span className="text-slate-900 font-semibold">
                           {reviewingTieup.vendor?.vendor_name || '-'}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-gray-400">PAN</span>
-                        <span className="text-[#F8F8F8]">{reviewingTieup.vendor?.pan || '-'}</span>
+                        <span className="text-slate-500">PAN</span>
+                        <span className="text-slate-800 font-mono text-sm">{reviewingTieup.vendor?.pan || '-'}</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-gray-400">GSTIN</span>
-                        <span className="text-[#F8F8F8]">{reviewingTieup.vendor?.gstin || '-'}</span>
+                        <span className="text-slate-500">GSTIN</span>
+                        <span className="text-slate-800 font-mono text-sm">{reviewingTieup.vendor?.gstin || '-'}</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-gray-400">Vendor Status</span>
+                        <span className="text-slate-500">Vendor Status</span>
                         <span
-                          className={`px-2 py-1 rounded text-xs font-medium ${
+                          className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${
                             reviewingTieup.vendor?.status === 'APPROVED'
-                              ? 'bg-emerald-500/10 text-emerald-500'
-                              : 'bg-amber-500/10 text-amber-500'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : 'bg-amber-50 text-amber-700 border-amber-200'
                           }`}
                         >
                           {reviewingTieup.vendor?.status || '-'}
@@ -713,7 +726,7 @@ export const VendorVehicleTieupApproval: React.FC<VendorVehicleTieupApprovalProp
                       </div>
                       <button
                         onClick={() => onNavigateToVendorProfile(reviewingTieup.vendor_id)}
-                        className="w-full mt-3 px-4 py-2 bg-[#2A2A2C] text-[#F8F8F8] rounded-lg hover:bg-[#3A3A3C] transition-colors flex items-center justify-center gap-2"
+                        className="w-full mt-3 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg transition-colors font-medium text-sm flex items-center justify-center gap-2"
                       >
                         <ExternalLink size={16} />
                         <span>View Vendor Profile</span>
@@ -722,49 +735,49 @@ export const VendorVehicleTieupApproval: React.FC<VendorVehicleTieupApprovalProp
                   </div>
 
                   {/* Vehicle Details */}
-                  <div className="bg-[#0D0D0E] border border-[#2A2A2C] rounded-xl p-6">
-                    <h3 className="text-lg font-semibold text-[#F8F8F8] mb-4 flex items-center gap-2">
-                      <Truck size={20} className="text-[#FF6B35]" />
+                  <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-6">
+                    <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
+                      <Truck size={20} className="text-[#F45325]" />
                       Vehicle Information
                     </h3>
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
-                        <span className="text-gray-400">Registration Number</span>
-                        <span className="text-[#F8F8F8] font-medium">
+                        <span className="text-slate-500">Registration Number</span>
+                        <span className="text-slate-900 font-bold font-mono">
                           {reviewingTieup.vehicle?.registration_number || '-'}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-gray-400">Vehicle Type</span>
-                        <span className="text-[#F8F8F8]">{reviewingTieup.vehicle?.vehicle_type || '-'}</span>
+                        <span className="text-slate-500">Vehicle Type</span>
+                        <span className="text-slate-800 font-medium">{reviewingTieup.vehicle?.vehicle_type || '-'}</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-gray-400">Make & Model</span>
-                        <span className="text-[#F8F8F8]">
+                        <span className="text-slate-500">Make & Model</span>
+                        <span className="text-slate-800 font-medium">
                           {reviewingTieup.vehicle?.make && reviewingTieup.vehicle?.model
                             ? `${reviewingTieup.vehicle.make} ${reviewingTieup.vehicle.model}`
                             : '-'}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-gray-400">Rated Capacity</span>
-                        <span className="text-[#F8F8F8]">{reviewingTieup.vehicle?.rated_capacity_mt || '-'} MT</span>
+                        <span className="text-slate-500">Rated Capacity</span>
+                        <span className="text-slate-800 font-semibold">{reviewingTieup.vehicle?.rated_capacity_mt || '-'} MT</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-gray-400">Minimum Capacity</span>
-                        <span className="text-[#F8F8F8]">
+                        <span className="text-slate-500">Minimum Capacity</span>
+                        <span className="text-slate-800 font-semibold">
                           {reviewingTieup.vehicle?.minimum_capacity_mt || '-'} MT
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-gray-400">Vehicle Status</span>
+                        <span className="text-slate-500">Vehicle Status</span>
                         <span
-                          className={`px-2 py-1 rounded text-xs font-medium ${
+                          className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${
                             reviewingTieup.vehicle?.verification_status === 'APPROVED'
-                              ? 'bg-emerald-500/10 text-emerald-500'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                               : reviewingTieup.vehicle?.verification_status === 'REJECTED'
-                              ? 'bg-red-500/10 text-red-500'
-                              : 'bg-amber-500/10 text-amber-500'
+                              ? 'bg-rose-50 text-rose-700 border-rose-200'
+                              : 'bg-amber-50 text-amber-700 border-amber-200'
                           }`}
                         >
                           {reviewingTieup.vehicle?.verification_status || '-'}
@@ -772,7 +785,7 @@ export const VendorVehicleTieupApproval: React.FC<VendorVehicleTieupApprovalProp
                       </div>
                       <button
                         onClick={() => onNavigateToVehicleVerification(reviewingTieup.vehicle_id)}
-                        className="w-full mt-3 px-4 py-2 bg-[#2A2A2C] text-[#F8F8F8] rounded-lg hover:bg-[#3A3A3C] transition-colors flex items-center justify-center gap-2"
+                        className="w-full mt-3 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg transition-colors font-medium text-sm flex items-center justify-center gap-2"
                       >
                         <ExternalLink size={16} />
                         <span>View Vehicle Details</span>
@@ -782,24 +795,24 @@ export const VendorVehicleTieupApproval: React.FC<VendorVehicleTieupApprovalProp
 
                   {/* Authorization Document */}
                   {authDocument && (
-                    <div className="bg-[#0D0D0E] border border-[#2A2A2C] rounded-xl p-6">
-                      <h3 className="text-lg font-semibold text-[#F8F8F8] mb-4 flex items-center gap-2">
-                        <FileText size={20} className="text-[#FF6B35]" />
+                    <div className="bg-white border border-slate-200 rounded-xl p-6">
+                      <h3 className="text-lg font-semibold text-[#111111] mb-4 flex items-center gap-2">
+                        <FileText size={20} className="text-[#F45325]" />
                         Authorization Document
                       </h3>
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
-                          <span className="text-gray-400">Document Type</span>
-                          <span className="text-[#F8F8F8]">Tie-up Authorization</span>
+                          <span className="text-[rgba(17,17,17,0.60)]">Document Type</span>
+                          <span className="text-[#111111]">Tie-up Authorization</span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span className="text-gray-400">Uploaded</span>
-                          <span className="text-[#F8F8F8]">{formatDateTime(authDocument.created_at)}</span>
+                          <span className="text-[rgba(17,17,17,0.60)]">Uploaded</span>
+                          <span className="text-[#111111]">{formatDateTime(authDocument.created_at)}</span>
                         </div>
                         <div className="flex gap-2 mt-4">
                           <button
                             onClick={() => setPreviewDocUrl(authDocument.file_url)}
-                            className="flex-1 px-4 py-2 bg-[#2A2A2C] text-[#F8F8F8] rounded-lg hover:bg-[#3A3A3C] transition-colors flex items-center justify-center gap-2"
+                            className="flex-1 px-4 py-2 bg-white text-[#111111] rounded-lg hover:bg-[#3A3A3C] transition-colors flex items-center justify-center gap-2"
                           >
                             <Eye size={16} />
                             <span>View</span>
@@ -808,7 +821,7 @@ export const VendorVehicleTieupApproval: React.FC<VendorVehicleTieupApprovalProp
                             href={authDocument.file_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex-1 px-4 py-2 bg-[#2A2A2C] text-[#F8F8F8] rounded-lg hover:bg-[#3A3A3C] transition-colors flex items-center justify-center gap-2"
+                            className="flex-1 px-4 py-2 bg-white text-[#111111] rounded-lg hover:bg-[#3A3A3C] transition-colors flex items-center justify-center gap-2"
                           >
                             <Download size={16} />
                             <span>Download</span>
@@ -819,15 +832,15 @@ export const VendorVehicleTieupApproval: React.FC<VendorVehicleTieupApprovalProp
                   )}
 
                   {reviewingTieup.tie_up_proof_url && !authDocument && (
-                    <div className="bg-[#0D0D0E] border border-[#2A2A2C] rounded-xl p-6">
-                      <h3 className="text-lg font-semibold text-[#F8F8F8] mb-4 flex items-center gap-2">
-                        <FileText size={20} className="text-[#FF6B35]" />
+                    <div className="bg-white border border-slate-200 rounded-xl p-6">
+                      <h3 className="text-lg font-semibold text-[#111111] mb-4 flex items-center gap-2">
+                        <FileText size={20} className="text-[#F45325]" />
                         Tie-up Proof
                       </h3>
                       <div className="flex gap-2">
                         <button
                           onClick={() => setPreviewDocUrl(reviewingTieup.tie_up_proof_url)}
-                          className="flex-1 px-4 py-2 bg-[#2A2A2C] text-[#F8F8F8] rounded-lg hover:bg-[#3A3A3C] transition-colors flex items-center justify-center gap-2"
+                          className="flex-1 px-4 py-2 bg-white text-[#111111] rounded-lg hover:bg-[#3A3A3C] transition-colors flex items-center justify-center gap-2"
                         >
                           <Eye size={16} />
                           <span>View Document</span>
@@ -836,7 +849,7 @@ export const VendorVehicleTieupApproval: React.FC<VendorVehicleTieupApprovalProp
                           href={reviewingTieup.tie_up_proof_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex-1 px-4 py-2 bg-[#2A2A2C] text-[#F8F8F8] rounded-lg hover:bg-[#3A3A3C] transition-colors flex items-center justify-center gap-2"
+                          className="flex-1 px-4 py-2 bg-white text-[#111111] rounded-lg hover:bg-[#3A3A3C] transition-colors flex items-center justify-center gap-2"
                         >
                           <Download size={16} />
                           <span>Download</span>
@@ -846,42 +859,42 @@ export const VendorVehicleTieupApproval: React.FC<VendorVehicleTieupApprovalProp
                   )}
 
                   {/* Request Details */}
-                  <div className="bg-[#0D0D0E] border border-[#2A2A2C] rounded-xl p-6">
-                    <h3 className="text-lg font-semibold text-[#F8F8F8] mb-4 flex items-center gap-2">
-                      <History size={20} className="text-[#FF6B35]" />
+                  <div className="bg-white border border-slate-200 rounded-xl p-6">
+                    <h3 className="text-lg font-semibold text-[#111111] mb-4 flex items-center gap-2">
+                      <History size={20} className="text-[#F45325]" />
                       Request Timeline
                     </h3>
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
-                        <span className="text-gray-400">Requested At</span>
-                        <span className="text-[#F8F8F8]">{formatDateTime(reviewingTieup.requested_at)}</span>
+                        <span className="text-[rgba(17,17,17,0.60)]">Requested At</span>
+                        <span className="text-[#111111]">{formatDateTime(reviewingTieup.requested_at)}</span>
                       </div>
                       {reviewingTieup.approved_at && (
                         <>
                           <div className="flex items-center justify-between">
-                            <span className="text-gray-400">Approved At</span>
-                            <span className="text-[#F8F8F8]">{formatDateTime(reviewingTieup.approved_at)}</span>
+                            <span className="text-[rgba(17,17,17,0.60)]">Approved At</span>
+                            <span className="text-[#111111]">{formatDateTime(reviewingTieup.approved_at)}</span>
                           </div>
                           <div className="flex items-center justify-between">
-                            <span className="text-gray-400">Approved By</span>
-                            <span className="text-[#F8F8F8]">{reviewingTieup.approved_by || '-'}</span>
+                            <span className="text-[rgba(17,17,17,0.60)]">Approved By</span>
+                            <span className="text-[#111111]">{reviewingTieup.approved_by || '-'}</span>
                           </div>
                         </>
                       )}
                       {reviewingTieup.rejected_at && (
                         <>
                           <div className="flex items-center justify-between">
-                            <span className="text-gray-400">Rejected At</span>
-                            <span className="text-[#F8F8F8]">{formatDateTime(reviewingTieup.rejected_at)}</span>
+                            <span className="text-[rgba(17,17,17,0.60)]">Rejected At</span>
+                            <span className="text-[#111111]">{formatDateTime(reviewingTieup.rejected_at)}</span>
                           </div>
                           <div className="flex items-center justify-between">
-                            <span className="text-gray-400">Rejected By</span>
-                            <span className="text-[#F8F8F8]">{reviewingTieup.rejected_by || '-'}</span>
+                            <span className="text-[rgba(17,17,17,0.60)]">Rejected By</span>
+                            <span className="text-[#111111]">{reviewingTieup.rejected_by || '-'}</span>
                           </div>
                           {reviewingTieup.rejection_reason && (
-                            <div className="mt-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-                              <p className="text-sm text-red-400">
-                                <span className="font-medium">Rejection Reason:</span> {reviewingTieup.rejection_reason}
+                            <div className="mt-3 p-3 bg-rose-50 border border-rose-200 rounded-lg">
+                              <p className="text-sm text-rose-700">
+                                <span className="font-semibold">Rejection Reason:</span> {reviewingTieup.rejection_reason}
                               </p>
                             </div>
                           )}
@@ -894,22 +907,22 @@ export const VendorVehicleTieupApproval: React.FC<VendorVehicleTieupApprovalProp
                   {reviewingTieup.status === 'PENDING' && (
                     <div className="space-y-3">
                       {reviewingTieup.vehicle?.verification_status !== 'APPROVED' && (
-                        <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-start gap-3">
-                          <AlertTriangle size={20} className="text-amber-500 flex-shrink-0 mt-0.5" />
+                        <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3">
+                          <AlertTriangle size={20} className="text-amber-600 flex-shrink-0 mt-0.5" />
                           <div>
-                            <p className="text-amber-500 font-medium mb-1">Vehicle Not Approved</p>
-                            <p className="text-sm text-gray-400">
+                            <p className="text-amber-800 font-semibold mb-1">Vehicle Not Approved</p>
+                            <p className="text-sm text-amber-700">
                               The vehicle must be verified and approved before this tie-up can be approved.
                             </p>
                           </div>
                         </div>
                       )}
                       {reviewingTieup.vendor?.status !== 'APPROVED' && (
-                        <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-start gap-3">
-                          <AlertTriangle size={20} className="text-amber-500 flex-shrink-0 mt-0.5" />
+                        <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3">
+                          <AlertTriangle size={20} className="text-amber-600 flex-shrink-0 mt-0.5" />
                           <div>
-                            <p className="text-amber-500 font-medium mb-1">Vendor Not Approved</p>
-                            <p className="text-sm text-gray-400">
+                            <p className="text-amber-800 font-semibold mb-1">Vendor Not Approved</p>
+                            <p className="text-sm text-amber-700">
                               The vendor must be approved before this tie-up can be approved.
                             </p>
                           </div>
@@ -921,7 +934,7 @@ export const VendorVehicleTieupApproval: React.FC<VendorVehicleTieupApprovalProp
 
                 {/* Actions */}
                 {reviewingTieup.status === 'PENDING' && (
-                  <div className="sticky bottom-0 bg-[#1A1A1C] border-t border-[#2A2A2C] px-8 py-6">
+                  <div className="tieup-drawer-footer">
                     <div className="flex items-center gap-4">
                       <button
                         onClick={handleApproveTieup}
@@ -930,7 +943,7 @@ export const VendorVehicleTieupApproval: React.FC<VendorVehicleTieupApprovalProp
                           reviewingTieup.vehicle?.verification_status !== 'APPROVED' ||
                           reviewingTieup.vendor?.status !== 'APPROVED'
                         }
-                        className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                        className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                       >
                         <CheckCircle size={20} />
                         <span>{saving ? 'Approving...' : 'Approve Transporter Link'}</span>
@@ -938,7 +951,7 @@ export const VendorVehicleTieupApproval: React.FC<VendorVehicleTieupApprovalProp
                       <button
                         onClick={() => setShowRejectModal(true)}
                         disabled={saving}
-                        className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 font-medium"
+                        className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-rose-50 text-rose-700 border border-rose-300 hover:bg-rose-100 rounded-lg transition-colors disabled:opacity-50 font-medium"
                       >
                         <XCircle size={20} />
                         <span>Reject Tie-up</span>
@@ -955,24 +968,24 @@ export const VendorVehicleTieupApproval: React.FC<VendorVehicleTieupApprovalProp
       {/* Document Preview Modal */}
       {previewDocUrl && (
         <div
-          className="fixed inset-0 bg-black/90 flex items-center justify-center z-[60] p-6"
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[60] p-6"
           onClick={() => setPreviewDocUrl(null)}
         >
           <div
-            className="bg-[#1A1A1C] border border-[#2A2A2C] rounded-xl max-w-5xl w-full max-h-[90vh] overflow-hidden"
+            className="bg-white border border-slate-200 shadow-2xl rounded-xl max-w-5xl w-full max-h-[90vh] overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between p-6 border-b border-[#2A2A2C]">
-              <h3 className="text-xl font-semibold text-[#F8F8F8]">Document Preview</h3>
+            <div className="flex items-center justify-between p-6 border-b border-slate-200">
+              <h3 className="text-xl font-semibold text-slate-900">Document Preview</h3>
               <button
                 onClick={() => setPreviewDocUrl(null)}
-                className="p-2 hover:bg-[#2A2A2C] rounded-lg transition-colors"
+                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
               >
-                <X size={20} className="text-gray-400" />
+                <X size={20} className="text-slate-500" />
               </button>
             </div>
             <div className="p-6">
-              <div className="aspect-video bg-[#0D0D0E] rounded-lg overflow-hidden">
+              <div className="aspect-video bg-slate-50 rounded-lg overflow-hidden border border-slate-200">
                 <iframe src={previewDocUrl} className="w-full h-full" title="Document Preview" />
               </div>
             </div>
@@ -982,22 +995,22 @@ export const VendorVehicleTieupApproval: React.FC<VendorVehicleTieupApprovalProp
 
       {/* Reject Modal */}
       {showRejectModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[70] p-6">
-          <div className="bg-[#1A1A1C] border border-[#2A2A2C] rounded-xl max-w-lg w-full">
-            <div className="flex items-center justify-between p-6 border-b border-[#2A2A2C]">
-              <h3 className="text-xl font-semibold text-[#F8F8F8]">Reject Tie-up Request</h3>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[70] p-6">
+          <div className="bg-white border border-slate-200 shadow-2xl rounded-xl max-w-lg w-full">
+            <div className="flex items-center justify-between p-6 border-b border-slate-200">
+              <h3 className="text-xl font-semibold text-slate-900">Reject Tie-up Request</h3>
               <button
                 onClick={() => {
                   setShowRejectModal(false);
                   setRejectionReason('');
                 }}
-                className="p-2 hover:bg-[#2A2A2C] rounded-lg transition-colors"
+                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
               >
-                <X size={20} className="text-gray-400" />
+                <X size={20} className="text-slate-500" />
               </button>
             </div>
             <div className="p-6">
-              <p className="text-gray-400 mb-4">
+              <p className="text-slate-600 mb-4 text-sm leading-relaxed">
                 Please provide a reason for rejecting this vendor-vehicle tie-up request. This will be visible to the
                 vendor.
               </p>
@@ -1005,13 +1018,13 @@ export const VendorVehicleTieupApproval: React.FC<VendorVehicleTieupApprovalProp
                 value={rejectionReason}
                 onChange={(e) => setRejectionReason(e.target.value)}
                 placeholder="Enter rejection reason..."
-                className="w-full h-32 px-4 py-3 bg-[#0D0D0E] border border-[#2A2A2C] rounded-lg text-[#F8F8F8] placeholder-gray-500 focus:outline-none focus:border-[#FF6B35] resize-none"
+                className="w-full h-32 px-4 py-3 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 resize-none text-sm"
               />
               <div className="flex items-center gap-3 mt-6">
                 <button
                   onClick={handleRejectTieup}
                   disabled={saving || !rejectionReason.trim()}
-                  className="flex-1 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                  className="flex-1 px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm shadow-sm"
                 >
                   {saving ? 'Rejecting...' : 'Confirm Rejection'}
                 </button>
@@ -1020,7 +1033,7 @@ export const VendorVehicleTieupApproval: React.FC<VendorVehicleTieupApprovalProp
                     setShowRejectModal(false);
                     setRejectionReason('');
                   }}
-                  className="px-6 py-3 bg-[#2A2A2C] text-[#F8F8F8] rounded-lg hover:bg-[#3A3A3C] transition-colors font-medium"
+                  className="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors font-medium text-sm"
                 >
                   Cancel
                 </button>

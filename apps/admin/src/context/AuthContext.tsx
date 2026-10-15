@@ -11,12 +11,40 @@ import { supabase } from "../utils/supabase";
 
 export type AdminRole = "ADMIN" | "SUPER_ADMIN";
 
+export interface ActionPermissions {
+  view?: boolean;
+  create?: boolean;
+  edit?: boolean;
+  approve?: boolean;
+  reject?: boolean;
+  assign?: boolean;
+  suspend?: boolean;
+  upload?: boolean;
+  verify?: boolean;
+  close?: boolean;
+  export?: boolean;
+  delete?: boolean;
+  view_margins?: boolean;
+  [key: string]: boolean | undefined;
+}
+
+export interface ModulePermissionConfig {
+  enabled: boolean;
+  actions: ActionPermissions;
+  scope?: 'ALL' | 'ASSIGNED';
+}
+
+export type AdminPermissionsMatrix = Record<string, ModulePermissionConfig>;
+
 export interface AdminProfile {
   id: string;
   name: string;
   email: string;
   role: AdminRole;
+  realRole: AdminRole;
   avatarUrl?: string;
+  isActive: boolean;
+  permissions?: AdminPermissionsMatrix;
 }
 
 export interface AuthContextValue {
@@ -28,6 +56,8 @@ export interface AuthContextValue {
   signOut: () => Promise<void>;
   switchRole: (role: AdminRole) => void;
   loginAsAdmin: (profile: AdminProfile) => void;
+  hasPermission: (moduleKey: string, actionKey?: string) => boolean;
+  canViewMargins: () => boolean;
 }
 
 const AuthContext = createContext<AuthContextValue>({
@@ -39,9 +69,11 @@ const AuthContext = createContext<AuthContextValue>({
   signOut: async () => {},
   switchRole: () => {},
   loginAsAdmin: () => {},
+  hasPermission: () => true,
+  canViewMargins: () => true,
 });
 
-const STORAGE_KEY = "necl_admin_session_v1";
+const STORAGE_KEY = "necl_admin_session_v2";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [supabaseUser, setSupabaseUser] = useState<User | null>(null);
@@ -67,35 +99,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {}
   }, []);
 
+  const fetchPermissionsFromBackend = async (userId: string, email: string): Promise<AdminPermissionsMatrix | undefined> => {
+    try {
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const cleanBase = baseUrl.replace(/\/+$/, '');
+      const res = await fetch(`${cleanBase}/admin/users/${userId}/permissions`, {
+        headers: { 'x-admin-email': email },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return data.permissions;
+      }
+    } catch (e) {
+      console.warn("Failed to fetch permissions from backend API:", e);
+    }
+    return undefined;
+  };
+
   const fetchAdminProfile = useCallback(async (user: User): Promise<void> => {
     try {
       const { data, error } = await supabase
         .from("admin_users")
-        .select("id, name, email, role, avatar_url")
-        .eq("auth_uid", user.id)
-        .single();
+        .select("id, name, email, role, avatar_url, is_active")
+        .or(`auth_uid.eq.${user.id},email.eq.${user.email?.toLowerCase()}`)
+        .maybeSingle();
 
       if (data && !error) {
-        const role: AdminRole = data.role === "SUPER_ADMIN" ? "SUPER_ADMIN" : "ADMIN";
+        const realRole: AdminRole = data.role === "SUPER_ADMIN" ? "SUPER_ADMIN" : "ADMIN";
+        const perms = await fetchPermissionsFromBackend(data.id, data.email);
         persistProfile({
           id: data.id,
-          name: data.name ?? user.email ?? "Admin",
+          name: data.name ?? user.email?.split("@")[0] ?? "Admin",
           email: data.email ?? user.email ?? "",
-          role,
+          role: realRole,
+          realRole,
           avatarUrl: data.avatar_url ?? undefined,
+          isActive: data.is_active ?? true,
+          permissions: perms,
         });
         return;
       }
-    } catch {}
+    } catch (err) {
+      console.warn("Error querying admin_users in Supabase:", err);
+    }
 
     const meta = user.user_metadata ?? {};
-    const role: AdminRole = meta.role === "SUPER_ADMIN" ? "SUPER_ADMIN" : "ADMIN";
+    const realRole: AdminRole = meta.role === "SUPER_ADMIN" ? "SUPER_ADMIN" : "ADMIN";
+    const fallbackId = user.id;
+    const perms = await fetchPermissionsFromBackend(fallbackId, user.email || '');
     persistProfile({
-      id: user.id,
+      id: fallbackId,
       name: meta.name ?? meta.full_name ?? user.email?.split("@")[0] ?? "Admin",
       email: user.email ?? "",
-      role,
+      role: realRole,
+      realRole,
       avatarUrl: meta.avatar_url ?? undefined,
+      isActive: true,
+      permissions: perms,
     });
   }, [persistProfile]);
 
@@ -118,6 +178,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const switchRole = useCallback((role: AdminRole) => {
     setAdminProfile((prev) => {
       if (!prev) return null;
+      // Prevent unauthorized privilege escalation:
+      // Only users who legitimately have SUPER_ADMIN rights in the database can switch between SUPER_ADMIN and ADMIN preview modes
+      if (role === 'SUPER_ADMIN' && prev.realRole !== 'SUPER_ADMIN') {
+        console.warn('Unauthorized role switch attempt blocked: account does not hold SUPER_ADMIN authorization');
+        return prev;
+      }
       const updated = { ...prev, role };
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
@@ -126,9 +192,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const loginAsAdmin = useCallback((profile: AdminProfile) => {
-    persistProfile(profile);
+  const loginAsAdmin = useCallback(async (profile: AdminProfile) => {
+    // Refresh permissions from backend upon login
+    const perms = await fetchPermissionsFromBackend(profile.id, profile.email);
+    const enriched = { ...profile, permissions: perms || profile.permissions };
+    persistProfile(enriched);
   }, [persistProfile]);
+
+  const hasPermission = useCallback((moduleKey: string, actionKey?: string): boolean => {
+    if (!adminProfile) return false;
+    // Super Admin has full administrative authority across all modules and actions
+    if (adminProfile.role === 'SUPER_ADMIN') return true;
+
+    // Suspended admin has no access
+    if (adminProfile.isActive === false) return false;
+
+    // Super Admin modules are strictly forbidden to Regular Admins
+    if (['superadmin', 'audit_logs'].includes(moduleKey)) return false;
+
+    const perms = adminProfile.permissions;
+    if (!perms) {
+      // Default fallback for regular admin: allow standard operational views, deny commercial margin
+      if (actionKey === 'view_margins' || actionKey === 'delete' || actionKey === 'suspend') return false;
+      return true;
+    }
+
+    const mod = perms[moduleKey];
+    if (!mod || !mod.enabled) return false;
+
+    if (!actionKey) return true;
+    return Boolean(mod.actions?.[actionKey]);
+  }, [adminProfile]);
+
+  const canViewMargins = useCallback((): boolean => {
+    if (!adminProfile) return false;
+    if (adminProfile.role === 'SUPER_ADMIN') return true;
+    if (adminProfile.isActive === false) return false;
+    return Boolean(adminProfile.permissions?.pricing?.actions?.view_margins);
+  }, [adminProfile]);
 
   useEffect(() => {
     let mounted = true;
@@ -142,14 +243,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setSupabaseUser(session.user);
           await fetchAdminProfile(session.user);
         } else {
-          // If no Supabase session but valid local admin profile exists, keep admin profile
-          const stored = localStorage.getItem(STORAGE_KEY);
-          if (stored) {
-            try {
-              const parsed = JSON.parse(stored);
-              setAdminProfile(parsed);
-            } catch {}
-          }
+          // If no active authenticated session exists, clear any stale cached session
+          localStorage.removeItem(STORAGE_KEY);
+          setAdminProfile(null);
+          setSupabaseUser(null);
         }
       } catch (err) {
         console.warn("Error initializing auth session:", err);
@@ -199,6 +296,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signOut,
         switchRole,
         loginAsAdmin,
+        hasPermission,
+        canViewMargins,
       }}
     >
       {children}
