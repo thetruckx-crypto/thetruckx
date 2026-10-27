@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Alert, Text, TouchableOpacity, Platform } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, StyleSheet, Alert, Text, TouchableOpacity } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import { Clock, X, Bell } from 'lucide-react-native';
@@ -180,25 +180,6 @@ export default function App() {
   }>({});
   const [isResumingRegistration, setIsResumingRegistration] = useState<boolean>(false);
 
-  // In-App Welcome / Welcome Back Notification Banner State
-  const [welcomeToast, setWelcomeToast] = useState<{
-    visible: boolean;
-    title: string;
-    subtitle: string;
-    isFirstTime: boolean;
-    item?: AppNotificationItem;
-  } | null>(null);
-
-  // Auto-dismiss welcome toast after 6 seconds
-  useEffect(() => {
-    if (welcomeToast?.visible) {
-      const timer = setTimeout(() => {
-        setWelcomeToast((prev) => (prev ? { ...prev, visible: false } : null));
-      }, 6000);
-      return () => clearTimeout(timer);
-    }
-  }, [welcomeToast?.visible]);
-
   // Client Registration State
   const [profileData, setProfileData] = useState<ClientProfileFormData | undefined>(undefined);
   const [businessDetails, setBusinessDetails] = useState<ClientBusinessDetails | undefined>(undefined);
@@ -372,6 +353,57 @@ export default function App() {
 
   const effectiveDriverId = (session as any)?.driverId || session?.userId || registeredDriverId;
 
+  // In-App Floating Notification Banner State
+  const [inAppToast, setInAppToast] = useState<{
+    visible: boolean;
+    title: string;
+    subtitle: string;
+    role?: MobileRole;
+  } | null>(null);
+
+  // Initialize notifications for Client, Vendor, or Driver
+  const triggerLoginNotification = useCallback(async (userSession: AuthSessionData) => {
+    try {
+      const res = await mobileNotificationService.initializeLoginNotifications({
+        userId: userSession.userId,
+        role: userSession.role,
+        mobile: userSession.mobile,
+        fullName: userSession.fullName || userSession.companyName,
+      });
+      if (res?.welcome?.title) {
+        setInAppToast({
+          visible: true,
+          title: res.welcome.title,
+          subtitle: res.welcome.body,
+          role: userSession.role,
+        });
+        setTimeout(() => {
+          setInAppToast(null);
+        }, 6000);
+      }
+    } catch (e) {
+      console.warn('Failed to initialize notifications:', e);
+    }
+  }, []);
+
+  // Foreground FCM Push Notification listener
+  useEffect(() => {
+    const unsubscribe = mobileNotificationService.setupForegroundHandler((remoteMessage) => {
+      const notifTitle = remoteMessage?.notification?.title || remoteMessage?.data?.title || 'THE TRUCKX Alert';
+      const notifBody = remoteMessage?.notification?.body || remoteMessage?.data?.body || 'New operational update received.';
+      setInAppToast({
+        visible: true,
+        title: notifTitle,
+        subtitle: notifBody,
+        role: selectedRole,
+      });
+      setTimeout(() => {
+        setInAppToast(null);
+      }, 6000);
+    });
+    return () => unsubscribe();
+  }, [selectedRole]);
+
   useEffect(() => {
     (async () => {
       const existing = await authService.checkExistingSession();
@@ -379,44 +411,11 @@ export default function App() {
         setSession(existing);
         setMobileNumber(existing.mobile);
         setSelectedRole(existing.role);
-        // Automatically trigger OS notification pop-up, check Welcome status ("once add that"), and prefetch
-        mobileNotificationService.initializeLoginNotifications({
-          userId: existing.userId,
-          role: existing.role,
-          mobile: existing.mobile,
-          fullName: existing.fullName,
-        }).then((res) => {
-          if (res.welcome && res.welcome.wasAdded) {
-            setWelcomeToast({
-              visible: true,
-              title: res.welcome.title,
-              subtitle: res.welcome.body,
-              isFirstTime: res.welcome.isFirstTime,
-              item: res.welcome.item,
-            });
-          }
-        }).catch((e) => console.warn('Failed to initialize notifications on launch:', e));
+        // Automatically trigger OS notification pop-up and fetch all role notifications
+        triggerLoginNotification(existing);
       }
     })();
-  }, []);
-
-  // Listen for live FCM foreground push notifications
-  useEffect(() => {
-    const unsubscribe = mobileNotificationService.setupForegroundHandler((remoteMessage) => {
-      console.log('[App] Foreground FCM push received:', remoteMessage);
-      const title = remoteMessage?.notification?.title || remoteMessage?.data?.title || 'THE TRUCKX';
-      const body = remoteMessage?.notification?.body || remoteMessage?.data?.body || 'New dispatch update received';
-      setWelcomeToast({
-        visible: true,
-        title,
-        subtitle: body,
-        isFirstTime: false,
-      });
-    });
-    return () => {
-      if (typeof unsubscribe === 'function') unsubscribe();
-    };
-  }, []);
+  }, [triggerLoginNotification]);
 
   const verifiedClientPhoneRef = useRef<string | null>(null);
 
@@ -521,24 +520,6 @@ export default function App() {
     setMobileNumber(existing.mobile);
     setSelectedRole(existing.role);
 
-    // Trigger notification permission and Welcome/Welcome Back notification
-    mobileNotificationService.initializeLoginNotifications({
-      userId: existing.userId,
-      role: existing.role,
-      mobile: existing.mobile,
-      fullName: existing.fullName,
-    }).then((res) => {
-      if (res.welcome && res.welcome.wasAdded) {
-        setWelcomeToast({
-          visible: true,
-          title: res.welcome.title,
-          subtitle: res.welcome.body,
-          isFirstTime: res.welcome.isFirstTime,
-          item: res.welcome.item,
-        });
-      }
-    }).catch((e) => console.warn('Failed to initialize notifications from splash session:', e));
-
     try {
       const completion = await authService.checkRegistrationCompletion(existing.role, existing.mobile, existing);
       if (completion.accountStatus === 'APPROVED' || completion.accountStatus === 'ACTIVE') {
@@ -604,7 +585,7 @@ export default function App() {
             );
             return;
           }
-        } catch {}
+        } catch { }
       }
     }
     setIsResumingRegistration(false);
@@ -618,7 +599,7 @@ export default function App() {
           if (clientDraft.businessDetails) setBusinessDetails(clientDraft.businessDetails);
           if (clientDraft.documents) setClientDocuments(clientDraft.documents);
         }
-      } catch {}
+      } catch { }
     }
 
     if (role === 'CLIENT') {
@@ -634,24 +615,6 @@ export default function App() {
     setSession(newSession);
     setSelectedRole(newSession.role);
     setMobileNumber(newSession.mobile);
-
-    // Trigger notification permission and Welcome/Welcome Back notification
-    mobileNotificationService.initializeLoginNotifications({
-      userId: newSession.userId,
-      role: newSession.role,
-      mobile: newSession.mobile,
-      fullName: newSession.fullName,
-    }).then((res) => {
-      if (res.welcome && res.welcome.wasAdded) {
-        setWelcomeToast({
-          visible: true,
-          title: res.welcome.title,
-          subtitle: res.welcome.body,
-          isFirstTime: res.welcome.isFirstTime,
-          item: res.welcome.item,
-        });
-      }
-    }).catch((e) => console.warn('Failed to initialize notifications on direct login:', e));
 
     try {
       const completion = await authService.checkRegistrationCompletion(newSession.role, newSession.mobile, newSession);
@@ -749,23 +712,8 @@ export default function App() {
         await authService.saveSession(activeSession);
       }
       setSession(activeSession);
-      // Automatically trigger OS notification pop-up, Welcome / Welcome Back alert ("once add that"), & pre-fetch
-      mobileNotificationService.initializeLoginNotifications({
-        userId: activeSession.userId,
-        role: activeSession.role,
-        mobile: activeSession.mobile,
-        fullName: activeSession.fullName,
-      }).then((res) => {
-        if (res.welcome && res.welcome.wasAdded) {
-          setWelcomeToast({
-            visible: true,
-            title: res.welcome.title,
-            subtitle: res.welcome.body,
-            isFirstTime: res.welcome.isFirstTime,
-            item: res.welcome.item,
-          });
-        }
-      }).catch((e) => console.warn('Failed to initialize notifications on login:', e));
+      // Automatically trigger OS notification pop-up & pre-fetch role-specific notifications upon login
+      triggerLoginNotification(activeSession);
 
       if (role === 'CLIENT' && (profile?.companyId || profile?.clientId)) {
         setRegisteredClientId(profile?.companyId || profile?.clientId);
@@ -864,11 +812,8 @@ export default function App() {
           await authService.saveSession(newSession);
           setSession(newSession);
 
-          // Automatically trigger OS notification pop-up & pre-fetch all notifications
-          mobileNotificationService.initializeLoginNotifications({
-            userId: newSession.userId,
-            role: newSession.role,
-          }).catch((e) => console.warn('Failed to initialize notifications on registration:', e));
+          // Automatically trigger OS notification pop-up & pre-fetch client notifications
+          triggerLoginNotification(newSession);
 
           setWelcomeData({
             companyName: pendingRegistration.clientSubmissionData.companyName,
@@ -905,6 +850,9 @@ export default function App() {
           await authService.saveSession(newSession);
           setSession(newSession);
 
+          // Trigger vendor welcome notification and token registration
+          triggerLoginNotification(newSession);
+
           setWelcomeData({
             companyName: pendingRegistration.vendorFormData.companyName,
             accountCode: result.applicationNumber || vId,
@@ -940,6 +888,9 @@ export default function App() {
           await authService.saveSession(newSession);
           setSession(newSession);
 
+          // Trigger driver welcome notification and token registration
+          triggerLoginNotification(newSession);
+
           setWelcomeData({
             companyName: pendingRegistration.driverSubmissionData.selectedVendorName,
             accountCode: result.applicationNumber || dId,
@@ -948,7 +899,7 @@ export default function App() {
           await driverService.clearDraftForm();
           try {
             await AsyncStorage.removeItem('@necl_driver_draft_uris');
-          } catch {}
+          } catch { }
           setPendingRegistration(null);
           setCurrentScreen('WELCOME_TO_NECL');
           return;
@@ -974,10 +925,10 @@ export default function App() {
     Alert.alert(
       'Terms & Privacy Policy',
       'TRUCKS Logistics Platform\n\n' +
-        '• Commercial Carriage: All cargo movements strictly adhere to Carriage by Road Act 2007 guidelines.\n' +
-        '• Digital POD: Consignees confirm digital delivery sign-off and verification within 24 hours.\n' +
-        '• Telematics & Security: Real-time GPS tracking is active solely during active trips for safety and ETA accuracy.\n' +
-        '• Privacy & Compliance: KYC and billing credentials are encrypted and never shared with third parties.',
+      '• Commercial Carriage: All cargo movements strictly adhere to Carriage by Road Act 2007 guidelines.\n' +
+      '• Digital POD: Consignees confirm digital delivery sign-off and verification within 24 hours.\n' +
+      '• Telematics & Security: Real-time GPS tracking is active solely during active trips for safety and ETA accuracy.\n' +
+      '• Privacy & Compliance: KYC and billing credentials are encrypted and never shared with third parties.',
       [{ text: 'Close', style: 'default' }]
     );
   };
@@ -1001,48 +952,40 @@ export default function App() {
         translucent={false}
       />
 
-      {/* Floating Welcome / Welcome Back Notification Banner */}
-      {welcomeToast?.visible && (
-        <View style={styles.welcomeToastWrapper}>
+      {/* Floating In-App Push Notification / Welcome Banner */}
+      {inAppToast?.visible && (
+        <TouchableOpacity
+          activeOpacity={0.92}
+          onPress={() => {
+            setInAppToast(null);
+            setCurrentScreen('NOTIFICATIONS');
+          }}
+          style={styles.floatingToastCard}
+        >
+          <View style={styles.floatingToastIconWrap}>
+            <Bell size={20} color="#FFFFFF" />
+          </View>
+          <View style={styles.floatingToastTextCol}>
+            <View style={styles.floatingToastHeaderRow}>
+              <Text style={styles.floatingToastRoleBadge}>
+                {inAppToast.role || 'THE TRUCKX'}
+              </Text>
+              <Text style={styles.floatingToastTime}>Just now</Text>
+            </View>
+            <Text style={styles.floatingToastTitle} numberOfLines={1}>
+              {inAppToast.title}
+            </Text>
+            <Text style={styles.floatingToastSubtitle} numberOfLines={2}>
+              {inAppToast.subtitle}
+            </Text>
+          </View>
           <TouchableOpacity
-            style={styles.welcomeToastCard}
-            activeOpacity={0.9}
-            onPress={() => {
-              setWelcomeToast((prev) => (prev ? { ...prev, visible: false } : null));
-              if (welcomeToast.item) {
-                setSelectedNotification(welcomeToast.item);
-                setCurrentScreen('NOTIFICATION_DETAILS');
-              } else {
-                setCurrentScreen('NOTIFICATIONS');
-              }
-            }}
+            style={styles.floatingToastCloseBtn}
+            onPress={() => setInAppToast(null)}
           >
-            <View style={styles.welcomeToastIconBox}>
-              <Bell size={18} color="#FFFFFF" />
-            </View>
-            <View style={styles.welcomeToastTextContainer}>
-              <View style={styles.welcomeToastBadgeRow}>
-                <Text style={styles.welcomeToastBadge}>
-                  {welcomeToast.isFirstTime ? 'NEW MEMBER' : 'OPERATIONS ACTIVE'}
-                </Text>
-                <Text style={styles.welcomeToastTime}>Just now</Text>
-              </View>
-              <Text style={styles.welcomeToastTitle} numberOfLines={1}>
-                {welcomeToast.title}
-              </Text>
-              <Text style={styles.welcomeToastSubtitle} numberOfLines={2}>
-                {welcomeToast.subtitle}
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={styles.welcomeToastCloseBtn}
-              onPress={() => setWelcomeToast((prev) => (prev ? { ...prev, visible: false } : null))}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <X size={16} color="#94A3B8" />
-            </TouchableOpacity>
+            <X size={16} color="#94A3B8" />
           </TouchableOpacity>
-        </View>
+        </TouchableOpacity>
       )}
 
       {isResumingRegistration &&
@@ -1244,10 +1187,10 @@ export default function App() {
               selectedRole === 'CLIENT'
                 ? 'CLIENT_DASHBOARD'
                 : selectedRole === 'VENDOR'
-                ? 'VENDOR_DASHBOARD'
-                : selectedRole === 'DRIVER'
-                ? 'DRIVER_DASHBOARD'
-                : 'PROFILE'
+                  ? 'VENDOR_DASHBOARD'
+                  : selectedRole === 'DRIVER'
+                    ? 'DRIVER_DASHBOARD'
+                    : 'PROFILE'
             )
           }
           onSelectNotification={(item) => {
@@ -1323,10 +1266,10 @@ export default function App() {
               selectedRole === 'CLIENT'
                 ? 'CLIENT_DASHBOARD'
                 : selectedRole === 'VENDOR'
-                ? 'VENDOR_DASHBOARD'
-                : selectedRole === 'DRIVER'
-                ? 'DRIVER_DASHBOARD'
-                : 'PROFILE'
+                  ? 'VENDOR_DASHBOARD'
+                  : selectedRole === 'DRIVER'
+                    ? 'DRIVER_DASHBOARD'
+                    : 'PROFILE'
             )
           }
         />
@@ -2475,20 +2418,20 @@ export default function App() {
         currentScreen === 'DRIVER_VEHICLE_ASSOCIATION' ||
         currentScreen === 'DRIVER_DOC_UPLOAD' ||
         currentScreen === 'DRIVER_APPLICATION_REVIEW') && (
-        <DriverRegistrationScreen
-          initialMobile={mobileNumber}
-          onBack={async () => {
-            await driverService.clearDraftForm();
-            setCurrentScreen('LOGIN');
-          }}
-          onSubmitSuccess={(data) => {
-            setRegisteredDriverId(data.driverId);
-            setDriverApplicationNumber(data.applicationNumber);
-            setCurrentScreen('DRIVER_SUBMISSION_CONFIRM');
-          }}
-          onCheckStatus={() => setCurrentScreen('DRIVER_VERIFICATION_STATUS')}
-        />
-      )}
+          <DriverRegistrationScreen
+            initialMobile={mobileNumber}
+            onBack={async () => {
+              await driverService.clearDraftForm();
+              setCurrentScreen('LOGIN');
+            }}
+            onSubmitSuccess={(data) => {
+              setRegisteredDriverId(data.driverId);
+              setDriverApplicationNumber(data.applicationNumber);
+              setCurrentScreen('DRIVER_SUBMISSION_CONFIRM');
+            }}
+            onCheckStatus={() => setCurrentScreen('DRIVER_VERIFICATION_STATUS')}
+          />
+        )}
 
       {/* Screen 7: Submission Confirmation */}
       {currentScreen === 'DRIVER_SUBMISSION_CONFIRM' && (
@@ -2776,10 +2719,10 @@ export default function App() {
               currentScreen === 'MY_SHIPMENTS' || currentScreen === 'MY_BOOKINGS'
                 ? 'SHIPMENTS'
                 : currentScreen === 'MY_REQUIREMENTS'
-                ? 'REQUIREMENTS'
-                : currentScreen === 'PROFILE'
-                ? 'PROFILE'
-                : 'HOME'
+                  ? 'REQUIREMENTS'
+                  : currentScreen === 'PROFILE'
+                    ? 'PROFILE'
+                    : 'HOME'
             }
             onSelectTab={(tab: ClientNavTab | string) => {
               if (tab === 'HOME') setCurrentScreen('CLIENT_DASHBOARD');
@@ -2818,74 +2761,67 @@ const styles = StyleSheet.create({
     flex: 1,
     lineHeight: 16,
   },
-  welcomeToastWrapper: {
+  floatingToastCard: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 52 : 28,
-    left: 14,
-    right: 14,
-    zIndex: 9999,
-    elevation: 10,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-  },
-  welcomeToastCard: {
+    top: 12,
+    left: 12,
+    right: 12,
     backgroundColor: '#0F172A',
     borderRadius: 14,
-    borderLeftWidth: 4,
-    borderLeftColor: '#FA5700',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    elevation: 20,
+    zIndex: 9999,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: '#334155',
   },
-  welcomeToastIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
+  floatingToastIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#FA5700',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 10,
   },
-  welcomeToastTextContainer: {
+  floatingToastTextCol: {
     flex: 1,
-    marginRight: 8,
   },
-  welcomeToastBadgeRow: {
+  floatingToastHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 2,
   },
-  welcomeToastBadge: {
-    fontSize: 9,
-    fontWeight: '700',
+  floatingToastRoleBadge: {
+    fontSize: 10,
+    fontWeight: '800',
     color: '#FA5700',
-    letterSpacing: 0.8,
     textTransform: 'uppercase',
+    letterSpacing: 0.8,
   },
-  welcomeToastTime: {
+  floatingToastTime: {
     fontSize: 10,
     color: '#64748B',
   },
-  welcomeToastTitle: {
-    fontSize: 14,
+  floatingToastTitle: {
+    fontSize: 13,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#F8FAFC',
     marginBottom: 2,
   },
-  welcomeToastSubtitle: {
-    fontSize: 12,
+  floatingToastSubtitle: {
+    fontSize: 11,
     color: '#CBD5E1',
-    lineHeight: 16,
+    lineHeight: 15,
   },
-  welcomeToastCloseBtn: {
+  floatingToastCloseBtn: {
     padding: 6,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    marginLeft: 6,
   },
 });

@@ -3697,25 +3697,38 @@ app.post('/api/notifications/send-push', async (req: Request, res: Response) => 
 });
 
 // Test Push Notification Dispatcher (FCM Mobile & Web)
+// Test Push Notification Dispatcher (FCM Mobile & Web)
 app.post('/api/notifications/test-fcm', async (req: Request, res: Response) => {
-  const { targetRole, targetUserId, title, body, icon } = req.body;
+  const { targetRole, role, targetUserId, title, body, icon } = req.body;
+  const effectiveRole = (role || targetRole || 'CLIENT') as 'CLIENT' | 'VENDOR' | 'DRIVER' | 'ADMIN';
 
-  const testTitle = title || 'THE TRUCKX - Live Dispatch Alert';
-  const testBody = body || 'Trip #TRP-8821 lorry has been placed and GPS tracking is now live.';
+  let defaultTitle = 'THE TRUCKX - Live Dispatch Alert';
+  let defaultBody = 'Trip #TRP-8821 lorry has been placed and GPS tracking is now live.';
+
+  if (effectiveRole === 'VENDOR') {
+    defaultTitle = 'New Freight Requirement Available 📦';
+    defaultBody = 'Guwahati → Siliguri | 25 MT TMT Steel open for quotation. Review specs & place bid.';
+  } else if (effectiveRole === 'DRIVER') {
+    defaultTitle = 'Trip Assigned: Report to Loading Bay 🚚';
+    defaultBody = 'Trip #TRP-8821 assigned. Vehicle: AS-01-EC-9942. Report for cargo loading.';
+  }
+
+  const testTitle = title || defaultTitle;
+  const testBody = body || defaultBody;
   const notifIcon = icon || 'notification_icon';
 
   let tokens = NotificationService.getTokens({
-    role: targetRole,
+    role: effectiveRole,
     userId: targetUserId,
   });
 
   // If no tokens found, register a test mobile recipient token so dispatch test succeeds
   if (tokens.length === 0) {
-    const demoToken = `fcm_mobile_android_${Date.now()}`;
+    const demoToken = `fcm_${effectiveRole.toLowerCase()}_demo_${Date.now()}`;
     NotificationService.registerToken({
       pushToken: demoToken,
-      userId: targetUserId || 'client_demo',
-      role: targetRole || 'CLIENT',
+      userId: targetUserId || `${effectiveRole.toLowerCase()}_demo_user`,
+      role: effectiveRole,
       platform: 'android',
     });
     tokens = [demoToken];
@@ -3727,6 +3740,7 @@ app.post('/api/notifications/test-fcm', async (req: Request, res: Response) => {
     body: testBody,
     data: {
       source: 'FCM_TEST_DISPATCH',
+      role: effectiveRole,
       icon: notifIcon,
       click_action: 'FLUTTER_NOTIFICATION_CLICK',
       timestamp: new Date().toISOString(),
@@ -3736,10 +3750,79 @@ app.post('/api/notifications/test-fcm', async (req: Request, res: Response) => {
 
   res.json({
     success: true,
-    message: `Test FCM push notification processed for ${tokens.length} device(s)`,
+    message: `Test FCM push notification processed for ${tokens.length} ${effectiveRole} device(s)`,
+    role: effectiveRole,
     recipients: tokens,
     result: dispatchResult,
   });
+});
+
+// Test Push specifically for Vendor / Fleet Partner
+app.post('/api/notifications/test-vendor', async (req: Request, res: Response) => {
+  const { title, body, targetUserId } = req.body;
+  const testTitle = title || 'Trip Awarded: Assign Vehicle & Driver 🏆';
+  const testBody = body || 'Booking #BK-2026-904 (Guwahati → Siliguri) has been awarded to your fleet. Assign driver to issue digital LR.';
+
+  let tokens = NotificationService.getTokens({ role: 'VENDOR', userId: targetUserId });
+  if (tokens.length === 0) {
+    const demoToken = `fcm_vendor_sample_${Date.now()}`;
+    NotificationService.registerToken({
+      pushToken: demoToken,
+      userId: targetUserId || 'vendor_demo_user',
+      role: 'VENDOR',
+      platform: 'android',
+    });
+    tokens = [demoToken];
+  }
+
+  const result = await NotificationService.sendPush({
+    to: tokens,
+    title: testTitle,
+    body: testBody,
+    data: {
+      source: 'VENDOR_AWARD_DISPATCH',
+      role: 'VENDOR',
+      icon: 'notification_icon',
+      bookingId: 'BK-2026-904',
+      timestamp: new Date().toISOString(),
+    },
+  });
+
+  res.json({ success: true, role: 'VENDOR', recipients: tokens, result });
+});
+
+// Test Push specifically for Driver
+app.post('/api/notifications/test-driver', async (req: Request, res: Response) => {
+  const { title, body, targetUserId } = req.body;
+  const testTitle = title || 'New Trip Assigned: Guwahati → Siliguri 🚚';
+  const testBody = body || 'Trip #TRP-8821. Vehicle: AS-01-EC-9942. Report to loading bay for digital LR verification.';
+
+  let tokens = NotificationService.getTokens({ role: 'DRIVER', userId: targetUserId });
+  if (tokens.length === 0) {
+    const demoToken = `fcm_driver_sample_${Date.now()}`;
+    NotificationService.registerToken({
+      pushToken: demoToken,
+      userId: targetUserId || 'driver_demo_user',
+      role: 'DRIVER',
+      platform: 'android',
+    });
+    tokens = [demoToken];
+  }
+
+  const result = await NotificationService.sendPush({
+    to: tokens,
+    title: testTitle,
+    body: testBody,
+    data: {
+      source: 'DRIVER_ASSIGNMENT_DISPATCH',
+      role: 'DRIVER',
+      icon: 'notification_icon',
+      tripId: 'TRP-8821',
+      timestamp: new Date().toISOString(),
+    },
+  });
+
+  res.json({ success: true, role: 'DRIVER', recipients: tokens, result });
 });
 
 // Device Tokens Inspector (Admin view)

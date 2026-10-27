@@ -214,9 +214,9 @@ class MobileNotificationService {
   /**
    * Fetch all real notifications from database & cache them locally
    */
-  async fetchAndCacheNotifications(userId?: string): Promise<any[]> {
+  async fetchAndCacheNotifications(userId?: string, role?: MobileRole): Promise<any[]> {
     try {
-      const notifs = await authService.fetchRealNotifications(userId);
+      const notifs = await authService.fetchRealNotifications(userId, role);
       await AsyncStorage.setItem(STORAGE_KEYS.CACHED_NOTIFICATIONS, JSON.stringify(notifs));
       return notifs;
     } catch (e) {
@@ -294,27 +294,54 @@ class MobileNotificationService {
       isFirstTime = false;
     }
 
-    // Determine notification title and body
+    // Determine role-specific notification title and body
     let title = '';
     let subtitle = '';
     let content = '';
 
-    if (isFirstTime) {
-      title = 'Welcome to THE TRUCKX! 🚚';
-      subtitle = 'Your transport portal is ready. Discover verified loads & routes.';
-      content =
-        'Welcome to THE TRUCKX! 🚚 Thank you for joining our logistics ecosystem. You can now post transport requirements, bid on freight, track shipments live via GPS telematics, and manage digital PODs with ease.';
+    const effectiveRole = params.role || 'CLIENT';
+
+    if (effectiveRole === 'VENDOR') {
+      const displayName = params.fullName?.trim() || 'Fleet Partner';
+      if (isFirstTime) {
+        title = 'Welcome to THE TRUCKX Fleet Partner Portal! 🚛';
+        subtitle = 'Start receiving freight RFQs, place live bids, and manage your fleet.';
+        content =
+          'Welcome to THE TRUCKX Fleet Partner Portal! 🚛 You are registered as an official Transporter & Fleet Partner. You can now browse verified client load requirements, submit commercial quotes, allocate vehicles & drivers, and track trip settlements.';
+      } else {
+        title = `Welcome Back, Fleet Partner ${displayName}! 🚛`;
+        subtitle = 'Fleet & RFQ dispatch board is active. New requirements and trip awards await.';
+        content = `Welcome back, ${displayName}! 🚛 Your transporter console is updated with real-time RFQ inquiries, active fleet allocations, pending trip settlements, and live milestone updates.`;
+      }
+    } else if (effectiveRole === 'DRIVER') {
+      const displayName = params.fullName?.trim() || 'Captain';
+      if (isFirstTime) {
+        title = 'Welcome to THE TRUCKX Driver Console! 🚦';
+        subtitle = 'Your digital cab dashboard is ready. View assigned trips and upload digital PODs.';
+        content =
+          'Welcome Captain! 🚦 You are now part of THE TRUCKX logistics fleet. Receive immediate trip dispatch notifications, navigate routes safely with live turn-by-turn tracking, and upload delivery receipts (e-POD) in 1-click.';
+      } else {
+        title = `Welcome Back, Captain ${displayName}! 🛣️`;
+        subtitle = 'Your live trip sheet, route navigation, and e-waybill details are loaded.';
+        content = `Welcome back, Captain ${displayName}! 🛣️ Stay safe on the road. Check your active route, reporting time, consignment status, and electronic proof of delivery tasks.`;
+      }
     } else {
-      const displayName =
-        params.fullName?.trim() ||
-        (params.role ? `${params.role} Partner` : 'Transporter');
-      title = `Welcome Back, ${displayName}! 👋`;
-      subtitle = 'All systems active. Your fleet & live dispatches are up to date.';
-      content = `Welcome back, ${displayName}! 👋 Glad to see you again. Your dashboard is synced with active consignments, live trips, and real-time dispatch updates.`;
+      // CLIENT Role
+      const displayName = params.fullName?.trim() || 'Valued Shipper';
+      if (isFirstTime) {
+        title = 'Welcome to THE TRUCKX Client Portal! 🚚';
+        subtitle = 'Your transport portal is ready. Post requirements and track consignments.';
+        content =
+          'Welcome to THE TRUCKX Client Portal! 🚚 Thank you for joining our logistics ecosystem. You can now post transport requirements, receive transparent competitive market bids, track shipments live via GPS telematics, and manage digital PODs with ease.';
+      } else {
+        title = `Welcome Back, ${displayName}! 👋`;
+        subtitle = 'Active consignments, quotes & live telematics are synced.';
+        content = `Welcome back, ${displayName}! 👋 Glad to see you again. Your dashboard is synced with active consignments, live trips, and real-time dispatch updates.`;
+      }
     }
 
     const notificationItem = {
-      id: `welcome-${cleanPhone}-${isFirstTime ? 'first' : 'back'}-${Date.now()}`,
+      id: `welcome-${cleanPhone}-${effectiveRole.toLowerCase()}-${isFirstTime ? 'first' : 'back'}-${Date.now()}`,
       category: 'system' as const,
       title,
       subtitle,
@@ -373,7 +400,7 @@ class MobileNotificationService {
     granted: boolean;
     token?: string;
     notifications: any[];
-    welcome?: {
+    welcome: {
       isFirstTime: boolean;
       title: string;
       body: string;
@@ -381,7 +408,7 @@ class MobileNotificationService {
       wasAdded: boolean;
     };
   }> {
-    console.log('[NotificationService] Initializing login notifications & OS pop-up for user:', params.userId);
+    console.log(`[NotificationService] Initializing login notifications (${params.role || 'CLIENT'}) for user:`, params.userId);
 
     // 1. Trigger the native OS pop-up dialog
     const granted = await this.requestOSNotificationPermission();
@@ -393,7 +420,7 @@ class MobileNotificationService {
     const welcome = await this.handleWelcomeNotification(params);
 
     // 4. Pre-fetch all real notifications so the user has them immediately
-    const notifications = await this.fetchAndCacheNotifications(params.userId);
+    const notifications = await this.fetchAndCacheNotifications(params.userId, params.role);
 
     return {
       granted,
@@ -401,6 +428,30 @@ class MobileNotificationService {
       notifications,
       welcome,
     };
+  }
+
+  /**
+   * Helper: Dispatch operational notification to a Vendor
+   */
+  async notifyVendorTripAwarded(params: { token?: string; bookingNumber: string; route: string }): Promise<void> {
+    const title = 'Trip Awarded! Assign Lorry & Driver 🏆';
+    const body = `Booking #${params.bookingNumber} (${params.route}) awarded. Assign vehicle from fleet to dispatch.`;
+    const token = params.token || (await this.getStoredToken());
+    if (token) {
+      await this.sendPushNotificationDirect(token, title, body);
+    }
+  }
+
+  /**
+   * Helper: Dispatch operational notification to a Driver
+   */
+  async notifyDriverTripAssigned(params: { token?: string; tripNumber: string; route: string; vehicleNumber?: string }): Promise<void> {
+    const title = 'New Trip Assigned to You 🚚';
+    const body = `Trip #${params.tripNumber} (${params.route}). Vehicle: ${params.vehicleNumber || 'Assigned Lorry'}. Report to loading bay.`;
+    const token = params.token || (await this.getStoredToken());
+    if (token) {
+      await this.sendPushNotificationDirect(token, title, body);
+    }
   }
 
   /**

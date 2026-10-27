@@ -6,5 +6,21 @@
     "platform": "android",
     "registeredAt": "2026-10-26T07:47:24.265Z",
     "lastActiveAt": "2026-10-26T07:47:24.265Z"
+  },
+  {
+    "pushToken": "fcm_vendor_sample_1793081522869",
+    "userId": "vendor_test_101",
+    "role": "VENDOR",
+    "platform": "android",
+    "registeredAt": "2026-10-27T06:12:02.870Z",
+    "lastActiveAt": "2026-10-27T06:12:02.870Z"
+  },
+  {
+    "pushToken": "fcm_driver_sample_1793081623489",
+    "userId": "driver_test_202",
+    "role": "DRIVER",
+    "platform": "android",
+    "registeredAt": "2026-10-27T06:13:43.489Z",
+    "lastActiveAt": "2026-10-27T06:13:43.489Z"
   }
 ]

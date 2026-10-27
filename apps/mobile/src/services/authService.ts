@@ -97,14 +97,14 @@ export interface RegisteredUserRecord {
   email?: string;
   companyName?: string;
   status:
-    | 'ACTIVE'
-    | 'PENDING'
-    | 'PENDING_APPROVAL'
-    | 'APPROVED'
-    | 'REJECTED'
-    | 'CORRECTIONS_REQUESTED'
-    | 'DEACTIVATED'
-    | string;
+  | 'ACTIVE'
+  | 'PENDING'
+  | 'PENDING_APPROVAL'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'CORRECTIONS_REQUESTED'
+  | 'DEACTIVATED'
+  | string;
   registeredAt: string;
 }
 
@@ -125,16 +125,16 @@ export interface MobileRegistrationCheckResult {
   isRegisteredOtherRole: boolean;
   otherRole?: MobileRole;
   status:
-    | 'ACTIVE'
-    | 'PENDING'
-    | 'APPROVED'
-    | 'REJECTED'
-    | 'CORRECTIONS_REQUESTED'
-    | 'PENDING_APPROVAL'
-    | 'INACTIVE'
-    | 'DEACTIVATED'
-    | 'NOT_REGISTERED'
-    | string;
+  | 'ACTIVE'
+  | 'PENDING'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'CORRECTIONS_REQUESTED'
+  | 'PENDING_APPROVAL'
+  | 'INACTIVE'
+  | 'DEACTIVATED'
+  | 'NOT_REGISTERED'
+  | string;
   isRegistrationComplete?: boolean;
   profileCompletionStatus?: 'COMPLETE' | 'INCOMPLETE';
   missingFields?: string[];
@@ -170,7 +170,7 @@ export const authService = {
           email: latest.email,
           companyName: latest.companyName,
           status: latest.status,
-        }).catch(() => {});
+        }).catch(() => { });
       }
     } catch (e) {
       console.warn('Failed to save user registry:', e);
@@ -254,7 +254,7 @@ export const authService = {
     }
 
     // 2. Ensure mobile session for direct database queries
-    await ensureMobileSession().catch(() => {});
+    await ensureMobileSession().catch(() => { });
 
     // 3. Fallback: Query Supabase across role tables and RPC in parallel
     const activeRoles: Array<{
@@ -340,8 +340,8 @@ export const authService = {
         const compStatus = rawCompStatus === 'APPROVED' || rawCompStatus === 'ACTIVE'
           ? 'APPROVED'
           : rawCompStatus === 'INACTIVE'
-          ? 'INACTIVE'
-          : rawCompStatus;
+            ? 'INACTIVE'
+            : rawCompStatus;
         const clientMissing: string[] = [];
         if (!comp?.company_name) clientMissing.push('Company Name');
         if (!comp?.pan && !comp?.gstin) clientMissing.push('PAN / GSTIN');
@@ -399,8 +399,8 @@ export const authService = {
             nextStep: vendorMissing.includes('Transporter Name') || vendorMissing.includes('PAN')
               ? 'VENDOR_BUSINESS_INFO'
               : vendorMissing.includes('Address')
-              ? 'VENDOR_ADDRESS_CONTACT'
-              : 'VENDOR_FLEET_INFO',
+                ? 'VENDOR_ADDRESS_CONTACT'
+                : 'VENDOR_FLEET_INFO',
           });
         }
       } else if (!activeRoles.some((r) => r.role === 'VENDOR')) {
@@ -504,7 +504,7 @@ export const authService = {
           registeredAt: new Date().toISOString(),
         });
         await this.saveLocalRegistry(filtered);
-      } catch {}
+      } catch { }
     }
 
     if (requestedRole) {
@@ -592,7 +592,7 @@ export const authService = {
           details: newRequest,
         },
       ]);
-    } catch {}
+    } catch { }
 
     return {
       success: true,
@@ -637,7 +637,7 @@ export const authService = {
       } else if (role === 'DRIVER') {
         await supabase.from('drivers').update({ status: 'DEACTIVATED' }).eq('mobile', cleanPhone);
       }
-    } catch {}
+    } catch { }
 
     return {
       success: true,
@@ -670,7 +670,7 @@ export const authService = {
       } else if (role === 'DRIVER') {
         await supabase.from('drivers').delete().eq('mobile', cleanPhone);
       }
-    } catch {}
+    } catch { }
 
     return {
       success: true,
@@ -707,8 +707,8 @@ export const authService = {
       data.role === 'CLIENT'
         ? `${trimmedName} Enterprise`
         : data.role === 'VENDOR'
-        ? `${trimmedName} Logistics`
-        : 'TRUCKS Logistics Fleet';
+          ? `${trimmedName} Logistics`
+          : 'TRUCKS Logistics Fleet';
 
     // 1. Immediately persist to database (Supabase)
     try {
@@ -814,7 +814,7 @@ export const authService = {
           details: { role: data.role, name: trimmedName, mobile: cleanPhone },
         },
       ]);
-    } catch {}
+    } catch { }
 
     return {
       success: true,
@@ -835,7 +835,7 @@ export const authService = {
     }
 
     try {
-      await ensureMobileSession().catch(() => {});
+      await ensureMobileSession().catch(() => { });
 
       if (role === 'CLIENT') {
         const { data: existingUser } = await supabase
@@ -991,7 +991,7 @@ export const authService = {
           message: apiRes.message,
         };
       }
-    } catch {}
+    } catch { }
 
     if (role === 'CLIENT') {
       const { clientService } = require('./clientService');
@@ -1063,7 +1063,7 @@ export const authService = {
 
       const resumed = await vendorService.loadAuthenticatedVendorRegistration(vId, cleanPhone);
       const validation = vendorService.validateVendorRegistrationData(resumed, resumed?.documents);
-      
+
       const missing: string[] = [];
       for (const step of validation.incompleteSteps) {
         missing.push(...step.missingFields);
@@ -1375,7 +1375,7 @@ export const authService = {
       if (apiErr?.status === 409 || apiErr?.data?.error === 'WRONG_ROLE') {
         throw new Error(
           apiErr.message ||
-            'WRONG_ROLE: This mobile number is registered under another role. Please select the correct role.'
+          'WRONG_ROLE: This mobile number is registered under another role. Please select the correct role.'
         );
       }
       console.warn('Backend API send-otp notice, falling back to direct operations:', apiErr?.message);
@@ -1416,7 +1416,7 @@ export const authService = {
             details: { phone: cleanPhone, purpose, role, timestamp: new Date().toISOString() },
           },
         ]);
-      } catch {}
+      } catch { }
 
       return {
         success: true,
@@ -1476,8 +1476,8 @@ export const authService = {
           const resolvedUserId = requestedRole === 'CLIENT'
             ? (apiRes.userProfile?.clientId || apiRes.userProfile?.id || `cli-${cleanPhone}`)
             : requestedRole === 'DRIVER'
-            ? (apiRes.userProfile?.id || `drv-${cleanPhone}`)
-            : (apiRes.userProfile?.vendorId || apiRes.userProfile?.id || `ven-${cleanPhone}`);
+              ? (apiRes.userProfile?.id || `drv-${cleanPhone}`)
+              : (apiRes.userProfile?.vendorId || apiRes.userProfile?.id || `ven-${cleanPhone}`);
 
           await this.saveSession({
             userId: resolvedUserId,
@@ -1595,8 +1595,8 @@ export const authService = {
       const resolvedUserId = existingRole === 'CLIENT'
         ? (userProfile?.clientId || userProfile?.companyId || userProfile?.id || `cli-${cleanPhone}`)
         : existingRole === 'DRIVER'
-        ? (userProfile?.id || `drv-${cleanPhone}`)
-        : (userProfile?.vendorId || `ven-${cleanPhone}`);
+          ? (userProfile?.id || `drv-${cleanPhone}`)
+          : (userProfile?.vendorId || `ven-${cleanPhone}`);
 
       const rawStatus = regCheck.status || 'INACTIVE';
       const accountStatus = rawStatus === 'APPROVED' || rawStatus === 'ACTIVE' ? 'APPROVED' : rawStatus;
@@ -1857,137 +1857,222 @@ export const authService = {
     }
   },
 
-  // ─── 11.1 Custom User Notifications Persistence ──────────────────────────
+  // ─── 12. Custom & Real Role-Based Notifications ───────────────────────────
   async getUserCustomNotifications(userKey?: string): Promise<any[]> {
     try {
-      const cleanKey = (userKey || 'common').replace(/[^a-zA-Z0-9_-]/g, '_');
-      const stored = await AsyncStorage.getItem(`@necl_user_custom_notifs_${cleanKey}`);
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
+      const cleanKey = (userKey || 'common').replace(/[^0-9a-zA-Z_-]/g, '');
+      const storageKey = `@necl_user_custom_notifs_${cleanKey}`;
+      const raw = await AsyncStorage.getItem(storageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      }
+    } catch (e) {
+      console.warn('Failed to read custom notifications:', e);
     }
+    return [];
   },
 
-  async appendUserCustomNotification(notification: any, userKey?: string): Promise<void> {
+  async appendUserCustomNotification(item: any, userKey?: string): Promise<void> {
     try {
-      const cleanKey = (userKey || 'common').replace(/[^a-zA-Z0-9_-]/g, '_');
-      const list = await this.getUserCustomNotifications(cleanKey);
-      // Prevent duplicates by ID (ensures 'once add that' property)
-      const filtered = list.filter((n: any) => n.id !== notification.id);
-      filtered.unshift(notification);
-      // Keep up to 30 notifications
-      await AsyncStorage.setItem(
-        `@necl_user_custom_notifs_${cleanKey}`,
-        JSON.stringify(filtered.slice(0, 30))
-      );
+      const cleanKey = (userKey || 'common').replace(/[^0-9a-zA-Z_-]/g, '');
+      const storageKey = `@necl_user_custom_notifs_${cleanKey}`;
+      const existing = await this.getUserCustomNotifications(cleanKey);
+      const filtered = existing.filter((n) => n.id !== item.id);
+      const updated = [item, ...filtered].slice(0, 30);
+      await AsyncStorage.setItem(storageKey, JSON.stringify(updated));
     } catch (e) {
       console.warn('Failed to append custom notification:', e);
     }
   },
 
-  // ─── 12. Fetch Real Notifications ─────────────────────────────────────────
-  async fetchRealNotifications(clientId?: string): Promise<any[]> {
+  async fetchRealNotifications(userId?: string, role?: MobileRole): Promise<any[]> {
     try {
-      // If no clientId passed, try getting current session user
-      let targetClientId = clientId;
-      if (!targetClientId) {
-        const session = await this.getCurrentSession();
-        targetClientId = session?.userId;
-      }
+      const session = await this.getCurrentSession();
+      const effectiveUserId = userId || session?.userId;
+      const effectiveRole: MobileRole = role || session?.role || 'CLIENT';
+      const cleanPhone = (session?.mobile || effectiveUserId || 'common').replace(/[^0-9]/g, '').slice(-10);
 
-      let targetCompanyId = targetClientId;
-      if (targetClientId && targetClientId.includes('-')) {
-        const { data: userRec } = await supabase
-          .from('client_users')
-          .select('client_id, client_company_id')
-          .eq('id', targetClientId)
-          .maybeSingle();
-        if (userRec?.client_id || userRec?.client_company_id) {
-          targetCompanyId = userRec.client_id || userRec.client_company_id;
+      // 1. Fetch user-specific custom notifications (Welcome messages, direct alerts, FCM foreground saves)
+      const customItems = await this.getUserCustomNotifications(cleanPhone);
+
+      const items: any[] = [...customItems];
+
+      // 2. Fetch role-specific operational database notifications
+      if (effectiveRole === 'VENDOR') {
+        const targetVendorId = effectiveUserId || session?.userId;
+        try {
+          // Vendor awarded trips & fleet assignments
+          let tripsQuery = supabase
+            .from('trips')
+            .select('*, vehicles(registration_number), requirements(material_type, pickup_address, destination_address)')
+            .order('created_at', { ascending: false })
+            .limit(6);
+          if (targetVendorId) {
+            tripsQuery = tripsQuery.or(`vendor_id.eq.${targetVendorId},transporter_id.eq.${targetVendorId}`);
+          }
+          const { data: vTrips } = await tripsQuery;
+
+          (vTrips || []).forEach((t: any) => {
+            const hasDriver = !!t.driver_id;
+            items.push({
+              id: `v-trip-${t.id}`,
+              category: 'shipment',
+              title: hasDriver ? `Trip Awarded: ${t.trip_status || 'CONFIRMED'}` : 'Action Required: Assign Driver & Lorry',
+              subtitle: `Lorry: ${t.vehicles?.registration_number || 'Pending'} | Route: ${t.requirements?.pickup_address || 'Origin'} → ${t.requirements?.destination_address || 'Dest'}`,
+              time: t.created_at ? new Date(t.created_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Recent Award',
+              isRead: hasDriver,
+              isImportant: !hasDriver,
+              refId: t.booking_id || t.id,
+              content: hasDriver
+                ? `Trip #${t.id.slice(0, 8)} is confirmed with vehicle ${t.vehicles?.registration_number || 'Allocated'}. Telematics & tracking are active.`
+                : `You have been awarded Booking #${t.booking_id || t.id.slice(0, 8)}. Please link a verified vehicle and driver to dispatch the load.`,
+            });
+          });
+
+          // Open requirements available for vendor bidding
+          const { data: openReqs } = await supabase
+            .from('requirements')
+            .select('*')
+            .in('status', ['POSTED', 'OPEN_FOR_BIDDING', 'PENDING_PRICING'])
+            .order('created_at', { ascending: false })
+            .limit(4);
+
+          (openReqs || []).forEach((r: any) => {
+            items.push({
+              id: `v-rfq-${r.id}`,
+              category: 'booking',
+              title: 'New Freight Requirement Available 📦',
+              subtitle: `${r.pickup_address || 'Origin'} → ${r.destination_address || 'Dest'} | ${r.vehicle_type_required || 'Standard'}`,
+              time: r.created_at ? new Date(r.created_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }) : 'Live RFQ',
+              isRead: true,
+              isImportant: false,
+              refId: r.id,
+              content: `A verified transport requirement for ${r.material_type || 'Cargo'} is open for quotation. Review specs and submit your commercial bid.`,
+            });
+          });
+        } catch (vErr) {
+          console.warn('Vendor notification fetch notice:', vErr);
         }
+      } else if (effectiveRole === 'DRIVER') {
+        const targetDriverId = effectiveUserId || session?.userId;
+        try {
+          // Driver assigned trips
+          let driverTripsQuery = supabase
+            .from('trips')
+            .select('*, vehicles(registration_number)')
+            .order('created_at', { ascending: false })
+            .limit(6);
+          if (targetDriverId) {
+            driverTripsQuery = driverTripsQuery.eq('driver_id', targetDriverId);
+          }
+          const { data: dTrips } = await driverTripsQuery;
+
+          (dTrips || []).forEach((t: any) => {
+            const inProgress = t.trip_status === 'IN_TRANSIT' || t.trip_status === 'LOADING';
+            items.push({
+              id: `d-trip-${t.id}`,
+              category: 'shipment',
+              title: `Trip Assigned: ${t.trip_status || 'DISPATCHED'} 🚚`,
+              subtitle: `Vehicle: ${t.vehicles?.registration_number || 'Your Lorry'} | Status: ${t.trip_status || 'ASSIGNED'}`,
+              time: t.created_at ? new Date(t.created_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Today',
+              isRead: !inProgress,
+              isImportant: inProgress,
+              refId: t.id,
+              content: `You are assigned to Trip #${t.id.slice(0, 8)}. Report to the loading bay on schedule and upload the stamped delivery challan/e-POD upon destination arrival.`,
+            });
+          });
+        } catch (dErr) {
+          console.warn('Driver notification fetch notice:', dErr);
+        }
+      } else {
+        // CLIENT Role: Requirements, bookings, and live consignment trips
+        let targetCompanyId = effectiveUserId;
+        if (effectiveUserId && effectiveUserId.includes('-')) {
+          const { data: userRec } = await supabase
+            .from('client_users')
+            .select('client_id, client_company_id')
+            .eq('id', effectiveUserId)
+            .maybeSingle();
+          if (userRec?.client_id || userRec?.client_company_id) {
+            targetCompanyId = userRec.client_id || userRec.client_company_id;
+          }
+        }
+
+        let reqsQuery = supabase.from('requirements').select('*').order('created_at', { ascending: false }).limit(6);
+        let boksQuery = supabase.from('bookings').select('*').order('created_at', { ascending: false }).limit(6);
+
+        if (targetCompanyId) {
+          reqsQuery = reqsQuery.or(`client_id.eq.${targetCompanyId},client_id.eq.${effectiveUserId}`);
+          boksQuery = boksQuery.or(`client_id.eq.${targetCompanyId},client_id.eq.${effectiveUserId}`);
+        }
+
+        const [{ data: reqs }, { data: boks }] = await Promise.all([reqsQuery, boksQuery]);
+
+        const bookingIds = (boks || []).map((b) => b.id);
+        let trips: any[] = [];
+        if (bookingIds.length > 0) {
+          const { data: tripsData } = await supabase
+            .from('trips')
+            .select('*, vehicles(registration_number)')
+            .in('booking_id', bookingIds)
+            .order('created_at', { ascending: false })
+            .limit(6);
+          trips = tripsData || [];
+        }
+
+        (trips || []).forEach((t) => {
+          const inTransit = t.trip_status === 'IN_TRANSIT';
+          items.push({
+            id: `trip-${t.id}`,
+            category: 'shipment',
+            title: `Trip ${t.trip_status === 'IN_TRANSIT' ? 'In Transit' : t.trip_status}`,
+            subtitle: `Lorry: ${t.vehicles?.registration_number || 'Standard Fleet'} | Freight ₹${(t.vendor_rate || 0).toLocaleString('en-IN')}`,
+            time: t.started_at ? new Date(t.started_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Recent Update',
+            isRead: !inTransit,
+            isImportant: inTransit,
+            refId: t.booking_id || t.id,
+            content: `Your shipment with vehicle ${t.vehicles?.registration_number || 'Assigned'} is currently progressing towards its destination with real-time GPS telematics active.`,
+          });
+        });
+
+        (boks || []).forEach((b) => {
+          const isPending = b.payment_status === 'PAYMENT_PENDING';
+          items.push({
+            id: `bok-${b.id}`,
+            category: 'booking',
+            title: `Booking: ${b.booking_status}`,
+            subtitle: `Reference: ${b.booking_number || b.id.slice(0, 8)} | Payment: ${b.payment_status || 'CONFIRMED'}`,
+            time: b.confirmed_at ? new Date(b.confirmed_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Today',
+            isRead: !isPending,
+            isImportant: isPending,
+            refId: b.id,
+            content: `Consignment booking ${b.booking_number || b.id} has been registered into the TRUCKS central brokerage system.`,
+          });
+        });
+
+        (reqs || []).forEach((r) => {
+          items.push({
+            id: `req-${r.id}`,
+            category: 'system',
+            title: `Requirement: ${r.status}`,
+            subtitle: `Route: ${r.pickup_address} → ${r.destination_address}`,
+            time: r.created_at ? new Date(r.created_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }) : 'Active',
+            isRead: true,
+            isImportant: false,
+            refId: r.id,
+            content: `Freight requirement for ${r.material_type || 'Cargo'} between ${r.pickup_address} and ${r.destination_address} is logged in TRUCKS dispatch.`,
+          });
+        });
       }
 
-      let reqsQuery = supabase.from('requirements').select('*').order('created_at', { ascending: false }).limit(6);
-      let boksQuery = supabase.from('bookings').select('*').order('created_at', { ascending: false }).limit(6);
-
-      if (targetCompanyId) {
-        reqsQuery = reqsQuery.or(`client_id.eq.${targetCompanyId},client_id.eq.${targetClientId}`);
-        boksQuery = boksQuery.or(`client_id.eq.${targetCompanyId},client_id.eq.${targetClientId}`);
-      }
-
-      const [
-        { data: reqs },
-        { data: boks },
-      ] = await Promise.all([
-        reqsQuery,
-        boksQuery,
-      ]);
-
-      const bookingIds = (boks || []).map((b) => b.id);
-      let trips: any[] = [];
-      if (bookingIds.length > 0) {
-        const { data: tripsData } = await supabase
-          .from('trips')
-          .select('*, vehicles(registration_number)')
-          .in('booking_id', bookingIds)
-          .order('created_at', { ascending: false })
-          .limit(6);
-        trips = tripsData || [];
-      }
-
-      const items: any[] = [];
-
-      (trips || []).forEach((t) => {
-        const inTransit = t.trip_status === 'IN_TRANSIT';
-        items.push({
-          id: `trip-${t.id}`,
-          category: 'shipment',
-          title: `Trip ${t.trip_status === 'IN_TRANSIT' ? 'In Transit' : t.trip_status}`,
-          subtitle: `Lorry: ${t.vehicles?.registration_number || 'Standard Fleet'} | Freight ₹${(t.vendor_rate || 0).toLocaleString('en-IN')}`,
-          time: t.started_at ? new Date(t.started_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Recent Update',
-          isRead: !inTransit,
-          isImportant: inTransit,
-          refId: t.booking_id || t.id,
-          content: `Your shipment with vehicle ${t.vehicles?.registration_number || 'Assigned'} is currently progressing towards its destination with real-time GPS telematics active.`,
-        });
+      // Deduplicate items by ID
+      const seenIds = new Set<string>();
+      return items.filter((item) => {
+        if (!item?.id || seenIds.has(item.id)) return false;
+        seenIds.add(item.id);
+        return true;
       });
-
-      (boks || []).forEach((b) => {
-        const isPending = b.payment_status === 'PAYMENT_PENDING';
-        items.push({
-          id: `bok-${b.id}`,
-          category: 'booking',
-          title: `Booking: ${b.booking_status}`,
-          subtitle: `Reference: ${b.booking_number || b.id.slice(0, 8)} | Payment: ${b.payment_status || 'CONFIRMED'}`,
-          time: b.confirmed_at ? new Date(b.confirmed_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Today',
-          isRead: !isPending,
-          isImportant: isPending,
-          refId: b.id,
-          content: `Consignment booking ${b.booking_number || b.id} has been registered into the TRUCKS central brokerage system.`,
-        });
-      });
-
-      (reqs || []).forEach((r) => {
-        items.push({
-          id: `req-${r.id}`,
-          category: 'system',
-          title: `Requirement: ${r.status}`,
-          subtitle: `Route: ${r.pickup_address} → ${r.destination_address}`,
-          time: r.created_at ? new Date(r.created_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }) : 'Active',
-          isRead: true,
-          isImportant: false,
-          refId: r.id,
-          content: `Freight requirement for ${r.material_type || 'Cargo'} between ${r.pickup_address} and ${r.destination_address} is logged in TRUCKS dispatch.`,
-        });
-      });
-
-      // Retrieve user-specific custom notifications (such as Welcome / Welcome Back alerts)
-      const currentSession = await this.getCurrentSession();
-      const userKey = targetClientId || currentSession?.mobile || currentSession?.userId || 'common';
-      const customItems = await this.getUserCustomNotifications(userKey);
-
-      // Prepend custom items at the top so user notices Welcome / alerts immediately
-      return [...customItems, ...items];
     } catch {
       return [];
     }
