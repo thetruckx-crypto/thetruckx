@@ -52,7 +52,6 @@ import {
   Clock,
   Phone,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { TransportRequirementDraft, CargoItemSpecification } from '../../../types';
 import { clientService } from '../../../services/clientService';
 
@@ -762,7 +761,7 @@ export const CargoDetailsScreen: React.FC<CargoDetailsScreenProps> = ({
           <ArrowLeft size={22} color="#1D2D46" strokeWidth={2.4} />
         </TouchableOpacity>
 
-        <BrandLogoHeader size="sm" showSubtitle={false} />
+        <Text style={styles.headerTopTitle}>Cargo Details</Text>
 
         {/* Background autosave active: saveStatus === 'SAVED' (silent persistence) */}
         <View style={styles.headerSpacer} />
@@ -1812,6 +1811,11 @@ export const CargoDetailsScreen: React.FC<CargoDetailsScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
+  headerTopTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#172B4D',
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#F6F8FB',

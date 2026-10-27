@@ -21,7 +21,6 @@ import {
   Clock,
   Sparkles,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { BottomGoldWings } from '../../../components/BottomGoldWings';
 import { MobileRole } from '../../../types';
 
@@ -155,9 +154,7 @@ export const WelcomeToNeclScreen: React.FC<WelcomeToNeclScreenProps> = ({
       >
         {/* Top Header */}
         <View style={styles.topBar}>
-          <View style={styles.logoWrap}>
-            <BrandLogoHeader theme="light" showSubtitle={false} size="sm" />
-          </View>
+          
         </View>
 
         {/* Hero Success Badge & Welcome Message */}

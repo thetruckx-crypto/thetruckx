@@ -117,14 +117,21 @@ export const driverService = {
 
     try {
       await ensureMobileSession();
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const validVendorId = active.primaryVendorId && isUuid.test(String(active.primaryVendorId).trim())
+        ? String(active.primaryVendorId).trim()
+        : null;
+
+      const defaultExpiry = `${new Date().getFullYear() + 5}-12-31`;
       const driverPayload = {
         full_name: active.fullName ? active.fullName.trim() : 'Registration in progress',
         mobile: cleanPhone,
         phone: cleanPhone,
         date_of_birth: active.dateOfBirth || null,
         licence_number: active.licenceNumber?.trim() || `DL-${cleanPhone}`,
+        licence_expiry_date: (active.licenceExpiryDate && active.licenceExpiryDate.trim()) ? active.licenceExpiryDate.trim() : defaultExpiry,
         status: 'INACTIVE', // Staging status during active registration
-        primary_vendor_id: active.primaryVendorId && active.primaryVendorId.includes('-') ? active.primaryVendorId : null,
+        primary_vendor_id: validVendorId,
       };
 
       const { data: existing } = await supabase
@@ -329,12 +336,17 @@ export const driverService = {
 
         driverId = existing?.id;
 
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         const vendorId =
-          formData.primaryVendorId && formData.primaryVendorId.includes('-')
-            ? formData.primaryVendorId
+          formData.primaryVendorId && isUuid.test(String(formData.primaryVendorId).trim())
+            ? String(formData.primaryVendorId).trim()
             : null;
 
         const cleanLicence = formData.licenceNumber?.trim() || `DL-${cleanPhone}`;
+        const defaultExpiryDate = `${new Date().getFullYear() + 5}-12-31`;
+        const resolvedExpiryDate = (formData.licenceExpiryDate && formData.licenceExpiryDate.trim())
+          ? formData.licenceExpiryDate.trim()
+          : defaultExpiryDate;
 
         const driverPayload = {
           primary_vendor_id: vendorId,
@@ -344,7 +356,7 @@ export const driverService = {
           date_of_birth: formData.dateOfBirth || null,
           dob: formData.dateOfBirth || null,
           licence_number: cleanLicence,
-          licence_expiry_date: formData.licenceExpiryDate || null,
+          licence_expiry_date: resolvedExpiryDate,
           status: 'PENDING',
           rejection_reason: null,
         };

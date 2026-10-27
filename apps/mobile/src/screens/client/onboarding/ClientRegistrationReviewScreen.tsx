@@ -22,7 +22,6 @@ import {
   FileText,
   AlertTriangle,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { AuthBottomDecoration } from '../../../components/AuthBottomDecoration';
 import { ClientBusinessDetails, ClientDocumentItem, clientService } from '../../../services/clientService';
 import { authService } from '../../../services/authService';
@@ -151,9 +150,7 @@ export const ClientRegistrationReviewScreen: React.FC<ClientRegistrationReviewSc
         </View>
 
         {/* Logo Center */}
-        <View style={styles.logoWrap}>
-          <BrandLogoHeader size="md" theme="light" />
-        </View>
+        
 
         {/* Step Indicator (Step 4 of 4) */}
         <View style={styles.stepIndicatorRow}>

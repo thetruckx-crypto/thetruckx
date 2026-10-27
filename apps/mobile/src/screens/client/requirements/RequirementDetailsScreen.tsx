@@ -33,7 +33,6 @@ import {
   X,
   FileCheck,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { clientService } from '../../../services/clientService';
 import { buildGoogleMapsDirectionsUrl } from '../../../utils/googleMapsUtil';
 
@@ -190,7 +189,7 @@ export const RequirementDetailsScreen: React.FC<RequirementDetailsScreenProps> =
           <TouchableOpacity style={styles.backBtn} onPress={onBack}>
             <ArrowLeft size={20} color="#101D36" />
           </TouchableOpacity>
-          <BrandLogoHeader size="sm" />
+          <Text style={styles.headerTopTitle}>Requirement Details</Text>
           <View style={{ width: 38 }} />
         </View>
         <View style={styles.centerWrap}>
@@ -216,7 +215,7 @@ export const RequirementDetailsScreen: React.FC<RequirementDetailsScreenProps> =
         >
           <ArrowLeft size={20} color="#101D36" />
         </TouchableOpacity>
-        <BrandLogoHeader size="sm" />
+        <Text style={styles.headerTopTitle}>Requirement Details</Text>
         <View style={{ width: 38 }} />
       </View>
 
@@ -653,6 +652,11 @@ export const RequirementDetailsScreen: React.FC<RequirementDetailsScreenProps> =
 };
 
 const styles = StyleSheet.create({
+  headerTopTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#172B4D',
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#F4F6FA',

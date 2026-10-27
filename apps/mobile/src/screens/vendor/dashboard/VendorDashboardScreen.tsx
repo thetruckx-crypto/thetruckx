@@ -36,6 +36,7 @@ import { authService, AuthSessionData } from '../../../services/authService';
 import { supabase } from '../../../supabase';
 import { VendorBottomNavBar, VendorNavTab } from '../../../components/VendorBottomNavBar';
 import { VendorReportsModal } from './VendorReportsModal';
+import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 
 interface VendorDashboardScreenProps {
   session: AuthSessionData | null;
@@ -206,13 +207,10 @@ export const VendorDashboardScreen: React.FC<VendorDashboardScreenProps> = ({
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* ── 1. Compact Header Bar (Screenshot 1 Match - No landscape banner) ── */}
+      {/* ── 1. Compact Header Bar (Home Screen Header with Company Logo) ── */}
       <View style={styles.headerBar}>
         <View style={styles.headerLeft}>
-          <Text style={styles.controlTowerTitle}>CARRIER CONTROL TOWER</Text>
-          <Text style={styles.carrierCompanyName} numberOfLines={1}>
-            {vendorName}
-          </Text>
+          <BrandLogoHeader size="sm" theme="light" />
         </View>
 
         <View style={styles.headerRight}>

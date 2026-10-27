@@ -21,7 +21,6 @@ import {
   Award,
   AlertCircle,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { ScenicHeroBanner } from '../../../components/ScenicHeroBanner';
 import { BottomGoldWings } from '../../../components/BottomGoldWings';
 import { driverService } from '../../../services/driverService';
@@ -114,9 +113,7 @@ export const DriverLicenceDetailsScreen: React.FC<DriverLicenceDetailsScreenProp
             <TouchableOpacity style={styles.backBtn} onPress={onBack} accessibilityLabel="Back">
               <ChevronLeft size={22} color="#172B4D" />
             </TouchableOpacity>
-            <View style={styles.logoWrap}>
-              <BrandLogoHeader theme="light" size="sm" />
-            </View>
+            
           </View>
 
           <View style={styles.contentWrap}>

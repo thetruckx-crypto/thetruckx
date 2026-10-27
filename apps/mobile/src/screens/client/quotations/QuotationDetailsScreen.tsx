@@ -22,7 +22,6 @@ import {
   FileCheck2,
   Calendar,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { clientService } from '../../../services/clientService';
 
 interface QuotationDetailsScreenProps {
@@ -119,7 +118,7 @@ export const QuotationDetailsScreen: React.FC<QuotationDetailsScreenProps> = ({
         <TouchableOpacity style={styles.backBtn} onPress={onBack} disabled={bookingInProgress}>
           <ArrowLeft size={22} color="#172B4D" />
         </TouchableOpacity>
-        <BrandLogoHeader size="sm" />
+        <Text style={styles.topBarTitle}>Quotation Details</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -276,6 +275,11 @@ export const QuotationDetailsScreen: React.FC<QuotationDetailsScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
+  topBarTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#172B4D',
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#F8FAFC',

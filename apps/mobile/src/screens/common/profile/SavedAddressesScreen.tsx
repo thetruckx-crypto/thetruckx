@@ -24,7 +24,6 @@ import {
   X,
   Bookmark,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { clientService, SavedAddressItem } from '../../../services/clientService';
 import { pincodeService } from '../../../services/pincodeService';
 
@@ -179,7 +178,7 @@ export const SavedAddressesScreen: React.FC<SavedAddressesScreenProps> = ({
         <TouchableOpacity style={styles.backBtn} onPress={onBack} accessibilityLabel="Back">
           <ArrowLeft size={22} color="#172B4D" />
         </TouchableOpacity>
-        <BrandLogoHeader size="sm" />
+        <Text style={styles.topBarTitle}>Saved Addresses</Text>
         <TouchableOpacity style={styles.addBtn} onPress={handleOpenAdd}>
           <Plus size={18} color="#FFFFFF" />
         </TouchableOpacity>
@@ -375,6 +374,11 @@ export const SavedAddressesScreen: React.FC<SavedAddressesScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
+  topBarTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#172B4D',
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#F8FAFC',

@@ -32,7 +32,6 @@ import {
   Radio,
   FileCheck2,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { TransportRequirementDraft } from '../../../types';
 import { clientService } from '../../../services/clientService';
 
@@ -225,7 +224,7 @@ export const RequirementReviewScreen: React.FC<RequirementReviewScreenProps> = (
           <ArrowLeft size={20} color="#0B1730" />
         </TouchableOpacity>
 
-        <BrandLogoHeader size="sm" />
+        <Text style={styles.headerTopTitle}>Review Requirement</Text>
 
         <TouchableOpacity
           style={styles.helpBtn}
@@ -722,6 +721,11 @@ export const RequirementReviewScreen: React.FC<RequirementReviewScreenProps> = (
 };
 
 const styles = StyleSheet.create({
+  headerTopTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#172B4D',
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#F5F7FA',

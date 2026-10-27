@@ -33,7 +33,6 @@ import {
   Crosshair,
   Compass,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { AuthBottomDecoration } from '../../../components/AuthBottomDecoration';
 import { StaticMapPreviewTile } from '../../../components/StaticMapPreviewTile';
 import { TransportRequirementDraft } from '../../../types';
@@ -564,7 +563,7 @@ export const PickupDeliveryDetailsScreen: React.FC<
         >
           <ArrowLeft size={20} color="#101D36" />
         </TouchableOpacity>
-        <BrandLogoHeader size="sm" />
+        <Text style={styles.topBarTitle}>Pickup & Delivery</Text>
         {/* Background autosave active: saveStatus === 'SAVED' (visible "Draft Saved" and "Saving..." text removed per user specification) */}
         <View style={styles.headerSpacer} />
       </View>
@@ -1316,6 +1315,11 @@ export const PickupDeliveryDetailsScreen: React.FC<
 };
 
 const styles = StyleSheet.create({
+  topBarTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#172B4D',
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#F4F6FA',

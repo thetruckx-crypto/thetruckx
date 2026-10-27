@@ -29,7 +29,6 @@ import {
   User,
   Phone,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { BottomGoldWings } from '../../../components/BottomGoldWings';
 import { vendorService } from '../../../services/vendorService';
 import { VendorDocumentItem, VendorVehicleConfig, VendorVehicleDocumentItem } from '../../../types';
@@ -469,9 +468,7 @@ export const VendorDocumentUploadScreen: React.FC<VendorDocumentUploadScreenProp
         <TouchableOpacity style={styles.backBtn} onPress={onBack} accessibilityLabel="Back">
           <ChevronLeft size={22} color="#172B4D" />
         </TouchableOpacity>
-        <View style={styles.logoWrap}>
-          <BrandLogoHeader theme="light" showSubtitle={false} size="sm" />
-        </View>
+        
         <View style={styles.headerSpacer} />
       </View>
 

@@ -19,7 +19,6 @@ import {
   ArrowRight,
   Package,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { ScenicHeroBanner } from '../../../components/ScenicHeroBanner';
 import { BottomGoldWings } from '../../../components/BottomGoldWings';
 import { vendorService } from '../../../services/vendorService';
@@ -86,9 +85,7 @@ export const VendorTripManagementScreen: React.FC<VendorTripManagementScreenProp
           <TouchableOpacity style={styles.backBtn} onPress={onBack} accessibilityLabel="Back">
             <ChevronLeft size={22} color="#172B4D" />
           </TouchableOpacity>
-          <View style={styles.logoWrap}>
-            <BrandLogoHeader theme="light" showSubtitle={false} size="sm" />
-          </View>
+          
         </View>
 
         {/* Content */}

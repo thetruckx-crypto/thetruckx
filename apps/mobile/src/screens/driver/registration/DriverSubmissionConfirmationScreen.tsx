@@ -15,7 +15,6 @@ import {
   ArrowRight,
   Home,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { ScenicHeroBanner } from '../../../components/ScenicHeroBanner';
 import { BottomGoldWings } from '../../../components/BottomGoldWings';
 import { supabase } from '../../../supabase';
@@ -100,9 +99,7 @@ export const DriverSubmissionConfirmationScreen: React.FC<DriverSubmissionConfir
         {/* Top Banner */}
         <View style={styles.topWrap}>
           <ScenicHeroBanner height={190} />
-          <View style={styles.logoWrap}>
-            <BrandLogoHeader theme="light" size="sm" />
-          </View>
+          
         </View>
 
         <View style={styles.contentWrap}>

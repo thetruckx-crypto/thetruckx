@@ -14,7 +14,6 @@ import {
   ArrowRight,
   Package,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { ScenicHeroBanner } from '../../../components/ScenicHeroBanner';
 import { BottomGoldWings } from '../../../components/BottomGoldWings';
 
@@ -39,9 +38,7 @@ export const VendorQuotationConfirmationScreen: React.FC<VendorQuotationConfirma
         {/* Top Banner */}
         <View style={styles.topWrap}>
           <ScenicHeroBanner height={190} />
-          <View style={styles.logoWrap}>
-            <BrandLogoHeader theme="light" showSubtitle={false} size="sm" />
-          </View>
+          
         </View>
 
         {/* Content */}

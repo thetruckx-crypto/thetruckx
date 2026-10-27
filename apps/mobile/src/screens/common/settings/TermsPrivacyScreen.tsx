@@ -20,7 +20,6 @@ import {
   X,
   Lock,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 
 interface TermsPrivacyScreenProps {
   onBack: () => void;
@@ -92,9 +91,7 @@ export const TermsPrivacyScreen: React.FC<TermsPrivacyScreenProps> = ({
         </View>
 
         {/* Logo Center */}
-        <View style={styles.logoWrap}>
-          <BrandLogoHeader size="md" theme="light" />
-        </View>
+        
 
         {/* Header with Highway Truck Image Matching Reference Image 4 */}
         <View style={styles.headerSectionCard}>

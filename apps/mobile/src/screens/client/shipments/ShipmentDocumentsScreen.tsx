@@ -36,7 +36,6 @@ import {
   ChevronRight,
   ShieldAlert,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { supabase, ensureMobileSession } from '../../../supabase';
 import { authService } from '../../../services/authService';
 import {
@@ -345,7 +344,7 @@ export const ShipmentDocumentsScreen: React.FC<ShipmentDocumentsScreenProps> = (
         >
           <ArrowLeft size={22} color="#0B1730" strokeWidth={2.4} />
         </TouchableOpacity>
-        <BrandLogoHeader size="sm" showSubtitle={false} />
+        <Text style={styles.topBarTitle}>Shipment Documents</Text>
         <TouchableOpacity
           style={styles.refreshBtn}
           onPress={loadDocuments}
@@ -883,8 +882,7 @@ export const ShipmentDocumentsScreen: React.FC<ShipmentDocumentsScreenProps> = (
                     { transform: [{ scale: zoomScale }] },
                   ]}
                 >
-                  <View style={styles.paperTopRow}>
-                    <BrandLogoHeader size="sm" showSubtitle={false} />
+                  <View style={styles.paperTopRow}><Text style={{ fontSize: 15, fontWeight: "900", color: "#F05A22" }}>THE TRUCKX</Text>
                     <View style={styles.watermarkTag}>
                       <ShieldCheck size={13} color="#169B75" />
                       <Text style={styles.watermarkText}>DIGITALLY SIGNED & VERIFIED</Text>
@@ -941,6 +939,11 @@ export const ShipmentDocumentsScreen: React.FC<ShipmentDocumentsScreenProps> = (
 };
 
 const styles = StyleSheet.create({
+  topBarTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#172B4D',
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#F8FAFC',

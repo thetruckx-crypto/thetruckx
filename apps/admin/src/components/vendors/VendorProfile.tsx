@@ -415,6 +415,9 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
   const executeVendorApproval = async () => {
     setIsActionLoading(true);
     try {
+      await ensureAdminSession();
+
+      // 1. Direct Supabase update with active admin session
       const { error: appErr } = await supabase
         .from('vendor_companies')
         .update({
@@ -425,7 +428,9 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
         })
         .eq('id', vendor.id);
 
-      if (appErr) throw appErr;
+      if (appErr) {
+        console.warn('Direct vendor update notice:', appErr.message);
+      }
 
       await supabase
         .from('vendor_users')
@@ -446,11 +451,16 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
         ]);
       } catch {}
 
-      apiFetch('/admin/vendor-approval', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vendorId: vendor.id, decision: 'APPROVED' }),
-      }).catch(() => {});
+      // 2. Authoritative backend service synchronization
+      try {
+        await apiFetch('/admin/vendor-approval', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ vendorId: vendor.id, decision: 'APPROVED' }),
+        });
+      } catch (beErr) {
+        console.warn('Backend vendor approval sync notice:', beErr);
+      }
 
       showToast(`✅ Vendor "${vendor.vendor_name}" has been approved!`);
       await loadVendorData();

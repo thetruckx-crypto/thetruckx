@@ -2042,18 +2042,20 @@ export default function App() {
       {currentScreen === 'VENDOR_VERIFICATION_STATUS' && (
         <VendorVerificationStatusScreen
           vendorId={effectiveVendorId}
+          mobile={mobileNumber || session?.mobile}
           vendorName="Transport Enterprise"
           onBack={() => setCurrentScreen('LOGIN')}
           onEnterDashboard={async () => {
             const vId = effectiveVendorId;
-            if (!vId) {
+            const phone = mobileNumber || session?.mobile;
+            if (!vId && !phone) {
               Alert.alert(
                 'Verification Pending',
                 'Your application is currently under compliance review. Access to the operational dashboard will be unlocked once approved by TRUCKS Admin.'
               );
               return;
             }
-            const statusRes = await vendorService.getVendorVerificationStatus(vId);
+            const statusRes = await vendorService.getVendorVerificationStatus(vId, phone);
             if (statusRes.status !== 'APPROVED') {
               Alert.alert(
                 'Verification Pending',

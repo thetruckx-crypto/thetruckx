@@ -25,7 +25,6 @@ import {
   Clock,
   Compass,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { supabase, ensureMobileSession } from '../../../supabase';
 
 interface ProofOfDeliveryScreenProps {
@@ -146,7 +145,7 @@ export const ProofOfDeliveryScreen: React.FC<ProofOfDeliveryScreenProps> = ({
         >
           <ArrowLeft size={22} color="#172B4D" />
         </TouchableOpacity>
-        <BrandLogoHeader size="sm" showSubtitle={false} />
+        <Text style={styles.topBarTitle}>Proof of Delivery</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -324,6 +323,11 @@ export const ProofOfDeliveryScreen: React.FC<ProofOfDeliveryScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
+  topBarTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#172B4D',
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#F8FAFC',

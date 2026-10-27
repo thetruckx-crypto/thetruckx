@@ -39,7 +39,6 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { DriverDobCalendarModal } from '../../../components/DriverDobCalendarModal';
 import { driverService } from '../../../services/driverService';
 import { DriverRegistrationFormData } from '../../../types';
@@ -648,7 +647,7 @@ export const DriverRegistrationScreen: React.FC<DriverRegistrationScreenProps> =
             >
               <ChevronLeft size={22} color="#172B4D" />
             </TouchableOpacity>
-            <BrandLogoHeader theme="light" size="sm" />
+            <Text style={styles.headerTopTitle}>Driver Registration</Text>
             <View style={{ width: 38 }} />
           </View>
 
@@ -1331,6 +1330,11 @@ export const DriverRegistrationScreen: React.FC<DriverRegistrationScreenProps> =
 };
 
 const styles = StyleSheet.create({
+  headerTopTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#172B4D',
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#F8FAFC',

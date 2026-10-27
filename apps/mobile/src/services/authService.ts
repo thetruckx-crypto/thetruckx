@@ -1669,15 +1669,49 @@ export const authService = {
     const cleanPhone = driverData.mobileNumber.replace(/[^0-9]/g, '').slice(-10);
 
     try {
+      // 1. Try backend API first
+      try {
+        const apiRes = await callBackendApi<{ success: boolean; driverId: string }>('/driver/submit-registration', 'POST', {
+          fullName: driverData.fullName.trim(),
+          mobile: cleanPhone,
+          licenceNumber: driverData.licenceNumber.trim().toUpperCase(),
+          licenceExpiryDate: '2030-12-31',
+        });
+        if (apiRes && apiRes.success) {
+          await this.saveSession({
+            userId: apiRes.driverId,
+            mobile: cleanPhone,
+            role: 'DRIVER',
+            fullName: driverData.fullName.trim(),
+            token: 'sess-driver-' + Date.now(),
+            createdAt: new Date().toISOString(),
+          });
+          return { success: true, driverId: apiRes.driverId };
+        }
+      } catch (apiErr) {
+        // Fall through to direct Supabase
+      }
+
+      await ensureMobileSession();
+
+      // Look up first approved vendor company if available
+      const { data: vComp } = await supabase
+        .from('vendor_companies')
+        .select('id')
+        .eq('status', 'APPROVED')
+        .limit(1)
+        .maybeSingle();
+
       const { data, error } = await supabase
         .from('drivers')
         .insert([
           {
-            primary_vendor_id: 'ba111111-1111-1111-1111-111111111111',
+            primary_vendor_id: vComp?.id || null,
             full_name: driverData.fullName.trim(),
             mobile: cleanPhone,
+            phone: cleanPhone,
             licence_number: driverData.licenceNumber.trim().toUpperCase(),
-            licence_expiry_date: '2028-12-31',
+            licence_expiry_date: '2030-12-31',
             status: 'PENDING',
           },
         ])

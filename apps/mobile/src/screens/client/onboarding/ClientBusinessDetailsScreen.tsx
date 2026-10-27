@@ -21,7 +21,6 @@ import {
   Check,
   ShieldAlert,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { AuthBottomDecoration } from '../../../components/AuthBottomDecoration';
 import { ClientBusinessDetails } from '../../../services/clientService';
 import { pincodeService } from '../../../services/pincodeService';
@@ -220,9 +219,7 @@ export const ClientBusinessDetailsScreen: React.FC<ClientBusinessDetailsScreenPr
           </View>
 
           {/* Logo Center */}
-          <View style={styles.logoWrap}>
-            <BrandLogoHeader size="md" theme="light" />
-          </View>
+          
 
           {/* Step Indicator */}
           <View style={styles.stepIndicatorRow}>

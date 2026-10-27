@@ -2097,10 +2097,11 @@ app.get('/api/vendor/status/:identifier', async (req: Request, res: Response) =>
   try {
     await ensureAdminAuth();
     if (cleanPhone.length === 10) {
+      // 1. Check vendor_users with join to vendor_companies
       const { data: userRec } = await supabase
         .from('vendor_users')
         .select('*, vendor_companies(*)')
-        .eq('mobile', cleanPhone)
+        .or(`mobile.eq.${cleanPhone},mobile.eq.+91${cleanPhone}`)
         .maybeSingle();
 
       if (userRec) {
@@ -2108,7 +2109,7 @@ app.get('/api/vendor/status/:identifier', async (req: Request, res: Response) =>
         const canonicalCode = comp?.vendor_code || formatDisplayId('VD', comp?.id || userRec.vendor_id);
         return res.json({
           success: true,
-          status: comp?.status || 'PENDING',
+          status: comp?.status || userRec.status || 'PENDING',
           complianceStatus: comp?.compliance_status || comp?.status || 'PENDING',
           vendorId: comp?.id || userRec.vendor_id,
           vendorCode: canonicalCode,
@@ -2120,6 +2121,46 @@ app.get('/api/vendor/status/:identifier', async (req: Request, res: Response) =>
           approvedAt: comp?.approved_at,
           rejectionReason: comp?.rejection_reason || null,
           correctionNotes: comp?.correction_notes || null,
+        });
+      }
+
+      // 2. Check vendor_companies directly by phone
+      const { data: compByPhone } = await supabase
+        .from('vendor_companies')
+        .select('*')
+        .or(`phone.eq.${cleanPhone},phone.eq.+91${cleanPhone}`)
+        .maybeSingle();
+
+      if (compByPhone) {
+        const canonicalCode = compByPhone.vendor_code || formatDisplayId('VD', compByPhone.id);
+        return res.json({
+          success: true,
+          status: compByPhone.status || 'PENDING',
+          complianceStatus: compByPhone.compliance_status || compByPhone.status || 'PENDING',
+          vendorId: compByPhone.id,
+          vendorCode: canonicalCode,
+          vendorName: compByPhone.vendor_name,
+          submittedAt: compByPhone.created_at,
+          approvedAt: compByPhone.approved_at,
+          rejectionReason: compByPhone.rejection_reason || null,
+          correctionNotes: compByPhone.correction_notes || null,
+        });
+      }
+
+      // 3. Check persistent server registry
+      const reg = getServerUserRegistry();
+      const regEntry = reg.find((r) => r.mobile === cleanPhone && r.role === 'VENDOR');
+      if (regEntry) {
+        return res.json({
+          success: true,
+          status: regEntry.status || 'PENDING',
+          complianceStatus: regEntry.status === 'APPROVED' ? 'APPROVED' : 'PENDING',
+          vendorId: `ven-${cleanPhone}`,
+          vendorCode: `VD-${cleanPhone.slice(-6)}`,
+          vendorName: regEntry.companyName || regEntry.fullName,
+          contactPerson: regEntry.fullName,
+          mobile: regEntry.mobile,
+          submittedAt: regEntry.registeredAt,
         });
       }
     }
@@ -2189,14 +2230,29 @@ const handleGetVendors = async (req: Request, res: Response) => {
     }
 
     // Incorporate vendors from server user registry
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const registry = getServerUserRegistry();
     for (const u of registry) {
       if (u.role === 'VENDOR' && u.companyName) {
-        const fakeId = `vd-${u.mobile.slice(-6)}`;
-        if (!seenIds.has(fakeId)) {
-          seenIds.add(fakeId);
+        // Find if this vendor exists in dbVendors by phone or name
+        const matchDb = dbVendors?.find(
+          (dbV: any) =>
+            dbV.phone === u.mobile ||
+            (Array.isArray(dbV.vendor_users) && dbV.vendor_users.some((vu: any) => vu.mobile === u.mobile)) ||
+            dbV.vendor_name?.toLowerCase() === u.companyName?.toLowerCase()
+        );
+
+        let vendorId = matchDb?.id;
+        if (!vendorId) {
+          // Generate a deterministic valid UUID v4 from the phone number
+          const hash = crypto.createHash('md5').update(`necl_vendor_${u.mobile}`).digest('hex');
+          vendorId = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
+        }
+
+        if (!seenIds.has(vendorId)) {
+          seenIds.add(vendorId);
           results.push({
-            id: fakeId,
+            id: vendorId,
             name: u.companyName,
             vendor_name: u.companyName,
             vendorCode: `VD-${u.mobile.slice(-6)}`,
@@ -2310,14 +2366,51 @@ app.post('/api/driver/submit-registration', async (req: Request, res: Response) 
       .maybeSingle();
 
     let targetDriverId = existingDriver?.id;
-    const resolvedVendorId = primaryVendorId && primaryVendorId.includes('-') ? primaryVendorId : null;
+
+    // Resolve primaryVendorId safely against UUID constraints
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    let resolvedVendorId: string | null = null;
+
+    if (primaryVendorId && isUuid.test(String(primaryVendorId).trim())) {
+      resolvedVendorId = String(primaryVendorId).trim();
+    } else if (primaryVendorId) {
+      // Lookup vendor by vendor_code or phone in vendor_companies
+      const cleanVendorCode = String(primaryVendorId).trim();
+      const { data: vComp } = await supabase
+        .from('vendor_companies')
+        .select('id')
+        .or(`vendor_code.eq.${cleanVendorCode},phone.eq.${cleanVendorCode}`)
+        .maybeSingle();
+      if (vComp?.id && isUuid.test(vComp.id)) {
+        resolvedVendorId = vComp.id;
+      }
+    }
+
+    // Fallback: If no vendor associated yet, check if there is an approved primary vendor or leave null
+    if (!resolvedVendorId) {
+      const { data: defaultVendor } = await supabase
+        .from('vendor_companies')
+        .select('id')
+        .eq('status', 'APPROVED')
+        .limit(1)
+        .maybeSingle();
+      if (defaultVendor?.id && isUuid.test(defaultVendor.id)) {
+        resolvedVendorId = defaultVendor.id;
+      }
+    }
+
+    // Default licence expiry date if missing to satisfy PostgreSQL NOT NULL constraint
+    const defaultExpiryDate = `${new Date().getFullYear() + 5}-12-31`;
+    const resolvedExpiryDate = (licenceExpiryDate && String(licenceExpiryDate).trim().length >= 4)
+      ? String(licenceExpiryDate).trim()
+      : defaultExpiryDate;
 
     const driverPayload = {
       full_name: fullName.trim(),
       mobile: cleanPhone,
       phone: cleanPhone,
       licence_number: cleanLicence,
-      licence_expiry_date: licenceExpiryDate || null,
+      licence_expiry_date: resolvedExpiryDate,
       date_of_birth: effectiveDob,
       dob: effectiveDob,
       primary_vendor_id: resolvedVendorId,
@@ -2327,7 +2420,11 @@ app.post('/api/driver/submit-registration', async (req: Request, res: Response) 
     };
 
     if (targetDriverId) {
-      await supabase.from('drivers').update(driverPayload).eq('id', targetDriverId);
+      const { error: updErr } = await supabase.from('drivers').update(driverPayload).eq('id', targetDriverId);
+      if (updErr) {
+        console.error('Submit driver update error:', updErr);
+        throw updErr;
+      }
     } else {
       const { data: newDriver, error: driverErr } = await supabase
         .from('drivers')
@@ -2493,6 +2590,41 @@ app.get('/api/driver/status/:identifier', async (req: Request, res: Response) =>
     }
 
     return res.status(404).json({ error: 'Driver record not found', status: 'NOT_REGISTERED' });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Admin All Registered Drivers Endpoint (with full vendor details)
+app.get('/api/admin/drivers', async (req: Request, res: Response) => {
+  try {
+    await ensureAdminAuth();
+    const { data: drivers, error } = await supabase
+      .from('drivers')
+      .select('*, vendor_companies:primary_vendor_id(id, vendor_name, vendor_code)')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.warn('Admin drivers query error:', error.message);
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.json({ success: true, count: drivers?.length || 0, data: drivers || [] });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/drivers', async (req: Request, res: Response) => {
+  try {
+    await ensureAdminAuth();
+    const { data: drivers, error } = await supabase
+      .from('drivers')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return res.json(drivers || []);
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }

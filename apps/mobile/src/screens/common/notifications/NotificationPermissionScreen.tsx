@@ -14,7 +14,6 @@ import {
   Truck,
   CheckCircle2,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { AuthBottomDecoration } from '../../../components/AuthBottomDecoration';
 import { authService } from '../../../services/authService';
 import { mobileNotificationService } from '../../../services/notificationService';
@@ -56,9 +55,7 @@ export const NotificationPermissionScreen: React.FC<NotificationPermissionScreen
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         {/* Top Logo */}
-        <View style={styles.logoWrap}>
-          <BrandLogoHeader size="md" theme="light" />
-        </View>
+        
 
         {/* Center Permission Graphic */}
         <View style={styles.graphicSection}>

@@ -20,7 +20,6 @@ import {
   CreditCard,
   ArrowRight,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { ScenicHeroBanner } from '../../../components/ScenicHeroBanner';
 import { BottomGoldWings } from '../../../components/BottomGoldWings';
 import { driverService } from '../../../services/driverService';
@@ -53,9 +52,7 @@ export const DriverTripCompletionScreen: React.FC<DriverTripCompletionScreenProp
         {/* Top Banner */}
         <View style={styles.topWrap}>
           <ScenicHeroBanner height={190} />
-          <View style={styles.logoWrap}>
-            <BrandLogoHeader theme="light" size="sm" />
-          </View>
+          
         </View>
 
         <View style={styles.contentWrap}>

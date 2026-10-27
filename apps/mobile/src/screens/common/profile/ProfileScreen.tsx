@@ -25,7 +25,6 @@ import {
   UserCheck,
   Phone,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { AuthSessionData } from '../../../services/authService';
 
 interface ProfileScreenProps {
@@ -95,7 +94,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           >
             <ArrowLeft size={22} color="#172B4D" />
           </TouchableOpacity>
-          <BrandLogoHeader size="sm" theme="light" />
+          <Text style={styles.topBarTitle}>My Profile</Text>
           <View style={{ width: 40 }} />
         </View>
 
@@ -300,6 +299,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
+  topBarTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#172B4D',
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#FFFFFF',

@@ -37,7 +37,6 @@ import {
   Phone,
   ShieldCheck,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { clientService } from '../../../services/clientService';
 import { supabase } from '../../../supabase';
 import { formatDisplayId } from '../../../utils/idGenerator';
@@ -375,9 +374,7 @@ export const MyBookingsScreen: React.FC<MyBookingsScreenProps> = ({
           <ArrowLeft size={22} color="#1D2D46" strokeWidth={2.4} />
         </TouchableOpacity>
 
-        <View style={styles.headerLogoContainer}>
-          <BrandLogoHeader size="sm" showSubtitle={false} />
-        </View>
+        <Text style={styles.headerTitle}>My Bookings</Text>
 
         <View style={styles.headerRightSpacer} />
       </View>
@@ -877,6 +874,11 @@ export const MyBookingsScreen: React.FC<MyBookingsScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#172B4D',
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#F6F8FB',

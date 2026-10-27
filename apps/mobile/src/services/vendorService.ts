@@ -1265,6 +1265,58 @@ export const vendorService = {
   }> {
     try {
       const cleanPhone = (mobile || '').replace(/[^0-9]/g, '').slice(-10);
+
+      // 1. Try Backend API first for authoritative compliance status (bypasses mobile RLS)
+      try {
+        const lookupKey = cleanPhone || vendorId;
+        if (lookupKey) {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 1800);
+          const apiRes = await fetch(`${getBackendApiUrl()}/vendor/status/${lookupKey}`, {
+            signal: controller.signal,
+          }).finally(() => clearTimeout(timer));
+
+          if (apiRes.ok) {
+            const apiData = await apiRes.json();
+            if (apiData && apiData.success) {
+              const resStatus = apiData.status as 'PENDING' | 'APPROVED' | 'REJECTED' | 'INACTIVE';
+              // Update local cache to keep offline & session in sync
+              const cKey = apiData.vendorId || vendorId || cleanPhone;
+              if (cKey) {
+                const existingRaw = await AsyncStorage.getItem(`${VENDOR_APP_PREFIX}${cKey}`);
+                const existing = existingRaw ? JSON.parse(existingRaw) : {};
+                await AsyncStorage.setItem(
+                  `${VENDOR_APP_PREFIX}${cKey}`,
+                  JSON.stringify({
+                    ...existing,
+                    status: resStatus,
+                    vendorName: apiData.vendorName || existing.vendorName,
+                    transporterName: apiData.vendorName || existing.transporterName,
+                    vendorId: apiData.vendorId || existing.vendorId,
+                  })
+                );
+              }
+
+              return {
+                status: resStatus,
+                complianceStatus: apiData.complianceStatus || (resStatus === 'APPROVED' ? 'APPROVED' : 'UNDER_REVIEW'),
+                vendorName: apiData.vendorName,
+                vendorCode: apiData.vendorCode,
+                vendorId: apiData.vendorId,
+                approvedAt: apiData.approvedAt,
+                rejectionReason: apiData.rejectionReason,
+                correctionNotes: apiData.correctionNotes,
+              };
+            }
+          }
+        }
+      } catch (apiErr: any) {
+        // Fall through to direct Supabase query
+      }
+
+      // 2. Direct Supabase Query with active mobile session (handles RLS)
+      await ensureMobileSession();
+
       let resolvedId = (vendorId && vendorId.includes('-') && !vendorId.startsWith('NECL-') && !vendorId.startsWith('VND-')) ? vendorId : undefined;
 
       // If vendorId is a vendor_code, lookup UUID by vendor_code
@@ -1318,6 +1370,17 @@ export const vendorService = {
           const displayCode = vComp.vendor_code || formatDisplayId('VD', vComp.id);
 
           if (vComp.status === 'APPROVED') {
+            // Synchronize local cache with approved state
+            await AsyncStorage.setItem(
+              `${VENDOR_APP_PREFIX}${resolvedId}`,
+              JSON.stringify({
+                status: 'APPROVED',
+                vendorName: vComp.vendor_name,
+                transporterName: vComp.vendor_name,
+                vendorId: vComp.id,
+              })
+            );
+
             return {
               status: 'APPROVED',
               complianceStatus: 'APPROVED',

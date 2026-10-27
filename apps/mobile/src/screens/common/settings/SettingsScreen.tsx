@@ -18,7 +18,6 @@ import {
   Headphones,
   ChevronRight,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { authService } from '../../../services/authService';
 
 interface SettingsScreenProps {
@@ -125,7 +124,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <ArrowLeft size={20} color="#0B1730" />
         </TouchableOpacity>
 
-        <BrandLogoHeader size="sm" />
+        <Text style={styles.topBarTitle}>Settings</Text>
 
         <View style={{ width: 38 }} />
       </View>
@@ -311,6 +310,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
+  topBarTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#172B4D',
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#F5F7FA',

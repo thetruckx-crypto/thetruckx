@@ -25,7 +25,6 @@ import {
   CheckCircle2,
   AlertTriangle,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { AuthBottomDecoration } from '../../../components/AuthBottomDecoration';
 import { ClientDocumentItem, clientService } from '../../../services/clientService';
 import { DocumentPickerModal, PickedDocumentResult } from '../../../components/DocumentPickerModal';
@@ -272,9 +271,7 @@ export const ClientDocumentUploadScreen: React.FC<ClientDocumentUploadScreenProp
         </View>
 
         {/* Logo Center */}
-        <View style={styles.logoWrap}>
-          <BrandLogoHeader size="md" theme="light" />
-        </View>
+        
 
         {/* Step Indicator */}
         <View style={styles.stepIndicatorRow}>

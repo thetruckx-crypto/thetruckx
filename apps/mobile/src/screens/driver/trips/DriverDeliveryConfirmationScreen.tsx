@@ -22,7 +22,6 @@ import {
   ShieldCheck,
   PackageCheck,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { driverService } from '../../../services/driverService';
 import { DriverTripItem } from '../../../types';
 
@@ -95,7 +94,7 @@ export const DriverDeliveryConfirmationScreen: React.FC<DriverDeliveryConfirmati
         <TouchableOpacity style={styles.backBtn} onPress={onBack} accessibilityLabel="Back">
           <ChevronLeft size={22} color="#172B4D" />
         </TouchableOpacity>
-        <BrandLogoHeader size="sm" theme="light" />
+        <Text style={styles.topBarTitle}>Confirm Delivery</Text>
         <View style={{ width: 38 }} />
       </View>
 
@@ -238,6 +237,11 @@ export const DriverDeliveryConfirmationScreen: React.FC<DriverDeliveryConfirmati
 };
 
 const styles = StyleSheet.create({
+  topBarTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#172B4D',
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#F8FAFC',

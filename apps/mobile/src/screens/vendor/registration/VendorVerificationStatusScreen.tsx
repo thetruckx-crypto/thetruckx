@@ -22,7 +22,6 @@ import {
   ShieldCheck,
   Building2,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { BottomGoldWings } from '../../../components/BottomGoldWings';
 import { vendorService } from '../../../services/vendorService';
 import { supabase } from '../../../supabase';
@@ -30,6 +29,7 @@ import { formatDisplayId } from '../../../utils/idGenerator';
 
 interface VendorVerificationStatusScreenProps {
   vendorId: string;
+  mobile?: string;
   vendorName?: string;
   onBack?: () => void;
   onEnterDashboard: () => void;
@@ -41,6 +41,7 @@ interface VendorVerificationStatusScreenProps {
 
 export const VendorVerificationStatusScreen: React.FC<VendorVerificationStatusScreenProps> = ({
   vendorId,
+  mobile,
   vendorName = 'Transport Firm',
   onBack,
   onEnterDashboard,
@@ -58,7 +59,7 @@ export const VendorVerificationStatusScreen: React.FC<VendorVerificationStatusSc
 
   const checkStatus = useCallback(async () => {
     try {
-      const res = await vendorService.getVendorVerificationStatus(vendorId);
+      const res = await vendorService.getVendorVerificationStatus(vendorId, mobile);
       setStatus(res.status);
       if (res.vendorName) setTransporter(res.vendorName);
       if (res.vendorCode) setVendorCode(res.vendorCode);
@@ -77,10 +78,10 @@ export const VendorVerificationStatusScreen: React.FC<VendorVerificationStatusSc
       setLoading(false);
       setRefreshing(false);
     }
-  }, [vendorId, onApprovedContinue, onEnterDashboard]);
+  }, [vendorId, mobile, onApprovedContinue, onEnterDashboard]);
 
   useEffect(() => {
-    if (!vendorId) return;
+    if (!vendorId && !mobile) return;
 
     checkStatus();
 
@@ -162,9 +163,7 @@ export const VendorVerificationStatusScreen: React.FC<VendorVerificationStatusSc
           ) : (
             <View style={styles.headerSpacer} />
           )}
-          <View style={styles.logoWrap}>
-            <BrandLogoHeader theme="light" showSubtitle={false} size="sm" />
-          </View>
+          <Text style={styles.topBarTitle}>Verification Status</Text>
           <View style={styles.headerSpacer} />
         </View>
 
@@ -355,8 +354,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  logoWrap: {
-    alignItems: 'center',
+  topBarTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+    textAlign: 'center',
   },
   headerSpacer: {
     width: 38,

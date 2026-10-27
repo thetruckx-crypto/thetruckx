@@ -29,7 +29,6 @@ import {
   GitCommit,
   AlertTriangle,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { clientService } from '../../../services/clientService';
 import { supabase } from '../../../supabase';
 
@@ -297,7 +296,7 @@ export const ShipmentTrackingScreen: React.FC<ShipmentTrackingScreenProps> = ({
           <ArrowLeft size={20} color="#0B1730" />
         </TouchableOpacity>
 
-        <BrandLogoHeader size="sm" />
+        <Text style={styles.topBarTitle}>Live Tracking</Text>
 
         <TouchableOpacity
           style={styles.helpBtn}
@@ -598,6 +597,11 @@ export const ShipmentTrackingScreen: React.FC<ShipmentTrackingScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
+  topBarTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#172B4D',
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#F5F7FA',

@@ -15,7 +15,6 @@ import {
   Home,
   FileCheck,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { BottomGoldWings } from '../../../components/BottomGoldWings';
 import { vendorService } from '../../../services/vendorService';
 import { supabase } from '../../../supabase';
@@ -76,9 +75,7 @@ export const VendorSubmissionConfirmationScreen: React.FC<VendorSubmissionConfir
       <ScrollView contentContainerStyle={styles.scrollContainer} bounces={false}>
         {/* Top Header Bar */}
         <View style={styles.topBar}>
-          <View style={styles.logoWrap}>
-            <BrandLogoHeader theme="light" showSubtitle={false} size="sm" />
-          </View>
+          
         </View>
 
         {/* Content */}

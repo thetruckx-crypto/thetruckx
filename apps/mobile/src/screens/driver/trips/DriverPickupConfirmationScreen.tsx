@@ -35,7 +35,6 @@ import {
   X,
   FileText,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { driverService } from '../../../services/driverService';
 import { authService } from '../../../services/authService';
 import { documentWorkflowService } from '../../../services/documentWorkflowService';
@@ -268,7 +267,7 @@ export const DriverPickupConfirmationScreen: React.FC<DriverPickupConfirmationSc
         <TouchableOpacity style={styles.backBtn} onPress={onBack} accessibilityLabel="Back">
           <ChevronLeft size={22} color="#172B4D" />
         </TouchableOpacity>
-        <BrandLogoHeader size="sm" theme="light" />
+        <Text style={styles.topBarTitle}>Confirm Pickup</Text>
         <View style={{ width: 38 }} />
       </View>
 
@@ -611,6 +610,11 @@ export const DriverPickupConfirmationScreen: React.FC<DriverPickupConfirmationSc
 };
 
 const styles = StyleSheet.create({
+  topBarTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#172B4D',
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#F8FAFC',

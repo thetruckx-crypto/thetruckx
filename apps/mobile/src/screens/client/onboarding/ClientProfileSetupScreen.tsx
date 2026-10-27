@@ -22,7 +22,6 @@ import {
   CheckCircle2,
   ShieldCheck,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { AuthBottomDecoration } from '../../../components/AuthBottomDecoration';
 import { ClientProfileFormData } from '../../../types';
 
@@ -146,9 +145,7 @@ export const ClientProfileSetupScreen: React.FC<ClientProfileSetupScreenProps> =
           </View>
 
           {/* Centered Brand Logo */}
-          <View style={styles.logoWrap}>
-            <BrandLogoHeader size="md" theme="light" />
-          </View>
+          
 
           {/* Step Indicator (Step 1 of 4) */}
           <View style={styles.stepIndicatorRow}>

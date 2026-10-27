@@ -20,7 +20,6 @@ import {
   ArrowRight,
   ShieldCheck,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { authService } from '../../../services/authService';
 
 interface DriverOnboardingScreenProps {
@@ -85,7 +84,7 @@ export const DriverOnboardingScreen: React.FC<DriverOnboardingScreenProps> = ({
             <TouchableOpacity style={styles.backBtn} onPress={onBack} accessibilityLabel="Back" activeOpacity={0.8}>
               <ChevronLeft size={22} color="#172B4D" />
             </TouchableOpacity>
-            <BrandLogoHeader theme="light" size="sm" />
+            <Text style={styles.headerTopTitle}>Driver Onboarding</Text>
             <View style={{ width: 38 }} />
           </View>
 
@@ -197,6 +196,11 @@ export const DriverOnboardingScreen: React.FC<DriverOnboardingScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
+  headerTopTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#172B4D',
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#F8FAFC',

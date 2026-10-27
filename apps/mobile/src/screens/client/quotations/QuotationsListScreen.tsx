@@ -21,7 +21,6 @@ import {
   Columns2,
   FileText,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { clientService } from '../../../services/clientService';
 
 interface QuotationsListScreenProps {
@@ -58,7 +57,7 @@ export const QuotationsListScreen: React.FC<QuotationsListScreenProps> = ({
         <TouchableOpacity style={styles.backBtn} onPress={onBack} accessibilityLabel="Back">
           <ArrowLeft size={22} color="#172B4D" />
         </TouchableOpacity>
-        <BrandLogoHeader size="sm" />
+        <Text style={styles.topBarTitle}>Quotations</Text>
         {quotations.length > 1 ? (
           <TouchableOpacity
             style={styles.compareBtn}
@@ -201,6 +200,11 @@ export const QuotationsListScreen: React.FC<QuotationsListScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
+  topBarTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#172B4D',
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#F8FAFC',

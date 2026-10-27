@@ -19,7 +19,6 @@ import {
   XCircle,
   Zap,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 
 interface QuotationComparisonScreenProps {
   requirementId: string;
@@ -70,7 +69,7 @@ export const QuotationComparisonScreen: React.FC<QuotationComparisonScreenProps>
         <TouchableOpacity style={styles.backBtn} onPress={onBack} accessibilityLabel="Back">
           <ArrowLeft size={22} color="#172B4D" />
         </TouchableOpacity>
-        <BrandLogoHeader size="sm" />
+        <Text style={styles.topBarTitle}>Compare Quotations</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -257,6 +256,11 @@ export const QuotationComparisonScreen: React.FC<QuotationComparisonScreenProps>
 };
 
 const styles = StyleSheet.create({
+  topBarTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#172B4D',
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#F8FAFC',

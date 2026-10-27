@@ -42,7 +42,6 @@ import {
   Scale,
   FileUp,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { clientService } from '../../../services/clientService';
 import { formatDisplayId } from '../../../utils/idGenerator';
 import {
@@ -165,7 +164,7 @@ export const BookingDetailsScreen: React.FC<BookingDetailsScreenProps> = ({
           <TouchableOpacity style={styles.backBtn} onPress={onBack} accessibilityLabel="Back">
             <ArrowLeft size={22} color="#1D2D46" strokeWidth={2.4} />
           </TouchableOpacity>
-          <BrandLogoHeader size="sm" showSubtitle={false} />
+          <Text style={styles.topBarTitle}>Booking Details</Text>
           <View style={{ width: 42 }} />
         </View>
         <View style={styles.centerWrap}>
@@ -183,7 +182,7 @@ export const BookingDetailsScreen: React.FC<BookingDetailsScreenProps> = ({
           <TouchableOpacity style={styles.backBtn} onPress={onBack} accessibilityLabel="Back">
             <ArrowLeft size={22} color="#1D2D46" strokeWidth={2.4} />
           </TouchableOpacity>
-          <BrandLogoHeader size="sm" showSubtitle={false} />
+          <Text style={styles.topBarTitle}>Booking Details</Text>
           <View style={{ width: 42 }} />
         </View>
         <View style={styles.centerWrap}>
@@ -248,7 +247,7 @@ export const BookingDetailsScreen: React.FC<BookingDetailsScreenProps> = ({
         >
           <ArrowLeft size={22} color="#1D2D46" strokeWidth={2.4} />
         </TouchableOpacity>
-        <BrandLogoHeader size="sm" showSubtitle={false} />
+        <Text style={styles.topBarTitle}>Booking Details</Text>
         <View style={{ width: 42 }} />
       </View>
 
@@ -960,6 +959,11 @@ export const BookingDetailsScreen: React.FC<BookingDetailsScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
+  topBarTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#172B4D',
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#F6F8FB',

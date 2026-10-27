@@ -18,7 +18,6 @@ import {
   MapPin,
   ClipboardList,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { ScenicHeroBanner } from '../../../components/ScenicHeroBanner';
 import { BottomGoldWings } from '../../../components/BottomGoldWings';
 
@@ -45,9 +44,7 @@ export const BookingConfirmationScreen: React.FC<
         {/* Scenic Hero Banner */}
         <View style={styles.topWrap}>
           <ScenicHeroBanner height={190} />
-          <View style={styles.logoWrap}>
-            <BrandLogoHeader size="sm" />
-          </View>
+          
         </View>
 
         <View style={styles.contentWrap}>

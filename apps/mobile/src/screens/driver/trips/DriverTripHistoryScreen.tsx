@@ -18,7 +18,6 @@ import {
   FileCheck2,
   ArrowRight,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { driverService } from '../../../services/driverService';
 import { DriverTripItem } from '../../../types';
 
@@ -65,7 +64,7 @@ export const DriverTripHistoryScreen: React.FC<DriverTripHistoryScreenProps> = (
         <TouchableOpacity style={styles.backBtn} onPress={onBack} accessibilityLabel="Back">
           <ChevronLeft size={22} color="#172B4D" />
         </TouchableOpacity>
-        <BrandLogoHeader size="sm" theme="light" />
+        <Text style={styles.topBarTitle}>Trip History</Text>
         <View style={{ width: 38 }} />
       </View>
 
@@ -164,6 +163,11 @@ export const DriverTripHistoryScreen: React.FC<DriverTripHistoryScreenProps> = (
 };
 
 const styles = StyleSheet.create({
+  topBarTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#172B4D',
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#F8FAFC',

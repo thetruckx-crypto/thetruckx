@@ -44,7 +44,6 @@ import {
   FileDown,
   Check,
 } from 'lucide-react-native';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { clientService } from '../../../services/clientService';
 import { supabase } from '../../../supabase';
 import { formatDisplayId } from '../../../utils/idGenerator';
@@ -409,9 +408,7 @@ Digitally generated and verified by TRUCKS Logistics Platform`;
           <View style={{ width: 36 }} />
         )}
 
-        <View style={styles.logoCenter}>
-          <BrandLogoHeader size="sm" showSubtitle={false} />
-        </View>
+        <View style={styles.logoCenter}><Text style={styles.headerTopTitle}>Shipments</Text></View>
 
         <View style={styles.topRightIcons}>
           {/* Notification Bell with Badge */}
@@ -799,6 +796,11 @@ Digitally generated and verified by TRUCKS Logistics Platform`;
 };
 
 const styles = StyleSheet.create({
+  headerTopTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0B1730',
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#F8FAFC',

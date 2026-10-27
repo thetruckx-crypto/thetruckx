@@ -19,7 +19,7 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react';
-import { supabase } from '../../utils/supabase';
+import { supabase, ensureAdminSession } from '../../utils/supabase';
 import { DriverLicenceAudit } from './DriverLicenceAudit';
 import { formatDisplayId, generateDbNeclId } from '../../utils/idGenerator';
 import { optimizeFileForUpload } from '../../utils/fileCompressor';
@@ -140,27 +140,48 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
   const loadDrivers = useCallback(async () => {
     setLoading(true);
     try {
+      await ensureAdminSession();
+
       const [driversRes, vendorsRes] = await Promise.all([
         supabase
           .from('drivers')
-          .select('*')
+          .select('*, vendor_companies:primary_vendor_id(id, vendor_name, vendor_code)')
           .order('created_at', { ascending: false }),
         supabase
           .from('vendor_companies')
           .select('id, vendor_name')
       ]);
 
-      if (driversRes.error) throw driversRes.error;
-      if (vendorsRes.error) throw vendorsRes.error;
+      let fetchedDrivers = driversRes.data || [];
+      if (driversRes.error || fetchedDrivers.length === 0) {
+        try {
+          const apiRes = await apiFetch('/admin/drivers');
+          if (apiRes.ok) {
+            const json = await apiRes.json();
+            if (json.data && Array.isArray(json.data)) {
+              fetchedDrivers = json.data;
+            }
+          }
+        } catch {}
+      }
 
-      const fetchedDrivers = driversRes.data || [];
       setDrivers(fetchedDrivers);
 
       const fetchedVendors = vendorsRes.data || [];
       setVendors(fetchedVendors);
     } catch (err: any) {
       console.warn('Driver database query error:', err.message);
-      setDrivers([]);
+      try {
+        const apiRes = await apiFetch('/admin/drivers');
+        if (apiRes.ok) {
+          const json = await apiRes.json();
+          if (json.data && Array.isArray(json.data)) {
+            setDrivers(json.data);
+          }
+        }
+      } catch {
+        setDrivers([]);
+      }
       setVendors([]);
     } finally {
       setLoading(false);
@@ -288,9 +309,12 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
 
   const totalPages = Math.ceil(filteredDrivers.length / pageSize) || 1;
 
-  const getVendorName = (vendorId: string) => {
+  const getVendorName = (vendorId: string, driver?: any) => {
+    if (driver?.vendor_companies?.vendor_name) {
+      return driver.vendor_companies.vendor_name;
+    }
     const vendor = vendors.find(v => v.id === vendorId);
-    return vendor?.vendor_name || 'Unknown Vendor';
+    return vendor?.vendor_name || (vendorId ? 'Verified Transporter' : 'Independent / Unattached');
   };
 
   const getLicenceStatus = (driver: any) => {
@@ -810,7 +834,7 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
                           : '—'}
                       </td>
                       <td>
-                        <span className="table-cell-sub">{getVendorName(driver.primary_vendor_id)}</span>
+                        <span className="table-cell-sub">{getVendorName(driver.primary_vendor_id, driver)}</span>
                       </td>
                       <td>
                         {driver.created_at

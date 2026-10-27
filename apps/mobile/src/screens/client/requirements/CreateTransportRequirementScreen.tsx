@@ -40,7 +40,6 @@ import { TransportRequirementDraft, VehicleRequirementGroup } from '../../../typ
 import { clientService } from '../../../services/clientService';
 import { InteractiveCalendarModal } from '../../../components/InteractiveCalendarModal';
 import { InteractiveAnalogClockModal } from '../../../components/InteractiveAnalogClockModal';
-import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 
 // ─── Exported Constants for NECL Compatibility & Unit Testing ─────────────────
 export interface VehicleCatalogItem {
@@ -712,7 +711,7 @@ export const CreateTransportRequirementScreen: React.FC<
           <ArrowLeft size={22} color="#1D2D46" strokeWidth={2.4} />
         </TouchableOpacity>
 
-        <BrandLogoHeader size="sm" showSubtitle={false} />
+        <Text style={styles.headerTopTitle}>New Requirement</Text>
 
         {/* Background autosave active: saveStatus === 'SAVED' */}
         <View style={styles.headerSpacer} />
@@ -1509,6 +1508,11 @@ export const CreateTransportRequirementScreen: React.FC<
 
 // ─── Stylesheet Match to Established Booking Step Design System ─────────────
 const styles = StyleSheet.create({
+  headerTopTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#172B4D',
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#F6F8FB',
