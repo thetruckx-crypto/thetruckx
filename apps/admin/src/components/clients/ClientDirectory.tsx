@@ -4,13 +4,15 @@ import {
   Download, Upload, X, CheckCircle, AlertCircle, Users,
   UserCheck, UserMinus, Phone, Mail, MapPin, Building2,
   Clock, ShieldCheck, ShieldAlert, ArrowUpDown, ArrowUp, ArrowDown,
-  RotateCcw, FileText, ExternalLink, Copy, Check, Filter, AlertTriangle, Activity
+  RotateCcw, FileText, ExternalLink, Copy, Check, Filter, AlertTriangle, Activity, Trash2,
+  Bookmark, Save
 } from "lucide-react";
-import { supabase } from "../../utils/supabase";
+import { supabase, ensureAdminSession } from "../../utils/supabase";
 import { apiFetch } from "../../utils/api";
 import { useAuth } from "../../context/AuthContext";
 import { DocumentPreviewModal } from "../common/DocumentPreviewModal";
 import { EditClientModal } from "./EditClientModal";
+import { draftService, AdminRegistrationDraft } from "../../services/draftService";
 
 export interface Client {
   id: string;
@@ -58,7 +60,7 @@ export interface Client {
 }
 
 interface ClientDirectoryProps {
-  onNavigateToCreate: () => void;
+  onNavigateToCreate: (draftId?: string) => void;
   onNavigateToProfile: (clientId: string) => void;
 }
 
@@ -161,7 +163,6 @@ export function resolveClientDocumentType(doc: {
 }
 
 export function checkClientApprovalEligibility(docs?: any[]) {
-  const mandatoryKeys = ["GST_CERTIFICATE", "COMPANY_PAN", "INCORPORATION_PROOF"];
   const list = docs || [];
 
   const foundTypes = new Map<string, any>();
@@ -184,7 +185,9 @@ export function checkClientApprovalEligibility(docs?: any[]) {
     INCORPORATION_PROOF: "Certificate of Incorporation"
   };
 
-  mandatoryKeys.forEach((key) => {
+  // Core mandatory documents required for every client KYC
+  const coreMandatoryKeys = ["GST_CERTIFICATE", "COMPANY_PAN"];
+  coreMandatoryKeys.forEach((key) => {
     const doc = foundTypes.get(key);
     if (!doc) {
       missingMandatory.push(keyLabels[key]);
@@ -192,6 +195,12 @@ export function checkClientApprovalEligibility(docs?: any[]) {
       pendingMandatory.push(keyLabels[key]);
     }
   });
+
+  // Certificate of Incorporation is mandatory only when applicable/uploaded; if attached, it must be verified
+  const incDoc = foundTypes.get("INCORPORATION_PROOF");
+  if (incDoc && incDoc.verification_status !== "VERIFIED" && incDoc.verification_status !== "APPROVED") {
+    pendingMandatory.push(keyLabels["INCORPORATION_PROOF"]);
+  }
 
   const isEligible = list.length > 0 && missingMandatory.length === 0 && pendingMandatory.length === 0 && rejectedDocs.length === 0;
 
@@ -222,6 +231,7 @@ export const ClientDirectory: React.FC<ClientDirectoryProps> = ({
   const canReject = hasPermission("clients", "reject");
   const canSuspend = hasPermission("clients", "suspend");
   const canExport = hasPermission("clients", "export");
+  const canDelete = hasPermission("clients", "delete") || adminProfile?.role === "SUPER_ADMIN" || adminProfile?.role === "ADMIN";
 
   // Real data state
   const [clients, setClients] = useState<Client[]>([]);
@@ -239,11 +249,48 @@ export const ClientDirectory: React.FC<ClientDirectoryProps> = ({
   // Filters state
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED">("ALL");
-  const [activeTab, setActiveTab] = useState<"ALL" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED">("ALL");
+  const [activeTab, setActiveTab] = useState<"ALL" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "DRAFTS">("ALL");
   const [cityFilter, setCityFilter] = useState("ALL");
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+
+  // Drafts state
+  const [drafts, setDrafts] = useState<AdminRegistrationDraft[]>([]);
+  const [draftsLoading, setDraftsLoading] = useState(false);
+  const [draftToDelete, setDraftToDelete] = useState<AdminRegistrationDraft | null>(null);
+  const [isDeletingDraft, setIsDeletingDraft] = useState(false);
+
+  const fetchDrafts = useCallback(async () => {
+    setDraftsLoading(true);
+    try {
+      const data = await draftService.getDrafts("CLIENT");
+      setDrafts(data);
+    } catch (err: any) {
+      console.warn("Failed to fetch client drafts:", err);
+    } finally {
+      setDraftsLoading(false);
+    }
+  }, []);
+
+  const handleDeleteDraft = async (draftId: string) => {
+    setIsDeletingDraft(true);
+    try {
+      await draftService.deleteDraft(draftId);
+      setDrafts((prev) => prev.filter((d) => d.id !== draftId));
+      setToastMessage("Draft deleted successfully.");
+      setDraftToDelete(null);
+    } catch (err: any) {
+      console.error("Delete draft failed:", err);
+      setToastMessage(err.message || "Failed to delete draft.");
+    } finally {
+      setIsDeletingDraft(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDrafts();
+  }, [fetchDrafts]);
 
   // Sorting state
   const [sortField, setSortField] = useState<"company_name" | "created_at" | "city" | "status">("created_at");
@@ -318,6 +365,9 @@ export const ClientDirectory: React.FC<ClientDirectoryProps> = ({
   const [rejectionReasonInput, setRejectionReasonInput] = useState("");
   const [rejectionInputError, setRejectionInputError] = useState<string | null>(null);
   const [confirmStatusClient, setConfirmStatusClient] = useState<Client | null>(null);
+  const [deletingClient, setDeletingClient] = useState<Client | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteReason, setDeleteReason] = useState("");
 
   // Document Preview & Individual Verification States
   const [previewDoc, setPreviewDoc] = useState<any | null>(null);
@@ -428,6 +478,7 @@ export const ClientDirectory: React.FC<ClientDirectoryProps> = ({
   // Fetch real statistics from database
   const fetchRealStats = useCallback(async () => {
     try {
+      await ensureAdminSession();
       const [allRes, pendingRes, approvedRes, rejectedRes] = await Promise.all([
         supabase.from("client_companies").select("id", { count: "exact", head: true }),
         supabase.from("client_companies").select("id", { count: "exact", head: true }).or("status.eq.PENDING_APPROVAL,status.eq.INACTIVE,status.eq.PENDING"),
@@ -442,7 +493,7 @@ export const ClientDirectory: React.FC<ClientDirectoryProps> = ({
         rejected: rejectedRes.count || 0,
       });
     } catch (err: any) {
-      console.error("Error fetching real client stats:", err.message);
+      console.error("Error fetching real client stats:", err?.message);
     }
   }, []);
 
@@ -452,6 +503,8 @@ export const ClientDirectory: React.FC<ClientDirectoryProps> = ({
     setError(null);
 
     try {
+      await ensureAdminSession();
+
       let query = supabase
         .from("client_companies")
         .select("*")
@@ -476,7 +529,14 @@ export const ClientDirectory: React.FC<ClientDirectoryProps> = ({
         );
       }
 
-      const { data: companies, error: cErr } = await query;
+      let { data: companies, error: cErr } = await query;
+      if (cErr && (cErr.code === '42501' || cErr.message?.includes('permission denied'))) {
+        console.warn("[ClientDirectory] Permission check failed, re-authenticating admin session...");
+        await ensureAdminSession();
+        const retryResult = await query;
+        companies = retryResult.data;
+        cErr = retryResult.error;
+      }
       if (cErr) throw cErr;
 
       if (!companies || companies.length === 0) {
@@ -993,13 +1053,25 @@ export const ClientDirectory: React.FC<ClientDirectoryProps> = ({
         console.warn("Backend API dispatch notice:", apiErr);
       }
 
-      // 2. Direct Supabase Update
+      // 2. Direct Supabase Update via RPC and direct queries
+      try {
+        await supabase.rpc("admin_review_client_registration", {
+          p_company_id: client.id,
+          p_decision: "APPROVED",
+          p_reviewer_name: adminProfile?.name || "NECL Admin Compliance Desk",
+        });
+      } catch (rpcErr) {
+        console.warn("RPC admin_review_client_registration notice:", rpcErr);
+      }
+
       const { error: upErr } = await supabase
         .from("client_companies")
         .update({
           status: "APPROVED",
           approved_at: new Date().toISOString(),
           approved_by: adminProfile?.name || "NECL Admin Compliance Desk",
+          rejection_reason: null,
+          correction_notes: null,
           updated_at: new Date().toISOString(),
         })
         .eq("id", client.id);
@@ -1008,8 +1080,8 @@ export const ClientDirectory: React.FC<ClientDirectoryProps> = ({
 
       await supabase
         .from("client_users")
-        .update({ status: "ACTIVE" })
-        .eq("client_id", client.id);
+        .update({ status: "APPROVED" })
+        .or(`client_id.eq.${client.id},client_company_id.eq.${client.id}`);
 
       setToastMessage(`Client "${client.company_name}" APPROVED! Dashboard access granted.`);
       setTimeout(() => setToastMessage(null), 4000);
@@ -1332,6 +1404,39 @@ export const ClientDirectory: React.FC<ClientDirectoryProps> = ({
     }
   };
 
+  // Permanent Delete Client User & Company Records
+  const handleConfirmDeleteClient = async () => {
+    if (!deletingClient) return;
+    setDeleteLoading(true);
+    try {
+      const res = await apiFetch("/admin/delete-user", {
+        method: "POST",
+        body: JSON.stringify({
+          companyId: deletingClient.id,
+          mobile: deletingClient.primary_contact_phone,
+          role: "CLIENT",
+          reason: deleteReason || "Deleted by Administrator from Client Directory",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to delete client account");
+      }
+      setClients((prev) => prev.filter((c) => c.id !== deletingClient.id));
+      setToastMessage(`Client "${deletingClient.company_name}" and all associated data permanently deleted.`);
+      setTimeout(() => setToastMessage(null), 4000);
+      setDeletingClient(null);
+      setDeleteReason("");
+      setOpenActionMenuId(null);
+      setMenuAnchor(null);
+      await Promise.all([fetchRealStats(), fetchRealClients()]);
+    } catch (err: any) {
+      setError(err.message || "Error permanently deleting client from database");
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   // Quick Edit Save
   const handleSaveQuickEdit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1476,7 +1581,7 @@ export const ClientDirectory: React.FC<ClientDirectoryProps> = ({
           {/* Primary Add Client Action */}
           <button
             className="btn-header-primary-orange"
-            onClick={onNavigateToCreate}
+            onClick={() => onNavigateToCreate()}
             disabled={!canCreate}
             title={canCreate ? "Open new client registration form" : "Create permission required"}
             id="btn-add-client"
@@ -1789,6 +1894,16 @@ export const ClientDirectory: React.FC<ClientDirectoryProps> = ({
           >
             Rejected ({dbKpis.rejected})
           </button>
+          <button
+            role="tab"
+            aria-selected={activeTab === "DRAFTS"}
+            className={`status-tab-btn ${activeTab === "DRAFTS" ? "active-tab" : ""}`}
+            onClick={() => { setActiveTab("DRAFTS"); setPage(1); fetchDrafts(); }}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+          >
+            <Bookmark size={14} />
+            <span>Drafts ({drafts.length})</span>
+          </button>
         </div>
       </div>
 
@@ -1849,15 +1964,190 @@ export const ClientDirectory: React.FC<ClientDirectoryProps> = ({
         </div>
       )}
 
-      {/* ── 5. Client Data Table ── */}
-      <div
-        ref={tableContainerRef}
-        className={`client-table-card ${isDragging ? "is-dragging" : ""}`}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUpOrLeave}
-        onMouseLeave={handleMouseUpOrLeave}
-      >
+      {/* ── 5. Client Data Table / Drafts Table ── */}
+      {activeTab === "DRAFTS" ? (
+        <div className="client-table-card" style={{ overflowX: "auto" }}>
+          <table className="client-table" aria-label="Clients registration drafts table">
+            <thead>
+              <tr>
+                <th style={{ minWidth: 220, paddingLeft: 20 }}>Draft Title & Entity</th>
+                <th style={{ minWidth: 160 }}>Contact Person</th>
+                <th style={{ minWidth: 150 }}>Current Step</th>
+                <th style={{ minWidth: 160 }}>Completion Progress</th>
+                <th style={{ minWidth: 150 }}>Last Saved</th>
+                <th style={{ minWidth: 140, textAlign: "center", paddingRight: 20 }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {draftsLoading ? (
+                Array.from({ length: 3 }).map((_, i) => (
+                  <tr key={i}>
+                    <td colSpan={6} style={{ padding: "20px" }}>
+                      <div className="table-skeleton-cell" style={{ width: "100%", height: 26 }} />
+                    </td>
+                  </tr>
+                ))
+              ) : drafts.length === 0 ? (
+                <tr>
+                  <td colSpan={6} style={{ textAlign: "center", padding: "64px 20px" }}>
+                    <div
+                      style={{
+                        width: 56,
+                        height: 56,
+                        borderRadius: 16,
+                        background: "#FFF1E8",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        marginBottom: 16,
+                      }}
+                    >
+                      <Bookmark size={28} color="#F05A22" />
+                    </div>
+                    <h3 style={{ color: "#172B4D", fontSize: 16, fontWeight: 700, margin: "0 0 8px" }}>
+                      No Saved Drafts Found
+                    </h3>
+                    <p
+                      style={{
+                        color: "#64748B",
+                        margin: "0 0 20px",
+                        fontSize: 13.5,
+                        maxWidth: 440,
+                        marginLeft: "auto",
+                        marginRight: "auto",
+                      }}
+                    >
+                      Partially entered client registrations saved using "Save Draft" will appear here. You can resume them at any time.
+                    </p>
+                    {canCreate && (
+                      <button className="btn-header-primary-orange" onClick={() => onNavigateToCreate()}>
+                        <Plus size={16} />
+                        <span>Create Client Draft</span>
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ) : (
+                drafts.map((draft) => {
+                  const contactName = draft.form_data?.contact_name || draft.form_data?.contactName || "—";
+                  const contactMobile = draft.form_data?.mobile || draft.form_data?.contactPhone || "—";
+                  const contactEmail = draft.form_data?.email || draft.form_data?.contactEmail || "—";
+                  const pct = draft.completion_percentage || 20;
+
+                  return (
+                    <tr key={draft.id} className="client-row">
+                      <td style={{ padding: "14px 20px" }}>
+                        <div style={{ fontWeight: 700, color: "#0F172A", fontSize: 14 }}>
+                          {draft.title || "Untitled Client Draft"}
+                        </div>
+                        <div style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>
+                          Draft ID: <span style={{ fontFamily: "monospace" }}>{draft.id.slice(0, 8)}</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: "14px 20px" }}>
+                        <div style={{ fontWeight: 600, color: "#334155", fontSize: 13 }}>{contactName}</div>
+                        <div style={{ fontSize: 12, color: "#64748B" }}>{contactMobile} • {contactEmail}</div>
+                      </td>
+                      <td style={{ padding: "14px 20px" }}>
+                        <span
+                          style={{
+                            background: "#F1F5F9",
+                            color: "#475569",
+                            padding: "3px 8px",
+                            borderRadius: 6,
+                            fontSize: 12,
+                            fontWeight: 600,
+                          }}
+                        >
+                          {draft.step_progress || "In Progress"}
+                        </span>
+                      </td>
+                      <td style={{ padding: "14px 20px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <div style={{ flex: 1, height: 6, background: "#E2E8F0", borderRadius: 9999, overflow: "hidden" }}>
+                            <div
+                              style={{
+                                width: `${pct}%`,
+                                height: "100%",
+                                background: pct >= 80 ? "#10B981" : pct >= 40 ? "#F05A22" : "#F59E0B",
+                                borderRadius: 9999,
+                                transition: "width 0.3s ease",
+                              }}
+                            />
+                          </div>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: "#334155", minWidth: 32 }}>
+                            {pct}%
+                          </span>
+                        </div>
+                      </td>
+                      <td style={{ padding: "14px 20px", fontSize: 12.5, color: "#64748B" }}>
+                        {new Date(draft.updated_at).toLocaleString([], {
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </td>
+                      <td style={{ padding: "14px 20px", textAlign: "center" }}>
+                        <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+                          <button
+                            type="button"
+                            onClick={() => onNavigateToCreate(draft.id)}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 5,
+                              padding: "6px 12px",
+                              background: "#FFF1E8",
+                              color: "#F05A22",
+                              border: "1px solid #FFD8C7",
+                              borderRadius: 6,
+                              fontSize: 12,
+                              fontWeight: 700,
+                              cursor: "pointer",
+                            }}
+                            title="Resume draft and continue registration"
+                          >
+                            <FileText size={13} />
+                            <span>Resume</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDraftToDelete(draft)}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              padding: "6px 8px",
+                              background: "#FEF2F2",
+                              color: "#DC2626",
+                              border: "1px solid #FECACA",
+                              borderRadius: 6,
+                              fontSize: 12,
+                              cursor: "pointer",
+                            }}
+                            title="Delete draft"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <>
+          <div
+            ref={tableContainerRef}
+            className={`client-table-card ${isDragging ? "is-dragging" : ""}`}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUpOrLeave}
+            onMouseLeave={handleMouseUpOrLeave}
+          >
         <table className="client-table" aria-label="Clients directory table">
           <thead>
             <tr>
@@ -2023,7 +2313,7 @@ export const ClientDirectory: React.FC<ClientDirectoryProps> = ({
                       </button>
                     )}
                     {canCreate && (
-                      <button className="btn-header-primary-orange" onClick={onNavigateToCreate}>
+                      <button className="btn-header-primary-orange" onClick={() => onNavigateToCreate()}>
                         <Plus size={16} />
                         <span>+ Add Client</span>
                       </button>
@@ -2366,6 +2656,8 @@ export const ClientDirectory: React.FC<ClientDirectoryProps> = ({
           </select>
         </div>
       </div>
+        </>
+      )}
 
       {/* ── 10. Client Details Slide-out Drawer ── */}
       {isDrawerOpen && activeSelectedClient && (
@@ -3379,7 +3671,7 @@ export const ClientDirectory: React.FC<ClientDirectoryProps> = ({
                           Approval Blocked: Mandatory Documents Require Individual Verification
                         </div>
                         <div style={{ color: "#B45309", fontSize: 12.5, marginTop: 4, lineHeight: 1.5 }}>
-                          {eligibility.summaryMessage}. Every mandatory document (GST Certificate, Company PAN, and Incorporation Proof) must be individually reviewed and verified before administrative registration approval can be executed.
+                          {eligibility.summaryMessage}. Core documents (GST Certificate and Company PAN, plus Certificate of Incorporation when applicable) must be individually reviewed and verified before administrative registration approval can be executed.
                         </div>
                       </div>
                     </div>
@@ -3393,7 +3685,7 @@ export const ClientDirectory: React.FC<ClientDirectoryProps> = ({
                         All Mandatory Compliance Documents Individually Verified
                       </div>
                       <div style={{ color: "#15803D", fontSize: 12.5, marginTop: 3 }}>
-                        GST Certificate, Company PAN, and Incorporation Proof are all verified. Client registration is fully cleared for administrative approval.
+                        Core documents (GST Certificate and Company PAN, and Certificate of Incorporation if uploaded) are verified. Client registration is fully cleared for administrative approval.
                       </div>
                     </div>
                   </div>
@@ -3408,7 +3700,7 @@ export const ClientDirectory: React.FC<ClientDirectoryProps> = ({
                     <span>Attached Verification Documents ({reviewingClient.documents_list?.length || 0})</span>
                   </h4>
                   <span style={{ fontSize: 12, color: "#64748B" }}>
-                    Mandatory: GST Certificate, Company PAN, Incorporation Proof
+                    Mandatory: GST Certificate, Company PAN • Optional/When Applicable: Certificate of Incorporation
                   </span>
                 </div>
 
@@ -3419,7 +3711,8 @@ export const ClientDirectory: React.FC<ClientDirectoryProps> = ({
                       const isVerified = doc.verification_status === "VERIFIED" || doc.verification_status === "APPROVED";
                       const isRejected = doc.verification_status === "REJECTED" || doc.verification_status === "REPLACEMENT_REQUESTED";
                       const isReuploaded = doc.verification_status === "RE_UPLOADED" || (doc.verification_status === "PENDING" && Boolean(doc.rejection_reason));
-                      const isMandatory = resolved.key !== "MSME_UDYAM" && resolved.key !== "OTHER";
+                      const isCoreMandatory = resolved.key === "GST_CERTIFICATE" || resolved.key === "COMPANY_PAN";
+                      const isWhenApplicable = resolved.key === "INCORPORATION_PROOF";
 
                       return (
                         <div
@@ -3450,9 +3743,13 @@ export const ClientDirectory: React.FC<ClientDirectoryProps> = ({
                                   <span style={{ fontSize: 13.5, fontWeight: 700, color: "#0F172A" }}>
                                     {resolved.label}
                                   </span>
-                                  {isMandatory ? (
+                                  {isCoreMandatory ? (
                                     <span style={{ fontSize: 10, fontWeight: 700, background: "#EFF6FF", color: "#1D4ED8", padding: "1px 6px", borderRadius: 4 }}>
                                       Mandatory
+                                    </span>
+                                  ) : isWhenApplicable ? (
+                                    <span style={{ fontSize: 10, fontWeight: 600, background: "#F3E8FF", color: "#7E22CE", padding: "1px 6px", borderRadius: 4 }}>
+                                      When Applicable
                                     </span>
                                   ) : (
                                     <span style={{ fontSize: 10, fontWeight: 600, background: "#F1F5F9", color: "#64748B", padding: "1px 6px", borderRadius: 4 }}>
@@ -3681,6 +3978,7 @@ export const ClientDirectory: React.FC<ClientDirectoryProps> = ({
           rejectionReason={previewDoc.rejection_reason}
           uploadedAt={previewDoc.created_at}
           fileSize={previewDoc.file_size}
+          mimeType={previewDoc.mime_type}
           onVerify={() => handleVerifySingleDocument(previewDoc)}
           onReject={() => {
             const target = previewDoc;
@@ -4028,6 +4326,65 @@ export const ClientDirectory: React.FC<ClientDirectoryProps> = ({
         </div>
       )}
 
+      {/* Delete Client Confirmation Modal */}
+      {deletingClient && (
+        <div className="modal-backdrop-overlay" style={{ zIndex: 9999 }}>
+          <div className="confirm-dialog" style={{ background: "#FFFFFF", border: "1px solid #FCA5A5", maxWidth: 440 }}>
+            <div className="confirm-dialog-icon" style={{ background: "#FEE2E2" }}>
+              <Trash2 size={36} color="#DC2626" />
+            </div>
+            <h3 className="confirm-dialog-title" style={{ color: "#991B1B" }}>
+              Permanently Delete User?
+            </h3>
+            <p className="confirm-dialog-desc" style={{ color: "#4B5563", fontSize: "13px", lineHeight: "1.5" }}>
+              Are you sure you want to permanently delete <strong>{deletingClient.company_name}</strong>?
+              This will permanently remove all associated company records, KYC documents, user accounts, and authentication credentials.
+              <br /><br />
+              <span style={{ color: "#DC2626", fontWeight: 600 }}>This action cannot be undone.</span>
+            </p>
+            <div style={{ marginTop: 12, marginBottom: 16 }}>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#374151", marginBottom: 4 }}>
+                Reason for Deletion (Optional)
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Account closure request, duplicate registration"
+                value={deleteReason}
+                onChange={(e) => setDeleteReason(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "8px 10px",
+                  borderRadius: 6,
+                  border: "1px solid #D1D5DB",
+                  fontSize: "13px",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+            <div className="confirm-dialog-actions">
+              <button
+                className="btn-cancel-modal"
+                disabled={deleteLoading}
+                onClick={() => {
+                  setDeletingClient(null);
+                  setDeleteReason("");
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-submit-modal"
+                style={{ background: "#DC2626", color: "#FFFFFF" }}
+                disabled={deleteLoading}
+                onClick={handleConfirmDeleteClient}
+              >
+                {deleteLoading ? "Deleting..." : "Permanently Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Floating Fixed Action Menu (Decoupled from table container to prevent ANY clipping) ── */}
       {menuAnchor && (() => {
         const activeClient = clients.find((c) => c.id === menuAnchor.id);
@@ -4182,9 +4539,60 @@ export const ClientDirectory: React.FC<ClientDirectoryProps> = ({
                 <span>{activeClient.status === "ACTIVE" ? "Suspend Account" : "Reactivate Account"}</span>
               </button>
             )}
+
+            {/* Delete User */}
+            {canDelete && (
+              <button
+                type="button"
+                role="menuitem"
+                style={{ color: "#DC2626" }}
+                onClick={() => {
+                  setMenuAnchor(null);
+                  setOpenActionMenuId(null);
+                  setDeletingClient(activeClient);
+                  setDeleteReason("");
+                }}
+              >
+                <Trash2 size={14} color="#DC2626" />
+                <span style={{ color: "#DC2626", fontWeight: 600 }}>Delete User</span>
+              </button>
+            )}
           </div>
         );
       })()}
+
+      {/* ── Draft Delete Confirmation Modal ── */}
+      {draftToDelete && (
+        <div className="modal-backdrop-overlay" style={{ zIndex: 9999 }}>
+          <div className="modal-dialog-card" role="dialog" aria-modal="true">
+            <div className="modal-icon-circle-warning">
+              <AlertCircle size={28} color="#DC2626" />
+            </div>
+            <h3 className="modal-title">Delete Registration Draft?</h3>
+            <p className="modal-desc">
+              Are you sure you want to permanently delete the draft for <strong>"{draftToDelete.title}"</strong>? All saved progress will be discarded and cannot be recovered.
+            </p>
+            <div className="modal-btn-row" style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                className="btn-modal-secondary"
+                onClick={() => setDraftToDelete(null)}
+                disabled={isDeletingDraft}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-modal-danger"
+                onClick={() => handleDeleteDraft(draftToDelete.id)}
+                disabled={isDeletingDraft}
+              >
+                {isDeletingDraft ? "Deleting Draft..." : "Permanently Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

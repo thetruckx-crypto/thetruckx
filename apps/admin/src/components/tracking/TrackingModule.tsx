@@ -92,7 +92,8 @@ export const TrackingModule: React.FC<TrackingModuleProps> = ({
     setError(null);
     try {
       let query = supabase.from("trips").select("*")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(100);
 
       if (statusFilter !== "ALL") query = query.eq("trip_status", statusFilter);
 

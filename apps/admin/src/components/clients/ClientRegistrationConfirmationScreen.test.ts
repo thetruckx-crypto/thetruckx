@@ -5,7 +5,7 @@ import * as path from 'path';
 describe('NECL Client Registration Success Screen Redesign Requirements', () => {
   const screenPath = path.resolve(
     __dirname,
-    '../../../../mobile/src/screens/ClientRegistrationConfirmationScreen.tsx'
+    '../../../../mobile/src/screens/client/onboarding/ClientRegistrationConfirmationScreen.tsx'
   );
   const screenCode = fs.readFileSync(screenPath, 'utf-8');
 
@@ -21,12 +21,13 @@ describe('NECL Client Registration Success Screen Redesign Requirements', () => 
 
     it('should display a clean green success icon with the exact heading', () => {
       expect(screenCode).toContain('<CheckCircle2 size={34} color="#16A779" strokeWidth={2.4} />');
-      expect(screenCode).toContain('<Text style={styles.mainHeading}>Registration Submitted Successfully</Text>');
+      expect(screenCode).toContain('Registration Submitted Successfully');
+      expect(screenCode).toContain('styles.mainHeading');
     });
 
     it('should add the concise supporting text stating awaiting admin verification', () => {
       expect(screenCode).toContain(
-        'Your application has been submitted successfully and is awaiting admin verification.'
+        'Your registration has been submitted and is awaiting admin verification.'
       );
     });
 
@@ -40,7 +41,7 @@ describe('NECL Client Registration Success Screen Redesign Requirements', () => 
     it('should create a compact, visually prominent card displaying Assigned Client ID and Status', () => {
       expect(screenCode).toContain('ASSIGNED CLIENT ID');
       expect(screenCode).toContain('Application Status');
-      expect(screenCode).toContain('Pending Approval');
+      expect(screenCode).toContain('Pending');
     });
 
     it('should use orange for Client ID and subtle amber badge for pending status', () => {
@@ -57,16 +58,16 @@ describe('NECL Client Registration Success Screen Redesign Requirements', () => 
     });
 
     it('should clearly communicate that dashboard access will be available after approval', () => {
-      expect(screenCode).toContain('Dashboard access will be available after approval.');
+      expect(screenCode).toContain('Dashboard access will be automatically unlocked upon admin approval.');
     });
   });
 
   describe('3. Application Summary', () => {
     it('should display clean, compact card with consistent label-value alignment and exact fallbacks', () => {
-      expect(screenCode).toContain("companyName || 'webyourdesign'");
-      expect(screenCode).toContain("businessType || 'Public Limited'");
-      expect(screenCode).toContain("gstin || '29AAAAA0000A1Z5'");
-      expect(screenCode).toContain("'15 Oct 2026'");
+      expect(screenCode).toContain("companyName = businessDetails?.companyName || 'Enterprise Partner'");
+      expect(screenCode).toContain("entityType = businessDetails?.businessType || 'Private Limited'");
+      expect(screenCode).toContain("gstin = businessDetails?.gstin || '18AAAAA0000A1Z5'");
+      expect(screenCode).toContain('formattedSubmissionDate');
     });
 
     it('should render all 4 required summary fields with proper typography and formatting', () => {

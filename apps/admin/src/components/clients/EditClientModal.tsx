@@ -437,8 +437,7 @@ export const EditClientModal: React.FC<EditClientModalProps> = ({
         .from("client_companies")
         .update({
           company_name: formData.company_name.trim(),
-          business_type: formData.client_type,
-          industry_type: formData.industry_type || null,
+          business_type: formData.client_type || formData.industry_type || "Private Limited",
           gstin: gstinClean || null,
           pan: panClean || null,
           registered_address: fullAddress,
@@ -647,7 +646,6 @@ export const EditClientModal: React.FC<EditClientModalProps> = ({
                       <AlertCircle size={12} /> {errors.gstin}
                     </span>
                   )}
-                  <span className="edit-client-hint">Auto-populates Company PAN</span>
                 </div>
 
                 <div className="edit-client-field">

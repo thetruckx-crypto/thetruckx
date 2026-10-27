@@ -1,17 +1,21 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import {
   ArrowLeft, ArrowRight, X, Building2, User, MapPin,
   Phone, Mail, Calendar, Info, CheckCircle, AlertCircle, Loader,
   Check, ShieldAlert, ChevronRight, FileText, ShieldCheck, UploadCloud,
-  Paperclip, Trash2, Eye, CreditCard
+  Paperclip, Trash2, Eye, CreditCard, Save, Bookmark
 } from "lucide-react";
 import { supabase } from "../../utils/supabase";
 import { pincodeService } from "../../services/pincodeService";
 import { generateDbNeclId } from "../../utils/idGenerator";
+import { draftService } from "../../services/draftService";
+import { optimizeFileForUpload, isCompressibleImage } from "../../utils/fileCompressor";
+import { apiFetch } from "../../utils/api";
 
 interface CreateClientProps {
   onBack: () => void;
   onCreated: (clientId: string) => void;
+  draftId?: string;
 }
 
 export type DocKey = "GST_CERTIFICATE" | "COMPANY_PAN" | "INCORPORATION_PROOF" | "MSME_UDYAM";
@@ -39,9 +43,9 @@ const CLIENT_COMPLIANCE_DOCS: DocConfig[] = [
   },
   {
     key: "INCORPORATION_PROOF",
-    label: "Certificate of Incorporation / Business Proof",
-    description: "MCA Certificate of Incorporation, Partnership Deed, or Trade License",
-    mandatory: true,
+    label: "Certificate of Incorporation / Business Proof (When Applicable)",
+    description: "MCA Certificate of Incorporation, Partnership Deed, or Trade License (optional)",
+    mandatory: false,
   },
   {
     key: "MSME_UDYAM",
@@ -69,6 +73,7 @@ interface FormData {
   // 3. Primary Contact Person
   contact_name: string;
   designation: string;
+  department: string;
   email: string;
   mobile: string;
 
@@ -89,6 +94,7 @@ const INITIAL_FORM: FormData = {
   pincode: "",
   contact_name: "",
   designation: "",
+  department: "Logistics",
   email: "",
   mobile: "",
   credit_window_days: "30",
@@ -172,7 +178,7 @@ const COMMON_CITIES = [
   "Dimapur", "Kohima", "Imphal", "Aizawl", "Itanagar"
 ];
 
-export const CreateClient: React.FC<CreateClientProps> = ({ onBack, onCreated }) => {
+export const CreateClient: React.FC<CreateClientProps> = ({ onBack, onCreated, draftId: propDraftId }) => {
   const [form, setForm] = useState<FormData>(INITIAL_FORM);
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -185,6 +191,19 @@ export const CreateClient: React.FC<CreateClientProps> = ({ onBack, onCreated })
     otp: string;
     mobile: string;
   } | null>(null);
+
+  // Draft Management State
+  const [activeDraftId, setActiveDraftId] = useState<string | null>(() => {
+    if (propDraftId) return propDraftId;
+    if (typeof window !== "undefined") {
+      const sp = new URLSearchParams(window.location.search);
+      return sp.get("draftId") || null;
+    }
+    return null;
+  });
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [draftToast, setDraftToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
+  const [draftLastSaved, setDraftLastSaved] = useState<string | null>(null);
 
   // Document Upload Responsibility State
   const [docResponsibilities, setDocResponsibilities] = useState<Record<DocKey, UploadResponsibility>>({
@@ -203,6 +222,111 @@ export const CreateClient: React.FC<CreateClientProps> = ({ onBack, onCreated })
   } | null>(null);
 
   const fileInputRefs = useRef<Partial<Record<DocKey, HTMLInputElement | null>>>({});
+
+  // Restore Draft on mount if draftId exists or check local backup
+  useEffect(() => {
+    const restoreDraft = async () => {
+      const targetId = activeDraftId || propDraftId;
+      if (targetId) {
+        try {
+          const draft = await draftService.getDraftById(targetId);
+          if (draft && draft.form_data) {
+            setForm((prev) => ({
+              ...prev,
+              ...(draft.form_data as any),
+            }));
+            if (draft.document_refs && typeof draft.document_refs === "object") {
+              setDocResponsibilities((prev) => ({
+                ...prev,
+                ...(draft.document_refs as any),
+              }));
+            }
+            setDraftLastSaved(draft.updated_at);
+            setDraftToast({
+              message: `Draft "${draft.title}" loaded successfully.`,
+              type: "info",
+            });
+            setTimeout(() => setDraftToast(null), 4000);
+          }
+        } catch (err: any) {
+          console.warn("Failed to load draft:", err);
+        }
+      } else {
+        const backup = draftService.getLocalBackup("CLIENT");
+        if (backup?.formData && Object.values(backup.formData).some((v) => Boolean(v))) {
+          setForm((prev) => ({ ...prev, ...(backup.formData as any) }));
+          if (backup.documentRefs) {
+            setDocResponsibilities((prev) => ({ ...prev, ...(backup.documentRefs as any) }));
+          }
+          if (backup.id) setActiveDraftId(backup.id);
+          if (backup.updatedAt) setDraftLastSaved(backup.updatedAt);
+        }
+      }
+    };
+
+    restoreDraft();
+  }, [activeDraftId, propDraftId]);
+
+  // Save Draft to Database & Persistent Storage
+  const handleSaveDraft = async (exitAfter = false) => {
+    setIsSavingDraft(true);
+    setGlobalError(null);
+    try {
+      const draftTitle =
+        form.company_name.trim() ||
+        (form.contact_name.trim() ? `Draft - ${form.contact_name.trim()}` : "Untitled Client Registration");
+
+      const saved = await draftService.saveDraft({
+        id: activeDraftId || undefined,
+        entityType: "CLIENT",
+        title: draftTitle,
+        formData: form,
+        documentRefs: docResponsibilities,
+        stepProgress: section4Complete
+          ? "Step 4: Compliance Docs"
+          : section3Complete
+          ? "Step 3: Primary Contact"
+          : section2Complete
+          ? "Step 2: Registered Office"
+          : "Step 1: Company Info",
+      });
+
+      setActiveDraftId(saved.id);
+      setDraftLastSaved(saved.updated_at);
+      draftService.setLocalBackup("CLIENT", {
+        id: saved.id,
+        entityType: "CLIENT",
+        formData: form,
+        documentRefs: docResponsibilities,
+        updatedAt: saved.updated_at,
+      });
+
+      if (typeof window !== "undefined") {
+        const url = new URL(window.location.href);
+        url.searchParams.set("draftId", saved.id);
+        window.history.replaceState({}, "", url.toString());
+      }
+
+      setDraftToast({
+        message: "Draft saved successfully! You can resume it anytime from the Client Directory.",
+        type: "success",
+      });
+      setTimeout(() => setDraftToast(null), 4000);
+
+      if (exitAfter) {
+        onBack();
+      }
+    } catch (err: any) {
+      console.error("Save draft error:", err);
+      setDraftToast({
+        message: err.message || "Failed to save draft. Please try again.",
+        type: "error",
+      });
+      setTimeout(() => setDraftToast(null), 5000);
+    } finally {
+      setIsSavingDraft(false);
+    }
+  };
 
   // Determine if form has any unsaved input
   const isDirty = useMemo(() => {
@@ -327,8 +451,8 @@ export const CreateClient: React.FC<CreateClientProps> = ({ onBack, onCreated })
     }
   };
 
-  // File picking for Admin Upload
-  const handleFilePicked = (key: DocKey, file: File | null) => {
+  // File picking for Admin Upload with automatic image optimization
+  const handleFilePicked = async (key: DocKey, file: File | null) => {
     if (!file) {
       setDocFiles((prev) => {
         const copy = { ...prev };
@@ -343,7 +467,12 @@ export const CreateClient: React.FC<CreateClientProps> = ({ onBack, onCreated })
       return;
     }
 
-    setDocFiles((prev) => ({ ...prev, [key]: file }));
+    try {
+      const optimized = await optimizeFileForUpload(file);
+      setDocFiles((prev) => ({ ...prev, [key]: optimized }));
+    } catch {
+      setDocFiles((prev) => ({ ...prev, [key]: file }));
+    }
     if (globalError) setGlobalError(null);
   };
 
@@ -505,8 +634,7 @@ export const CreateClient: React.FC<CreateClientProps> = ({ onBack, onCreated })
           city: form.city.trim(),
           state: form.state.trim(),
           pincode: form.pincode.trim(),
-          business_type: form.client_type,
-          industry_type: form.industry_type || null,
+          business_type: form.client_type || form.industry_type || "Private Limited",
           company_email: form.email.trim(),
           company_phone: `+91 ${mobileClean}`,
           status: initialStatus,
@@ -541,6 +669,7 @@ export const CreateClient: React.FC<CreateClientProps> = ({ onBack, onCreated })
           client_company_id: companyId,
           full_name: form.contact_name.trim(),
           designation: form.designation.trim() || "Authorized Contact",
+          department: form.department.trim() || "Logistics",
           email: form.email.trim(),
           mobile: mobileClean,
           status: "ACTIVE",
@@ -550,6 +679,23 @@ export const CreateClient: React.FC<CreateClientProps> = ({ onBack, onCreated })
 
       if (userErr) {
         console.warn("Notice on client_users insert:", userErr.message);
+      }
+
+      // Synchronize with server registry for duplicate-role checking and mobile auth persistence
+      try {
+        await apiFetch('/auth/register-sync', {
+          method: "POST",
+          body: JSON.stringify({
+            fullName: form.contact_name.trim(),
+            mobile: mobileClean,
+            role: "CLIENT",
+            email: form.email.trim(),
+            companyName: form.company_name.trim(),
+            status: initialStatus,
+          }),
+        });
+      } catch (syncErr) {
+        console.warn("register-sync notice:", syncErr);
       }
 
       // 7. Process Document Records (Admin Uploads vs Client Uploads)
@@ -565,15 +711,13 @@ export const CreateClient: React.FC<CreateClientProps> = ({ onBack, onCreated })
 
           let publicUrl = storagePath;
           try {
+            const uploadReadyFile = await optimizeFileForUpload(attachedFile);
             const { data: upData, error: upErr } = await supabase.storage
               .from("client-documents")
-              .upload(storagePath, attachedFile, { upsert: true });
+              .upload(storagePath, uploadReadyFile, { upsert: true });
 
             if (!upErr && upData) {
-              const { data: pubData } = supabase.storage
-                .from("client-documents")
-                .getPublicUrl(storagePath);
-              publicUrl = pubData?.publicUrl || storagePath;
+              publicUrl = storagePath;
             }
           } catch (storageErr) {
             console.warn("Notice on storage bucket upload:", storageErr);
@@ -626,6 +770,16 @@ export const CreateClient: React.FC<CreateClientProps> = ({ onBack, onCreated })
         mobile: `+91 ${mobileClean}`,
       });
 
+      // Cleanup completed draft record so it transitions cleanly without duplicates
+      if (activeDraftId) {
+        try {
+          await draftService.completeDraft(activeDraftId);
+        } catch (cleanupErr) {
+          console.warn("Draft complete cleanup notice:", cleanupErr);
+        }
+      }
+      draftService.clearLocalBackup("CLIENT");
+
       // Automatically navigate to client profile after showing provision feedback
       setTimeout(() => {
         onCreated(companyId);
@@ -670,6 +824,84 @@ export const CreateClient: React.FC<CreateClientProps> = ({ onBack, onCreated })
               Official ID: <span style={{ fontFamily: "monospace", fontWeight: 700 }}>{provisionSuccess.clientCode}</span> • Onboarding active for {provisionSuccess.mobile}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Draft Notification Alert */}
+      {draftToast && (
+        <div
+          role="status"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            padding: "12px 18px",
+            borderRadius: 8,
+            marginBottom: 16,
+            background: draftToast.type === "error" ? "#FEF2F2" : draftToast.type === "info" ? "#EFF6FF" : "#F0FDF4",
+            border: `1px solid ${draftToast.type === "error" ? "#FECACA" : draftToast.type === "info" ? "#BFDBFE" : "#BBF7D0"}`,
+            color: draftToast.type === "error" ? "#B91C1C" : draftToast.type === "info" ? "#1D4ED8" : "#15803D",
+            fontSize: 13.5,
+            fontWeight: 600,
+          }}
+        >
+          <Bookmark size={16} />
+          <span style={{ flex: 1 }}>{draftToast.message}</span>
+          <button
+            type="button"
+            onClick={() => setDraftToast(null)}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", padding: 2 }}
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {/* Active Draft Indicator */}
+      {activeDraftId && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            background: "#F8FAFC",
+            border: "1px solid #E2E8F0",
+            borderRadius: 8,
+            padding: "10px 16px",
+            marginBottom: 16,
+            fontSize: 13,
+            color: "#334155",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ background: "#E2E8F0", color: "#475569", padding: "2px 8px", borderRadius: 4, fontWeight: 700, fontSize: 11 }}>
+              DRAFT ACTIVE
+            </span>
+            <span>
+              Draft ID: <strong style={{ fontFamily: "monospace" }}>{activeDraftId.slice(0, 8)}...</strong>
+              {draftLastSaved && ` • Saved at ${new Date(draftLastSaved).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => handleSaveDraft(false)}
+            disabled={isSavingDraft}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              background: "#FFFFFF",
+              border: "1px solid #CBD5E1",
+              borderRadius: 6,
+              padding: "4px 10px",
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            {isSavingDraft ? <Loader size={12} className="spin-animate" /> : <Save size={12} />}
+            <span>Save Now</span>
+          </button>
         </div>
       )}
 
@@ -972,7 +1204,6 @@ export const CreateClient: React.FC<CreateClientProps> = ({ onBack, onCreated })
               <div className="form-field-unit">
                 <label className="form-field-label" htmlFor="input-city">
                   <span>City <span className="req">*</span></span>
-                  <span className="counter" style={{ color: "#047857" }}>Auto-populated</span>
                 </label>
                 <input
                   type="text"
@@ -1001,7 +1232,6 @@ export const CreateClient: React.FC<CreateClientProps> = ({ onBack, onCreated })
               <div className="form-field-unit" style={{ gridColumn: "span 2" }}>
                 <label className="form-field-label" htmlFor="select-state">
                   <span>State / Union Territory <span className="req">*</span></span>
-                  <span className="counter" style={{ color: "#047857" }}>Auto-populated</span>
                 </label>
                 <select
                   id="select-state"
@@ -1077,6 +1307,26 @@ export const CreateClient: React.FC<CreateClientProps> = ({ onBack, onCreated })
                   value={form.designation}
                   onChange={(e) => updateField("designation", e.target.value)}
                 />
+              </div>
+
+              {/* Department */}
+              <div className="form-field-unit">
+                <label className="form-field-label" htmlFor="input-department">
+                  <span>Department <span style={{ color: "#94A3B8", fontWeight: 500 }}>(Optional)</span></span>
+                </label>
+                <select
+                  id="input-department"
+                  className="form-text-input"
+                  value={form.department}
+                  onChange={(e) => updateField("department", e.target.value)}
+                >
+                  <option value="Logistics">Logistics</option>
+                  <option value="Supply Chain">Supply Chain</option>
+                  <option value="Procurement">Procurement</option>
+                  <option value="Operations">Operations</option>
+                  <option value="Dispatch">Dispatch</option>
+                  <option value="Corporate Management">Corporate Management</option>
+                </select>
               </div>
 
               {/* Row 2, Col 1: Official Email Address */}
@@ -1410,33 +1660,71 @@ export const CreateClient: React.FC<CreateClientProps> = ({ onBack, onCreated })
 
         {/* ── 12. Sticky Form Action Bar ── */}
         <div className="sticky-form-action-bar" role="region" aria-label="Form actions">
-          <button
-            type="button"
-            className="btn-cancel-flat"
-            onClick={handleCancelClick}
-            id="btn-cancel-client"
-          >
-            Cancel
-          </button>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <button
+              type="button"
+              className="btn-cancel-flat"
+              onClick={handleCancelClick}
+              id="btn-cancel-client"
+            >
+              Cancel
+            </button>
+          </div>
 
-          <button
-            type="submit"
-            className="btn-submit-primary"
-            disabled={isSubmitting}
-            id="btn-save-and-provision"
-          >
-            {isSubmitting ? (
-              <>
-                <Loader size={16} className="spin-animate" />
-                <span>Provisioning Client Account...</span>
-              </>
-            ) : (
-              <>
-                <CheckCircle size={16} />
-                <span>Save Client & Provision Account</span>
-              </>
-            )}
-          </button>
+          <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+            <button
+              type="button"
+              className="btn-save-draft"
+              onClick={() => handleSaveDraft(false)}
+              disabled={isSavingDraft || isSubmitting}
+              id="btn-save-draft-client"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                background: "#F1F5F9",
+                color: "#334155",
+                border: "1px solid #CBD5E1",
+                borderRadius: "8px",
+                height: "48px",
+                padding: "0 22px",
+                fontSize: "14px",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              {isSavingDraft ? (
+                <>
+                  <Loader size={16} className="spin-animate" />
+                  <span>Saving Draft...</span>
+                </>
+              ) : (
+                <>
+                  <Save size={16} />
+                  <span>Save Draft</span>
+                </>
+              )}
+            </button>
+
+            <button
+              type="submit"
+              className="btn-save-provision"
+              disabled={isSubmitting}
+              id="btn-save-and-provision"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader size={16} className="spin-animate" />
+                  <span>Provisioning Client Account...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle size={16} />
+                  <span>Save Client & Provision Account</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </form>
 
@@ -1447,17 +1735,37 @@ export const CreateClient: React.FC<CreateClientProps> = ({ onBack, onCreated })
             <div className="modal-icon-circle-warning">
               <AlertCircle size={28} color="#DC2626" />
             </div>
-            <h3 className="modal-title">Discard Unsaved Changes?</h3>
+            <h3 className="modal-title">Unsaved Progress Detected</h3>
             <p className="modal-desc">
-              You have entered client information. Are you sure you want to discard your progress and return to the directory?
+              Would you like to save this registration as a draft to resume later, or discard changes?
             </p>
-            <div className="modal-btn-row">
+            <div className="modal-btn-row" style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
               <button
                 type="button"
                 className="btn-modal-secondary"
                 onClick={() => setShowCancelConfirm(false)}
               >
                 Continue Editing
+              </button>
+              <button
+                type="button"
+                style={{
+                  background: "#0F172A",
+                  color: "#FFFFFF",
+                  border: "none",
+                  borderRadius: "6px",
+                  padding: "8px 16px",
+                  fontWeight: 600,
+                  fontSize: "13.5px",
+                  cursor: "pointer",
+                }}
+                onClick={() => {
+                  setShowCancelConfirm(false);
+                  handleSaveDraft(true);
+                }}
+                disabled={isSavingDraft}
+              >
+                {isSavingDraft ? "Saving Draft..." : "Save Draft & Exit"}
               </button>
               <button
                 type="button"

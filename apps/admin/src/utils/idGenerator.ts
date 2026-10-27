@@ -159,6 +159,11 @@ export function formatDisplayId(
     return str.toUpperCase();
   }
 
+  // Preserve existing requirement IDs (e.g., REQ-YYYYMMDD-XXXX or REQ-*)
+  if (entityType === "REQ" || str.toUpperCase().startsWith("REQ-")) {
+    return str;
+  }
+
   // Numeric sequence extraction or deterministic hash from UUID / legacy string
   let seq = 1;
   const numMatch = str.match(/\d+/g);

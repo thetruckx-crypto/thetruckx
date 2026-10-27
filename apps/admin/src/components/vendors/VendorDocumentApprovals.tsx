@@ -23,7 +23,7 @@ import {
   User,
   ExternalLink
 } from 'lucide-react';
-import { supabase } from '../../utils/supabase';
+import { supabase, ensureAdminSession } from '../../utils/supabase';
 
 interface DocumentApprovalsProps {
   initialVendorId?: string;
@@ -64,13 +64,49 @@ export const VendorDocumentApprovals: React.FC<DocumentApprovalsProps> = ({
   const loadDocuments = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. Fetch documents
+      await ensureAdminSession();
+      // 1. Fetch metadata mappings first
+      const { data: vendors } = await supabase
+        .from('vendor_companies')
+        .select('id, vendor_name, gstin, pan, status');
+      const vendorMap = new Map<string, any>();
+      (vendors || []).forEach((v) => vendorMap.set(v.id, v));
+
+      const { data: vLinks } = await supabase
+        .from('vendor_vehicle_links')
+        .select('vendor_id, vehicle_id, vehicles(registration_number)');
+      const vehicleToVendorMap = new Map<string, { vendorId: string; regNo: string }>();
+      (vLinks || []).forEach((l: any) => {
+        if (l.vehicle_id) {
+          const veh = Array.isArray(l.vehicles) ? l.vehicles[0] : l.vehicles;
+          vehicleToVendorMap.set(l.vehicle_id, {
+            vendorId: l.vendor_id,
+            regNo: veh?.registration_number || '',
+          });
+        }
+      });
+
+      const { data: drivers } = await supabase
+        .from('drivers')
+        .select('id, primary_vendor_id, full_name, name');
+      const driverToVendorMap = new Map<string, { vendorId: string; driverName: string }>();
+      (drivers || []).forEach((drv: any) => {
+        if (drv.id) {
+          driverToVendorMap.set(drv.id, {
+            vendorId: drv.primary_vendor_id,
+            driverName: drv.full_name || drv.name || '',
+          });
+        }
+      });
+
+      // 2. Fetch documents
       let docQuery = supabase
         .from('documents')
         .select(`
           id,
           reference_id,
           document_type,
+          file_name,
           file_url,
           verification_status,
           verified_by,
@@ -80,47 +116,65 @@ export const VendorDocumentApprovals: React.FC<DocumentApprovalsProps> = ({
         .order('created_at', { ascending: false });
 
       if (initialVendorId) {
-        docQuery = docQuery.eq('reference_id', initialVendorId);
+        const allowedRefs = [initialVendorId];
+        vehicleToVendorMap.forEach((val, vehId) => {
+          if (val.vendorId === initialVendorId) allowedRefs.push(vehId);
+        });
+        driverToVendorMap.forEach((val, drvId) => {
+          if (val.vendorId === initialVendorId) allowedRefs.push(drvId);
+        });
+        docQuery = docQuery.in('reference_id', allowedRefs);
       }
 
       const { data: docData, error: docErr } = await docQuery;
       if (docErr) throw docErr;
 
-      // 2. Fetch all vendors for metadata joining
-      const { data: vendors } = await supabase
-        .from('vendor_companies')
-        .select('id, vendor_name, gstin, pan, status');
-
-      const vendorMap = new Map<string, any>();
-      (vendors || []).forEach((v) => vendorMap.set(v.id, v));
-
       const mapped = (docData || []).map((d) => {
-        const v = vendorMap.get(d.reference_id);
-        const vendorName = v?.vendor_name || 'Vendor Partner';
-        const vendorIdDisplay = `VEN-${(d.reference_id || d.id).substring(0, 8).toUpperCase()}`;
+        let v = vendorMap.get(d.reference_id);
+        const vehInfo = vehicleToVendorMap.get(d.reference_id);
+        const drvInfo = driverToVendorMap.get(d.reference_id);
+
+        if (!v && vehInfo?.vendorId) {
+          v = vendorMap.get(vehInfo.vendorId);
+        } else if (!v && drvInfo?.vendorId) {
+          v = vendorMap.get(drvInfo.vendorId);
+        }
+
+        const vendorName = v?.vendor_name || (vehInfo ? 'Vendor Fleet Partner' : drvInfo ? 'Vendor Driver Partner' : 'Vendor Partner');
+        const resolvedVendorId = v?.id || vehInfo?.vendorId || drvInfo?.vendorId || d.reference_id;
+        const vendorIdDisplay = `VEN-${(resolvedVendorId || d.id).substring(0, 8).toUpperCase()}`;
 
         // Determine friendly document name and related entity
         let friendlyType = 'Business Registration';
-        let relatedTo: 'Vendor' | 'Vehicle' | 'Driver' = 'Vendor';
+        let relatedTo: 'Vendor' | 'Vehicle' | 'Driver' = vehInfo ? 'Vehicle' : drvInfo ? 'Driver' : 'Vendor';
         const rawType = (d.document_type || '').toUpperCase();
 
         if (rawType.includes('PAN')) {
           friendlyType = 'PAN Card';
           relatedTo = 'Vendor';
-        } else if (rawType.includes('RC') || rawType.includes('VEHICLE')) {
-          friendlyType = 'Vehicle RC';
+        } else if (rawType.includes('RC') || rawType === 'VEHICLE_RC') {
+          friendlyType = vehInfo?.regNo ? `[${vehInfo.regNo}] Vehicle RC` : 'Vehicle RC';
           relatedTo = 'Vehicle';
         } else if (rawType.includes('INSURANCE')) {
-          friendlyType = 'Insurance Certificate';
+          friendlyType = vehInfo?.regNo ? `[${vehInfo.regNo}] Insurance Certificate` : 'Insurance Certificate';
           relatedTo = 'Vehicle';
         } else if (rawType.includes('DL') || rawType.includes('DRIVER') || rawType.includes('LICENSE')) {
-          friendlyType = 'Driver License';
+          friendlyType = drvInfo?.driverName ? `[${drvInfo.driverName}] Driver License` : 'Driver License';
           relatedTo = 'Driver';
-        } else if (rawType.includes('FITNESS')) {
-          friendlyType = 'Fitness Certificate';
+        } else if (rawType.includes('FITNESS') || rawType.includes('C_BOOK')) {
+          friendlyType = vehInfo?.regNo ? `[${vehInfo.regNo}] Fitness / C-Book` : 'Fitness Certificate (C-Book)';
+          relatedTo = 'Vehicle';
+        } else if (rawType.includes('PERMIT')) {
+          friendlyType = vehInfo?.regNo ? `[${vehInfo.regNo}] Route Permit` : 'Route Permit';
+          relatedTo = 'Vehicle';
+        } else if (rawType.includes('PUC') || rawType.includes('POLLUTION')) {
+          friendlyType = vehInfo?.regNo ? `[${vehInfo.regNo}] Pollution Certificate (PUC)` : 'Pollution Certificate (PUC)';
           relatedTo = 'Vehicle';
         } else if (rawType.includes('GST') || rawType.includes('BUSINESS')) {
-          friendlyType = 'Business Registration';
+          friendlyType = 'GST Registration';
+          relatedTo = 'Vendor';
+        } else if (rawType.includes('CHEQUE') || rawType.includes('PASSBOOK')) {
+          friendlyType = 'Bank Cancelled Cheque';
           relatedTo = 'Vendor';
         }
 
@@ -157,7 +211,7 @@ export const VendorDocumentApprovals: React.FC<DocumentApprovalsProps> = ({
           id: d.id,
           referenceId: d.reference_id,
           documentType: friendlyType,
-          fileName: `${friendlyType.toLowerCase().replace(/\s+/g, '_')}.pdf`,
+          fileName: d.file_name || `${friendlyType.toLowerCase().replace(/\s+/g, '_')}.pdf`,
           fileUrl: d.file_url || null,
           vendorName,
           vendorIdDisplay,
@@ -293,21 +347,45 @@ export const VendorDocumentApprovals: React.FC<DocumentApprovalsProps> = ({
     if (!selectedDoc) return;
     setActionLoading(true);
     try {
+      await ensureAdminSession();
       const { error } = await supabase
         .from('documents')
         .update({
-          verification_status: 'APPROVED',
+          verification_status: 'VERIFIED',
           verified_by: 'Rahul (Admin)',
           rejection_reason: null,
+          verified_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         })
         .eq('id', selectedDoc.id);
 
       if (error) throw error;
 
+      // Recalculate vendor verification status
+      if (selectedDoc.reference_id && selectedDoc.reference_id.includes('-')) {
+        const { data: vDocs } = await supabase
+          .from('documents')
+          .select('verification_status')
+          .eq('reference_id', selectedDoc.reference_id);
+
+        const allVerified = vDocs && vDocs.length > 0 && vDocs.every((d) => d.verification_status === 'VERIFIED');
+        if (allVerified) {
+          await supabase
+            .from('vendor_companies')
+            .update({
+              status: 'APPROVED',
+              approved_by: 'Rahul (Admin)',
+              approved_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', selectedDoc.reference_id);
+        }
+      }
+
       showToast(`✅ ${selectedDoc.documentType} approved successfully.`);
       setSelectedDoc({
         ...selectedDoc,
-        status: 'Approved',
+        status: 'Verified',
         verifiedBy: 'Rahul (Admin)',
         verifiedAt: `${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}, ${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`,
       });
@@ -328,16 +406,30 @@ export const VendorDocumentApprovals: React.FC<DocumentApprovalsProps> = ({
     }
     setActionLoading(true);
     try {
+      await ensureAdminSession();
       const { error } = await supabase
         .from('documents')
         .update({
           verification_status: 'REJECTED',
           verified_by: 'Rahul (Admin)',
           rejection_reason: remarks.trim(),
+          updated_at: new Date().toISOString(),
         })
         .eq('id', selectedDoc.id);
 
       if (error) throw error;
+
+      // Mark vendor company for corrections/rejection
+      if (selectedDoc.reference_id && selectedDoc.reference_id.includes('-')) {
+        await supabase
+          .from('vendor_companies')
+          .update({
+            status: 'REJECTED',
+            rejection_reason: remarks.trim(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', selectedDoc.reference_id);
+      }
 
       showToast(`❌ ${selectedDoc.documentType} rejected.`);
       setSelectedDoc({

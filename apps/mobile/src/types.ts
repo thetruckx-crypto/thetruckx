@@ -12,6 +12,7 @@ export type ScreenId =
   | 'OTP'                     // 05. Verify OTP Screen
   | 'NOTIFICATION_PERMISSION' // 09. Notification Permission Screen
   | 'REGISTRATION_STATUS'     // 11. Registration & Account Status Screen
+  | 'WELCOME_TO_NECL'         // Welcome to NECL / Registration Successfully Completed Screen
   | 'PROFILE'                 // 12. Profile Screen
   | 'EDIT_PROFILE'            // 13. Edit Profile Screen
   | 'NOTIFICATIONS'           // 14. Notifications Screen
@@ -101,14 +102,23 @@ export type ScreenId =
 
 export interface VehicleRequirementGroup {
   id: string;
+  requirementEntryId?: string;
+  parentRequirementId?: string;
   transportMode: 'ROAD' | 'RAIL' | 'AIR' | 'SEA' | 'MULTIMODAL' | 'OTHER';
   vehicleTypeId: string;
   vehicleTypeName: string;
+  vehicleType?: string;
+  vehicleBodyType?: string;
   vehicleCategory?: string;
   tyreCount?: number;
   axleConfig?: string;
   payloadMt?: number;
+  capacityMt?: number | string;
+  requiresDimensions?: boolean;
   dimensions?: string;
+  dimensionsLength?: string;
+  dimensionsWidth?: string;
+  dimensionsHeight?: string;
   specialCapabilities?: string;
   isCustom?: boolean;
   customVehicleName?: string;
@@ -116,8 +126,18 @@ export interface VehicleRequirementGroup {
   requestedDate: string; // YYYY-MM-DD
   requestedTime: string; // e.g. 09:30 AM
   scheduleScope?: 'COMMON' | 'INDIVIDUAL';
+  handlingRequirement?: string;
+  handlingRequirements?: string[];
+  customHandlingRequirement?: string;
   specificHandlingReqs?: string[];
+  dispatchRequirement?: string;
+  customDispatchRequirement?: string;
+  targetBudget?: string;
+  vehicleBudget?: string;
+  instructions?: string;
   notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface CargoItemSpecification {
@@ -172,6 +192,11 @@ export interface TransportRequirementDraft {
   // Step 1: Vehicle & Loading Schedule
   transportMode?: string;
   vehicleTypeRequired: string;
+  vehicleType?: string;
+  vehicleBodyType?: string;
+  vehicleCapacityMt?: string | number;
+  requiresDimensions?: boolean;
+  numberOfVehicles?: number;
   vehicleCategory?: string;
   customVehicleType?: string;
   loadingDatetime: string;
@@ -188,38 +213,78 @@ export interface TransportRequirementDraft {
   // Multiple vehicle groups support
   vehicleGroups?: VehicleRequirementGroup[];
   totalVehiclesCount?: number;
+  totalRequirementEntriesCount?: number;
+  budgetScope?: 'OVERALL' | 'INDIVIDUAL';
 
-  // Step 2: Cargo Specifications
-  materialType: string;
+  // Step 2: Cargo Specifications & Overall Weight / Quantity
+  materialType?: string;
+  commodityType?: string;
+  materialDescription?: string;
   customCommodityName?: string;
-  requiredCapacityMt: number;
+  requiredCapacityMt?: number;
   weightValue?: number;
+  totalCargoWeight?: number;
   weightUnit?: 'MT' | 'kg';
-  packagingType: string;
+  totalQuantity?: number;
+  quantityUnit?: string;
+  unitCount?: number;
   numberOfUnits?: string;
   packageCount?: number;
+
+  // Package Details (Optional)
+  packagingType?: string;
+  packageType?: string;
   packagingUnit?: string;
   customPackagingUnit?: string;
   packagingModes?: string[];
+  packageMode?: string;
   customPackagingMode?: string;
+  packageDescription?: string;
+
+  // Dimensions & Cargo Properties (Optional)
   dimensionsLength?: string;
+  cargoLength?: string;
   dimensionsWidth?: string;
+  cargoWidth?: string;
   dimensionsHeight?: string;
+  cargoHeight?: string;
   dimensionsUnit?: 'ft' | 'cm' | 'm' | 'in';
+  dimensionUnit?: 'ft' | 'cm' | 'm' | 'in';
+  dimensions?: string;
   calculatedVolume?: number;
+  cargoVolume?: number;
+  cargoDescription?: string;
   isFragile?: boolean;
+  isStackable?: boolean;
   isTemperatureSensitive?: boolean;
   temperatureMin?: string;
   temperatureMax?: string;
   isLiquid?: boolean;
   isOversized?: boolean;
   isMoistureSensitive?: boolean;
+  specialHandlingInstructions?: string;
+
+  // Hazardous Cargo Details
   isHazardous?: boolean;
   hazardousName?: string;
+  hazardousMaterialName?: string;
   unNumber?: string;
   hazardClass?: string;
   packingGroup?: string;
+  safetyHandlingInstructions?: string;
+  requiredPrecautions?: string;
+  emergencyContact?: string;
+  emergencyInstructions?: string;
+  additionalHazardousInfo?: string;
   sdsDocumentUri?: string;
+
+  // Loading-Point Information
+  loadingPointWeightDeclared?: number;
+  loadingPointQuantityDeclared?: number;
+  loadingPointVerifiedWeight?: number;
+  loadingPointVerifiedQuantity?: number;
+  isMeasurementVerified?: boolean;
+
   transitInsuranceNeeded?: boolean;
   declaredCargoValue?: string;
   declaredValueCurrency?: string;
@@ -237,14 +302,14 @@ export interface TransportRequirementDraft {
   pickupCity: string;
   pickupState?: string;
   pickupPincode: string;
-  pickupContactName: string;
-  pickupContactPhone: string;
+  pickupContactName?: string;
+  pickupContactPhone?: string;
   destinationAddress: string;
   destinationCity: string;
   destinationState?: string;
   destinationPincode: string;
-  dropContactName: string;
-  dropContactPhone: string;
+  dropContactName?: string;
+  dropContactPhone?: string;
 
   // Step 3: Zero-Cost Google Maps Location Fields
   pickupGoogleMapsUrl?: string;
@@ -330,9 +395,46 @@ export interface VendorDocumentItem {
   title: string;
   fileName?: string;
   fileUrl?: string;
+  storagePath?: string;
+  fileSize?: string;
+  mimeType?: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   rejectionReason?: string;
   uploadedAt?: string;
+}
+
+export interface VendorVehicleDocumentItem {
+  id: string;
+  vehicleId: string;
+  registrationNumber: string;
+  docType: 'RC' | 'C_BOOK' | 'PERMIT' | 'INSURANCE' | 'PUC' | 'DRIVING_LICENCE';
+  title: string;
+  fileName?: string;
+  fileUrl?: string;
+  storagePath?: string;
+  fileSize?: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  rejectionReason?: string;
+  uploadedAt?: string;
+  driverName?: string;
+  driverPhone?: string;
+}
+
+export interface VendorVehicleConfig {
+  id: string;
+  registrationNumber?: string;
+  bodyType: 'Open Body' | 'Closed Body';
+  vehicleType: 'Lorry' | 'Trailer' | 'Van' | 'Heavy Carrier';
+  capacity: number;
+  capacityUnit: 'MT' | 'KG' | 'CBM';
+  vehicleCount: number;
+  ownership?: 'Owned' | 'Attached' | 'Both';
+  makeModel?: string;
+  rcNumber?: string;
+  driverName?: string;
+  driverPhone?: string;
+  driverLicence?: string;
+  documents?: VendorVehicleDocumentItem[];
 }
 
 export interface VendorRegistrationFormData {
@@ -347,15 +449,20 @@ export interface VendorRegistrationFormData {
   state: string;
   pincode: string;
   contactPerson: string;
-  email: string;
+  email?: string;
   phone: string;
   altPhone?: string;
   operatingHubs: string[];
+  manualOperatingLocations?: string[];
   interstatePermits: string[];
-  fleetStrength: string;
-  truckCategories: string[];
+  fleetStrength?: string;
+  totalFleetCount?: number;
+  fleetOwnership?: 'Owned' | 'Attached' | 'Both';
+  truckCategories?: string[];
+  vehicleConfigs?: VendorVehicleConfig[];
   servicesOffered: string[];
   documents: VendorDocumentItem[];
+  fleetDocuments?: VendorVehicleDocumentItem[];
 }
 
 export interface DriverDocumentItem {
@@ -371,39 +478,47 @@ export interface DriverDocumentItem {
 }
 
 export interface DriverRegistrationFormData {
-  // Personal Info
+  // Single-Screen Mandatory & Core Fields
   fullName: string;
-  fatherName?: string;
   phone: string;
-  email?: string;
-  dateOfBirth?: string;
-  bloodGroup?: string;
-  address: string;
-  city: string;
-  state: string;
-  pincode: string;
-  emergencyContactName: string;
-  emergencyContactPhone: string;
-  // Driving Licence
-  licenceNumber: string;
-  licenceExpiryDate: string;
-  rtoState: string;
-  vehicleCategory: string;
-  badgeNumber?: string;
-  // Vehicle / Vendor Association
-  associationType: 'VENDOR_FLEET' | 'INDEPENDENT_ATTACHED';
+  dateOfBirth: string;
+  dlFrontUri?: string;
+  dlBackUri?: string;
+  aadhaarFrontUri?: string;
+  aadhaarBackUri?: string;
   primaryVendorId?: string;
+  selectedVendorName?: string;
+  selectedVendorCode?: string;
+
+  // Optional / Legacy fields
+  fatherName?: string;
+  email?: string;
+  bloodGroup?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  licenceNumber?: string;
+  licenceExpiryDate?: string;
+  rtoState?: string;
+  vehicleCategory?: string;
+  badgeNumber?: string;
+  associationType?: 'VENDOR_FLEET' | 'INDEPENDENT_ATTACHED';
   transporterName?: string;
   vehicleRegistrationNumber?: string;
   vehicleType?: string;
-  // Documents
-  documents: DriverDocumentItem[];
+  documents?: DriverDocumentItem[];
 }
 
 export interface DriverTripItem {
   id: string;
+  tripCode?: string;
   bookingId: string;
-  tripStatus: 'LORRY_ASSIGNED' | 'AT_LOADING' | 'IN_TRANSIT' | 'AT_UNLOADING' | 'DELIVERED' | 'COMPLETED';
+  driverId?: string;
+  driverName?: string;
+  tripStatus: 'CREATED' | 'LORRY_ASSIGNED' | 'DISPATCHED' | 'AT_LOADING' | 'IN_TRANSIT' | 'AT_UNLOADING' | 'DELIVERED' | 'COMPLETED' | string;
   origin: string;
   destination: string;
   pickupAddress: string;
@@ -422,6 +537,9 @@ export interface DriverTripItem {
   vehicleNumber: string;
   vehicleType: string;
   rate?: number;
+  lrNumber?: string;
+  ewaybillNumber?: string;
+  dispatchedAt?: string;
   startedAt?: string;
   completedAt?: string;
   weighmentLoadingGross?: number;
@@ -438,4 +556,202 @@ export interface DriverTripItem {
     uploadedAt?: string;
   }[];
 }
+
+// ============================================================================
+// PHASE 10: e-POD, WEIGHBRIDGE & DAMAGE CLAIMS TYPES
+// ============================================================================
+
+export interface EpodSubmission {
+  id: string;
+  tripId: string;
+  receiverName: string;
+  receiverPhone?: string;
+  receivedAt: string;
+  deliveredCondition: 'CLEAN' | 'SHORTAGE' | 'DAMAGED' | 'PARTIAL';
+  consigneeStampVerified: boolean;
+  podDocumentUrl?: string;
+  signatureUrl?: string;
+  remarks?: string;
+  reviewStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
+  reviewedBy?: string;
+  reviewedAt?: string;
+  rejectionReason?: string;
+}
+
+export interface EpodSubmitPayload {
+  receiverName: string;
+  receiverPhone?: string;
+  deliveredCondition?: 'CLEAN' | 'SHORTAGE' | 'DAMAGED' | 'PARTIAL';
+  consigneeStampVerified?: boolean;
+  podDocumentUrl?: string;
+  signatureUrl?: string;
+  remarks?: string;
+  submittedBy?: string;
+}
+
+export interface WeighmentRecord {
+  id: string;
+  tripId: string;
+  stage: 'LOADING' | 'UNLOADING';
+  grossWeightMt: number;
+  tareWeightMt: number;
+  netWeightMt: number;
+  slipNumber?: string;
+  slipLocation?: string;
+  slipDocumentUrl?: string;
+  varianceMt?: number;
+  variancePercentage?: number;
+  status: 'MATCHED' | 'TOLERANCE_ACCEPTED' | 'DISCREPANCY' | 'REJECTED';
+  weighbridgeName?: string;
+  recordedAt: string;
+}
+
+export interface WeighmentRecordPayload {
+  stage: 'LOADING' | 'UNLOADING';
+  grossWeightMt: number;
+  tareWeightMt: number;
+  slipNumber?: string;
+  slipLocation?: string;
+  slipDocumentUrl?: string;
+  weighbridgeName?: string;
+  recordedBy?: string;
+}
+
+export interface DamageClaim {
+  id: string;
+  claimCode: string;
+  tripId: string;
+  bookingId?: string;
+  claimType: 'DAMAGE' | 'SHORTAGE' | 'TRANSIT_LOSS' | 'CONTAMINATION' | 'PILFERAGE' | 'DELAY';
+  claimedAmount: number;
+  approvedAmount?: number;
+  itemDescription?: string;
+  damagedQuantity?: number;
+  evidenceUrls?: string[];
+  status: 'SUBMITTED' | 'UNDER_INVESTIGATION' | 'APPROVED' | 'REJECTED' | 'SETTLED';
+  settlementNotes?: string;
+  submittedAt: string;
+  resolvedAt?: string;
+}
+
+export interface DamageClaimPayload {
+  claimType: 'DAMAGE' | 'SHORTAGE' | 'TRANSIT_LOSS' | 'CONTAMINATION' | 'PILFERAGE' | 'DELAY';
+  claimedAmount: number;
+  itemDescription?: string;
+  damagedQuantity?: number;
+  evidenceUrls?: string[];
+  submittedBy?: string;
+}
+
+// ============================================================================
+// PHASE 11: COMMERCIAL INVOICING, TRANSPORTER PAYOUTS & TDS RECONCILIATION
+// ============================================================================
+
+export interface ClientInvoice {
+  id: string;
+  invoiceNumber: string;
+  bookingId: string;
+  baseAmount: number;
+  loadingDetention: number;
+  unloadingDetention: number;
+  platformFee: number;
+  taxableAmount: number;
+  gstRatePercent: number;
+  isInterstate: boolean;
+  cgstAmount: number;
+  sgstAmount: number;
+  igstAmount: number;
+  totalTax: number;
+  totalAmount: number;
+  amountPaid: number;
+  balanceDue: number;
+  paymentStatus: 'PAYMENT_PENDING' | 'PARTIALLY_PAID' | 'PAID' | 'OVERDUE' | 'CANCELLED';
+  dueDate: string;
+  creditTerms: string;
+  invoiceUrl?: string;
+  createdAt: string;
+}
+
+export interface GenerateInvoicePayload {
+  bookingId: string;
+  loadingDetention?: number;
+  unloadingDetention?: number;
+  platformFee?: number;
+  creditDays?: number;
+  generatedBy?: string;
+}
+
+export interface PaymentRecord {
+  id: string;
+  bookingId?: string;
+  amountCollected: number;
+  paymentDate: string;
+  paymentMode: 'NEFT' | 'RTGS' | 'IMPS' | 'UPI' | 'CHEQUE' | 'BANK_TRANSFER';
+  transactionReference: string;
+  notes?: string;
+  recordedBy?: string;
+  createdAt: string;
+}
+
+export interface RecordPaymentPayload {
+  amount: number;
+  paymentMode?: 'NEFT' | 'RTGS' | 'IMPS' | 'UPI' | 'CHEQUE' | 'BANK_TRANSFER';
+  transactionReference: string;
+  paymentDate?: string;
+  notes?: string;
+  recordedBy?: string;
+}
+
+export interface TransporterPayout {
+  id: string;
+  payoutNumber: string;
+  tripId: string;
+  vendorRate: number;
+  tdsSection: '194C';
+  tdsRatePercent: number;
+  tdsDeductedAmount: number;
+  advancePaidAmount: number;
+  claimDeductionAmount: number;
+  otherDeductions: number;
+  netPayableAmount: number;
+  amountDisbursed: number;
+  payoutStatus: 'PENDING' | 'PROCESSED' | 'DISBURSED' | 'ON_HOLD' | 'REJECTED';
+  disbursalDate?: string;
+  bankReferenceUtr?: string;
+  paymentMethod?: string;
+  payoutSlipUrl?: string;
+  createdAt: string;
+}
+
+export interface GeneratePayoutPayload {
+  tripId: string;
+  advancePaid?: number;
+  claimDeduction?: number;
+  otherDeductions?: number;
+  generatedBy?: string;
+}
+
+export interface RecordDisbursalPayload {
+  bankReferenceUtr: string;
+  paymentMethod?: string;
+  amountDisbursed?: number;
+  disbursedBy?: string;
+}
+
+export interface FinancialReconciliation {
+  totalClientBilled: number;
+  totalClientCollected: number;
+  totalClientOutstanding: number;
+  totalGstLiability: number;
+  totalTransporterPayable: number;
+  totalTransporterDisbursed: number;
+  totalTransporterOutstanding: number;
+  totalTdsDeducted: number;
+  grossPlatformMargin: number;
+  reconciliationVariance: number;
+  invoicesCount: number;
+  payoutsCount: number;
+}
+
+
 

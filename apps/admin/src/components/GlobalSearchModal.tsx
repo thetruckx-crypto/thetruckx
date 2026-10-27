@@ -57,13 +57,13 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
         { data: boks },
         { data: docs }
       ] = await Promise.all([
-        supabase.from('client_companies').select('*'),
-        supabase.from('vendor_companies').select('*'),
-        supabase.from('vehicles').select('*'),
-        supabase.from('drivers').select('*'),
-        supabase.from('requirements').select('*, client_companies(company_name)'),
-        supabase.from('bookings').select('*, client_companies(company_name)'),
-        supabase.from('documents').select('*').limit(10),
+        supabase.from('client_companies').select('*').limit(50),
+        supabase.from('vendor_companies').select('*').limit(50),
+        supabase.from('vehicles').select('*').limit(50),
+        supabase.from('drivers').select('*').limit(50),
+        supabase.from('requirements').select('*, client_companies(company_name)').limit(50),
+        supabase.from('bookings').select('*, client_companies(company_name)').limit(50),
+        supabase.from('documents').select('*').limit(20),
       ]);
 
       const entities: SearchEntity[] = [];

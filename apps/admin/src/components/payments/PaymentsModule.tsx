@@ -81,15 +81,36 @@ export const PaymentsModule: React.FC = () => {
     setSaving(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from("payment_records").insert({
-        booking_id: selectedBooking.id,
-        amount,
-        payment_date: paymentForm.date,
-        payment_mode: paymentForm.mode,
-        reference_number: paymentForm.reference || null,
-        notes: paymentForm.notes || null,
-        recorded_by: user?.id,
-      });
+      let insertError = null;
+      try {
+        const { error } = await supabase.from("payment_records").insert({
+          booking_id: selectedBooking.id,
+          amount_collected: amount,
+          payment_date: paymentForm.date,
+          payment_mode: paymentForm.mode,
+          transaction_reference: paymentForm.reference || null,
+          recorded_by: user?.id || "admin-system",
+        });
+        insertError = error;
+      } catch (e: any) {
+        insertError = e;
+      }
+
+      if (insertError && (insertError.message?.includes("column") || insertError.message?.includes("schema cache"))) {
+        // Fallback for legacy column naming
+        const { error: altErr } = await supabase.from("payment_records").insert({
+          booking_id: selectedBooking.id,
+          amount,
+          payment_date: paymentForm.date,
+          payment_mode: paymentForm.mode,
+          reference_number: paymentForm.reference || null,
+          notes: paymentForm.notes || null,
+          recorded_by: user?.id,
+        });
+        if (altErr) throw altErr;
+      } else if (insertError) {
+        throw insertError;
+      }
       const newReceived = selectedBooking.amount_received + amount;
       const newStatus = newReceived >= selectedBooking.grand_total ? "PAID" : "PARTIALLY_PAID";
       await supabase.from("bookings").update({ amount_received: newReceived, payment_status: newStatus }).eq("id", selectedBooking.id);

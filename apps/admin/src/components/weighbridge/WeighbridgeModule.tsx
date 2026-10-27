@@ -68,12 +68,14 @@ export const WeighbridgeModule: React.FC<WeighbridgeModuleProps> = () => {
 
       // For LOADING tab: fetch IN_TRANSIT trips without loading weighment
       // For UNLOADING tab: fetch PENDING_UNLOADING trips without unloading weighment
-      let query = supabase.from("trips").select("*");
+      let query = supabase.from("trips").select("*")
+        .order("created_at", { ascending: false })
+        .limit(100);
 
       if (activeTab === "LOADING") {
-        query = query.eq("trip_status", "IN_TRANSIT");
+        query = query.in("trip_status", ["AT_LOADING", "IN_TRANSIT", "LORRY_ASSIGNED"]);
       } else {
-        query = query.eq("trip_status", "PENDING_UNLOADING");
+        query = query.in("trip_status", ["AT_UNLOADING", "PENDING_UNLOADING", "DELIVERED"]);
       }
 
       const { data: tripsData, error: tErr } = await query;
@@ -363,7 +365,7 @@ export const WeighbridgeModule: React.FC<WeighbridgeModuleProps> = () => {
                   background: "#FFFFFF", padding: "1.5rem", borderRadius: "8px", maxWidth: "80%", boxShadow: "0 10px 30px rgba(0,0,0,0.5)"
                 }}>
                   <div style={{ borderBottom: "2px dashed #CBD5E1", width: "100%", paddingBottom: "8px", marginBottom: "8px", textAlign: "center" }}>
-                    <div style={{ fontSize: "12px", fontWeight: 800, color: "#0F172A", letterSpacing: "1px" }}>NORTH EASTERN CARRIERS</div>
+                    <div style={{ fontSize: "12px", fontWeight: 800, color: "#0F172A", letterSpacing: "1px" }}>TRUCKS</div>
                     <div style={{ fontSize: "10px", color: "#64748B" }}>WEIGHBRIDGE MEMO SLIP</div>
                   </div>
                   <div style={{ fontSize: "11px", color: "#334155", width: "100%", lineHeight: "1.6" }}>

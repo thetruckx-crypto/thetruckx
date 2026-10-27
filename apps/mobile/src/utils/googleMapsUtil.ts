@@ -1,5 +1,5 @@
 /**
- * Zero-Cost Google Maps Utility for North Eastern Carriers
+ * Zero-Cost Google Maps Utility for TRUCKS Logistics
  *
  * Utilizes standard public Google Maps URLs for search and directions without paid APIs
  * (zero Google Maps API costs, zero Autocomplete charges, zero Geocoding charges).

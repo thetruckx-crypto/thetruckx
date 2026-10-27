@@ -8,12 +8,13 @@ import {
   Check, Globe, ExternalLink, ShieldCheck, MoreVertical, Eye, RotateCcw,
   Search, ArrowUpDown, ChevronLeft, ChevronRight, CheckCircle2, AlertTriangle, Info
 } from "lucide-react";
-import { supabase } from "../../utils/supabase";
+import { supabase, ensureAdminSession } from "../../utils/supabase";
 import { useAuth } from "../../context/AuthContext";
 import { DocumentPreviewModal } from "../common/DocumentPreviewModal";
 import { resolveClientDocumentType } from "./ClientDirectory";
 import { formatDisplayId, generateDbNeclId } from "../../utils/idGenerator";
 import { EditClientModal } from "./EditClientModal";
+import { apiFetch } from "../../utils/api";
 
 interface ClientProfileProps {
   clientId: string;
@@ -42,12 +43,20 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
   const [clientQuotes, setClientQuotes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reqFetchError, setReqFetchError] = useState<string | null>(null);
+  const [bokFetchError, setBokFetchError] = useState<string | null>(null);
+  const [docFetchError, setDocFetchError] = useState<string | null>(null);
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<ProfileTab>("overview");
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [copiedGst, setCopiedGst] = useState(false);
   const [copiedClientId, setCopiedClientId] = useState(false);
   const [copiedPan, setCopiedPan] = useState(false);
   const [copiedBookingId, setCopiedBookingId] = useState<string | null>(null);
+
+  // Requirement history search and filter state
+  const [reqSearch, setReqSearch] = useState("");
+  const [reqStatusFilter, setReqStatusFilter] = useState("ALL");
 
   // Booking table search, filter, and pagination states
   const [bookingSearch, setBookingSearch] = useState("");
@@ -78,6 +87,7 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
     | "VIEW_MAP"
     | "REJECT_REG"
     | "REQUEST_CORRECTIONS"
+    | "SUSPEND_CLIENT"
     | "REJECT_DOC"
     | "REPLACE_DOC"
     | null
@@ -85,11 +95,19 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
 
   // Form states for creating real DB rows
   const [newReqForm, setNewReqForm] = useState({
-    origin: "Visakhapatnam Port",
-    destination: "Hyderabad Logistics Depot",
+    origin: "",
+    originPincode: "",
+    originCity: "",
+    destination: "",
+    destinationPincode: "",
+    destinationCity: "",
     material: "Industrial Goods",
-    truckType: "16 Wheeler",
-    capacityMt: "35"
+    truckType: "16 Wheeler (35 MT)",
+    capacityMt: "35",
+    vehicleQuantity: "1",
+    loadingDate: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
+    loadingTime: "10:00",
+    specialInstructions: ""
   });
 
   const [messageText, setMessageText] = useState("");
@@ -101,6 +119,7 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
     setError(null);
 
     try {
+      await ensureAdminSession();
       // 1. Fetch Company
       let compData: any = null;
       if (clientId) {
@@ -112,10 +131,14 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
 
         if (cErr) throw cErr;
         compData = data;
-      }
 
-      // If no ID matched, fetch the first available company from DB
-      if (!compData) {
+        if (!compData) {
+          setError(`Client company with ID "${clientId}" was not found in the database.`);
+          setLoading(false);
+          return;
+        }
+      } else {
+        // Only if no clientId was provided at all, fetch first available company
         const { data: firstComp } = await supabase
           .from("client_companies")
           .select("*")
@@ -132,6 +155,14 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
 
       setClient(compData);
 
+      // Pre-fill requirement form defaults from client company profile
+      setNewReqForm(prev => ({
+        ...prev,
+        origin: prev.origin || compData.registered_address || compData.city || "",
+        originPincode: prev.originPincode || compData.pincode || "",
+        originCity: prev.originCity || compData.city || ""
+      }));
+
       // 2. Fetch Contacts from client_users
       const { data: userRows } = await supabase
         .from("client_users")
@@ -142,14 +173,22 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
       setContacts(userRows || []);
 
       // 3. Fetch real requirements from requirements table
-      const { data: reqRows } = await supabase
+      const { data: reqRows, error: rErr } = await supabase
         .from("requirements")
         .select("*")
         .eq("client_id", compData.id)
         .order("created_at", { ascending: false });
 
+      if (rErr) {
+        console.error("Requirements query error:", rErr);
+        setReqFetchError(rErr.message);
+        setRequirements([]);
+      } else {
+        setReqFetchError(null);
+        setRequirements(reqRows || []);
+      }
+
       const clientReqs = reqRows || [];
-      setRequirements(clientReqs);
 
       // Fetch client quotes associated with these requirements
       let quotesList: any[] = [];
@@ -290,13 +329,33 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
       }
 
       // 5. Fetch compliance documents from documents table
-      const { data: docRows } = await supabase
+      const { data: docRows, error: docErr } = await supabase
         .from("documents")
         .select("*")
         .eq("reference_id", compData.id)
         .order("created_at", { ascending: true });
 
-      setDocuments(docRows || []);
+      if (docErr) {
+        console.error("Documents query error:", docErr);
+        setDocFetchError(docErr.message);
+        setDocuments([]);
+      } else {
+        setDocFetchError(null);
+        setDocuments(docRows || []);
+      }
+
+      // 6. Fetch audit logs for Activity tab
+      try {
+        const { data: aData } = await supabase
+          .from("auth_audit_log")
+          .select("*")
+          .or(`user_id.eq.${compData.id},details->>companyId.eq.${compData.id},details->>clientId.eq.${compData.id}`)
+          .order("created_at", { ascending: false })
+          .limit(30);
+        setAuditLogs(aData || []);
+      } catch (aErr) {
+        console.warn("Audit logs query notice:", aErr);
+      }
     } catch (err: any) {
       console.error("Error loading client from database:", err);
       setError(err.message || "Failed to load client data from database");
@@ -367,6 +426,21 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
     return list;
   }, [bookings, bookingStatusFilter, bookingSearch, bookingDateSort]);
 
+  // Filtered requirements for History tab search & status filter
+  const filteredClientRequirements = useMemo(() => {
+    return requirements.filter(r => {
+      const q = reqSearch.toLowerCase().trim();
+      const matchesSearch = !q ||
+        r.id?.toLowerCase().includes(q) ||
+        r.material_type?.toLowerCase().includes(q) ||
+        r.pickup_address?.toLowerCase().includes(q) ||
+        r.destination_address?.toLowerCase().includes(q) ||
+        r.vehicle_type?.toLowerCase().includes(q);
+      const matchesStatus = reqStatusFilter === "ALL" || r.status === reqStatusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [requirements, reqSearch, reqStatusFilter]);
+
   const BOOKINGS_PAGE_SIZE = 5;
   const totalBookingPages = Math.max(1, Math.ceil(filteredClientBookings.length / BOOKINGS_PAGE_SIZE));
   const paginatedClientBookings = useMemo(() => {
@@ -391,7 +465,15 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
 
   // Compliance verification stats (mandatory vs optional documents + profile completion)
   const complianceStats = useMemo(() => {
-    const mandatoryDocTypes = ["GST_CERTIFICATE", "COMPANY_PAN", "INCORPORATION_PROOF"];
+    const hasGst = documents.some(d => resolveClientDocumentType(d).key === "GST_CERTIFICATE");
+    const hasPan = documents.some(d => resolveClientDocumentType(d).key === "COMPANY_PAN");
+    const hasInc = documents.some(d => resolveClientDocumentType(d).key === "INCORPORATION_PROOF");
+
+    // GST and PAN are mandatory for all clients; Certificate of Incorporation is mandatory only if attached/applicable
+    const mandatoryDocTypes = hasInc
+      ? ["GST_CERTIFICATE", "COMPANY_PAN", "INCORPORATION_PROOF"]
+      : ["GST_CERTIFICATE", "COMPANY_PAN"];
+
     const mandatoryDocs = documents.filter(d => mandatoryDocTypes.includes(resolveClientDocumentType(d).key));
     const verifiedMandatory = mandatoryDocs.filter(
       d => d.verification_status === "VERIFIED" || d.verification_status === "APPROVED"
@@ -406,15 +488,22 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
 
     const isProfileComplete = client?.profile_completion_status !== "INCOMPLETE";
 
-    // All mandatory docs present and verified, no rejections, no pending client uploads, and profile complete
+    // All core mandatory docs present and verified, no rejections, no pending client uploads, and profile complete
     const isEligibleForApproval =
+      hasGst &&
+      hasPan &&
       documents.length > 0 &&
       pendingDocs.length === 0 &&
       pendingUploadDocs.length === 0 &&
       rejectedDocs.length === 0 &&
-      mandatoryDocs.length >= 3 &&
+      mandatoryDocs.length >= 2 &&
       verifiedMandatory.length === mandatoryDocs.length &&
       isProfileComplete;
+
+    const gstDoc = documents.find(d => resolveClientDocumentType(d).key === "GST_CERTIFICATE");
+    const panDoc = documents.find(d => resolveClientDocumentType(d).key === "COMPANY_PAN");
+    const isGstVerified = gstDoc?.verification_status === "VERIFIED" || gstDoc?.verification_status === "APPROVED";
+    const isPanVerified = panDoc?.verification_status === "VERIFIED" || panDoc?.verification_status === "APPROVED";
 
     return {
       mandatoryDocTypes,
@@ -425,6 +514,10 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
       pendingUploadDocs,
       isProfileComplete,
       isEligibleForApproval,
+      gstDoc,
+      panDoc,
+      isGstVerified,
+      isPanVerified,
       totalCount: documents.length,
       verifiedCount: documents.filter(
         d => d.verification_status === "VERIFIED" || d.verification_status === "APPROVED"
@@ -575,8 +668,14 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
     }
   };
 
-  // Registration Decision Handlers (Phase 8)
+  // Registration Decision Handlers (Phase 8 & Remediation)
   const handleApproveRegistration = async () => {
+    if (client.status === "APPROVED" || client.status === "ACTIVE") {
+      setToastMsg("Client registration is already approved and active.");
+      setTimeout(() => setToastMsg(null), 3000);
+      return;
+    }
+
     if (!complianceStats.isProfileComplete) {
       const missing = Array.isArray(client?.incomplete_fields) && client.incomplete_fields.length > 0
         ? client.incomplete_fields.join(", ")
@@ -600,7 +699,7 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
 
     if (!complianceStats.isEligibleForApproval) {
       setApprovalWarning(
-        "Cannot approve registration: All mandatory compliance documents (GST Certificate, Company PAN, and Incorporation Proof) must be submitted and verified first."
+        "Cannot approve registration: Core compliance documents (GST Certificate and Company PAN, plus Certificate of Incorporation when applicable) must be submitted and verified first."
       );
       setToastMsg("Approval blocked: Mandatory compliance documents unverified.");
       setTimeout(() => setToastMsg(null), 3500);
@@ -610,10 +709,28 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
     setIsSubmittingAction(true);
     setApprovalWarning(null);
     try {
+      // 1. Notify Backend API
+      try {
+        const phone = client.company_phone?.replace(/[^0-9]/g, "").slice(-10) || primaryContact?.mobile?.replace(/[^0-9]/g, "").slice(-10);
+        await apiFetch("/client/admin-review", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            companyId: client.id,
+            mobile: phone,
+            decision: "APPROVED",
+            reviewerName: adminProfile?.name || "NECL Compliance Desk"
+          })
+        });
+      } catch (apiErr) {
+        console.warn("Backend API dispatch notice:", apiErr);
+      }
+
+      // 2. Direct Supabase Update
       const { data: rpcData, error: rpcErr } = await supabase.rpc("admin_review_client_registration", {
         p_company_id: client.id,
         p_decision: "APPROVED",
-        p_reviewer_name: "NECL Compliance Desk"
+        p_reviewer_name: adminProfile?.name || "NECL Compliance Desk"
       });
 
       if (rpcErr || (rpcData && !rpcData.success)) {
@@ -626,15 +743,16 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
           return;
         }
 
-        // Direct fallback update: Try APPROVED first, fall back to ACTIVE if schema requires
+        // Direct fallback update
         const { error: updErr } = await supabase
           .from("client_companies")
           .update({
             status: "APPROVED",
             approved_at: new Date().toISOString(),
-            approved_by: "NECL Compliance Desk",
+            approved_by: adminProfile?.name || "NECL Compliance Desk",
             rejection_reason: null,
-            correction_notes: null
+            correction_notes: null,
+            updated_at: new Date().toISOString()
           })
           .eq("id", client.id);
 
@@ -650,13 +768,26 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
 
         await supabase
           .from("client_users")
-          .update({ status: "ACTIVE" })
-          .eq("client_id", client.id);
+          .update({ status: "APPROVED" })
+          .or(`client_id.eq.${client.id},client_company_id.eq.${client.id}`);
       }
+
+      try {
+        await supabase.from("auth_audit_log").insert([{
+          user_id: adminProfile?.id || "admin",
+          user_type: "ADMIN",
+          event_type: "CLIENT_REGISTRATION_APPROVED",
+          details: {
+            companyId: client.id,
+            companyName: client.company_name,
+            reviewerName: adminProfile?.name || "NECL Compliance Desk"
+          }
+        }]);
+      } catch {}
 
       setToastMsg("Client registration APPROVED! Dashboard access granted to client.");
       setTimeout(() => setToastMsg(null), 3500);
-      await loadClientDetailsFromDB();
+      await loadClientDetailsFromDB(true);
     } catch (err: any) {
       console.error("Approve client error:", err);
       setToastMsg(`Failed to approve: ${err.message}`);
@@ -667,18 +798,45 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
   };
 
   const handleRequestCorrections = async () => {
-    if (!actionReason.trim()) {
-      setToastMsg("Please provide correction instructions for the client.");
-      setTimeout(() => setToastMsg(null), 2500);
+    const cleanReason = actionReason.trim();
+    if (!cleanReason || cleanReason.length < 5) {
+      setToastMsg("Please provide clear correction instructions (min 5 characters).");
+      setTimeout(() => setToastMsg(null), 3000);
       return;
     }
+
+    if (client.status === "APPROVED" || client.status === "ACTIVE") {
+      setToastMsg("Active approved clients cannot be placed in initial corrections state. Use account suspension if necessary.");
+      setTimeout(() => setToastMsg(null), 3500);
+      return;
+    }
+
     setIsSubmittingAction(true);
     try {
+      // 1. Notify Backend API
+      try {
+        const phone = client.company_phone?.replace(/[^0-9]/g, "").slice(-10) || primaryContact?.mobile?.replace(/[^0-9]/g, "").slice(-10);
+        await apiFetch("/client/admin-review", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            companyId: client.id,
+            mobile: phone,
+            decision: "CORRECTIONS_REQUESTED",
+            notes: cleanReason,
+            reviewerName: adminProfile?.name || "NECL Compliance Desk"
+          })
+        });
+      } catch (apiErr) {
+        console.warn("Backend API sync notice:", apiErr);
+      }
+
+      // 2. Direct Supabase Update
       const { error: rpcErr } = await supabase.rpc("admin_review_client_registration", {
         p_company_id: client.id,
         p_decision: "CORRECTIONS_REQUESTED",
-        p_reason: actionReason.trim(),
-        p_reviewer_name: "NECL Compliance Desk"
+        p_reason: cleanReason,
+        p_reviewer_name: adminProfile?.name || "NECL Compliance Desk"
       });
 
       if (rpcErr) {
@@ -686,21 +844,36 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
           .from("client_companies")
           .update({
             status: "CORRECTIONS_REQUESTED",
-            correction_notes: actionReason.trim()
+            correction_notes: cleanReason,
+            updated_at: new Date().toISOString()
           })
           .eq("id", client.id);
 
         await supabase
           .from("client_users")
           .update({ status: "CORRECTIONS_REQUESTED" })
-          .eq("client_id", client.id);
+          .or(`client_id.eq.${client.id},client_company_id.eq.${client.id}`);
       }
+
+      try {
+        await supabase.from("auth_audit_log").insert([{
+          user_id: adminProfile?.id || "admin",
+          user_type: "ADMIN",
+          event_type: "CLIENT_CORRECTIONS_REQUESTED",
+          details: {
+            companyId: client.id,
+            companyName: client.company_name,
+            notes: cleanReason,
+            reviewerName: adminProfile?.name || "NECL Compliance Desk"
+          }
+        }]);
+      } catch {}
 
       setToastMsg("Corrections requested. Client notified in mobile app.");
       setTimeout(() => setToastMsg(null), 3000);
       setActiveModal(null);
       setActionReason("");
-      await loadClientDetailsFromDB();
+      await loadClientDetailsFromDB(true);
     } catch (err: any) {
       console.error("Request corrections error:", err);
       setToastMsg(`Error: ${err.message}`);
@@ -711,18 +884,45 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
   };
 
   const handleRejectRegistration = async () => {
-    if (!actionReason.trim()) {
-      setToastMsg("Please provide a rejection reason.");
-      setTimeout(() => setToastMsg(null), 2500);
+    const cleanReason = actionReason.trim();
+    if (!cleanReason || cleanReason.length < 5) {
+      setToastMsg("Please provide a valid rejection reason (min 5 characters).");
+      setTimeout(() => setToastMsg(null), 3000);
       return;
     }
+
+    if (client.status === "APPROVED" || client.status === "ACTIVE") {
+      setToastMsg("Active approved clients cannot be rejected via initial registration rejection. Use 'Suspend Account' instead.");
+      setTimeout(() => setToastMsg(null), 3500);
+      return;
+    }
+
     setIsSubmittingAction(true);
     try {
+      // 1. Notify Backend API
+      try {
+        const phone = client.company_phone?.replace(/[^0-9]/g, "").slice(-10) || primaryContact?.mobile?.replace(/[^0-9]/g, "").slice(-10);
+        await apiFetch("/client/admin-review", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            companyId: client.id,
+            mobile: phone,
+            decision: "REJECTED",
+            reason: cleanReason,
+            reviewerName: adminProfile?.name || "NECL Compliance Desk"
+          })
+        });
+      } catch (apiErr) {
+        console.warn("Backend API sync notice:", apiErr);
+      }
+
+      // 2. Direct Supabase Update
       const { error: rpcErr } = await supabase.rpc("admin_review_client_registration", {
         p_company_id: client.id,
         p_decision: "REJECTED",
-        p_reason: actionReason.trim(),
-        p_reviewer_name: "NECL Compliance Desk"
+        p_reason: cleanReason,
+        p_reviewer_name: adminProfile?.name || "NECL Compliance Desk"
       });
 
       if (rpcErr) {
@@ -730,25 +930,180 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
           .from("client_companies")
           .update({
             status: "REJECTED",
-            rejection_reason: actionReason.trim(),
+            rejection_reason: cleanReason,
             rejected_at: new Date().toISOString(),
-            rejected_by: "NECL Compliance Desk"
+            rejected_by: adminProfile?.name || "NECL Compliance Desk",
+            updated_at: new Date().toISOString()
           })
           .eq("id", client.id);
 
         await supabase
           .from("client_users")
           .update({ status: "REJECTED" })
-          .eq("client_id", client.id);
+          .or(`client_id.eq.${client.id},client_company_id.eq.${client.id}`);
       }
+
+      try {
+        await supabase.from("auth_audit_log").insert([{
+          user_id: adminProfile?.id || "admin",
+          user_type: "ADMIN",
+          event_type: "CLIENT_REGISTRATION_REJECTED",
+          details: {
+            companyId: client.id,
+            companyName: client.company_name,
+            reason: cleanReason,
+            reviewerName: adminProfile?.name || "NECL Compliance Desk"
+          }
+        }]);
+      } catch {}
 
       setToastMsg("Registration application marked as REJECTED.");
       setTimeout(() => setToastMsg(null), 3000);
       setActiveModal(null);
       setActionReason("");
-      await loadClientDetailsFromDB();
+      await loadClientDetailsFromDB(true);
     } catch (err: any) {
       console.error("Reject registration error:", err);
+      setToastMsg(`Error: ${err.message}`);
+      setTimeout(() => setToastMsg(null), 3000);
+    } finally {
+      setIsSubmittingAction(false);
+    }
+  };
+
+  const handleSuspendClient = async () => {
+    if (!client) return;
+    setIsSubmittingAction(true);
+    try {
+      const reason = actionReason.trim() || "Administrative account suspension";
+      const { error: upErr } = await supabase
+        .from("client_companies")
+        .update({
+          status: "SUSPENDED",
+          rejection_reason: reason,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", client.id);
+
+      if (upErr) throw upErr;
+
+      await supabase
+        .from("client_users")
+        .update({ status: "SUSPENDED" })
+        .or(`client_id.eq.${client.id},client_company_id.eq.${client.id}`);
+
+      try {
+        await supabase.from("auth_audit_log").insert([{
+          user_id: adminProfile?.id || "admin",
+          user_type: "ADMIN",
+          event_type: "CLIENT_ACCOUNT_SUSPENDED",
+          details: {
+            companyId: client.id,
+            companyName: client.company_name,
+            reason,
+            reviewerName: adminProfile?.name || "NECL Compliance Desk"
+          }
+        }]);
+      } catch {}
+
+      setToastMsg(`Client account for "${client.company_name}" has been SUSPENDED.`);
+      setTimeout(() => setToastMsg(null), 3000);
+      setActiveModal(null);
+      setActionReason("");
+      await loadClientDetailsFromDB(true);
+    } catch (err: any) {
+      console.error("Suspend client error:", err);
+      setToastMsg(`Error: ${err.message}`);
+      setTimeout(() => setToastMsg(null), 3000);
+    } finally {
+      setIsSubmittingAction(false);
+    }
+  };
+
+  const handleReactivateClient = async () => {
+    if (!client) return;
+    setIsSubmittingAction(true);
+    try {
+      const { error: upErr } = await supabase
+        .from("client_companies")
+        .update({
+          status: "ACTIVE",
+          rejection_reason: null,
+          correction_notes: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", client.id);
+
+      if (upErr) throw upErr;
+
+      await supabase
+        .from("client_users")
+        .update({ status: "ACTIVE" })
+        .or(`client_id.eq.${client.id},client_company_id.eq.${client.id}`);
+
+      try {
+        await supabase.from("auth_audit_log").insert([{
+          user_id: adminProfile?.id || "admin",
+          user_type: "ADMIN",
+          event_type: "CLIENT_ACCOUNT_REACTIVATED",
+          details: {
+            companyId: client.id,
+            companyName: client.company_name,
+            reviewerName: adminProfile?.name || "NECL Compliance Desk"
+          }
+        }]);
+      } catch {}
+
+      setToastMsg(`Client "${client.company_name}" successfully REACTIVATED.`);
+      setTimeout(() => setToastMsg(null), 3000);
+      await loadClientDetailsFromDB(true);
+    } catch (err: any) {
+      console.error("Reactivate client error:", err);
+      setToastMsg(`Error: ${err.message}`);
+      setTimeout(() => setToastMsg(null), 3000);
+    } finally {
+      setIsSubmittingAction(false);
+    }
+  };
+
+  const handleReopenApplication = async () => {
+    if (!client) return;
+    setIsSubmittingAction(true);
+    try {
+      const { error: upErr } = await supabase
+        .from("client_companies")
+        .update({
+          status: "PENDING_APPROVAL",
+          rejection_reason: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", client.id);
+
+      if (upErr) throw upErr;
+
+      await supabase
+        .from("client_users")
+        .update({ status: "PENDING_APPROVAL" })
+        .or(`client_id.eq.${client.id},client_company_id.eq.${client.id}`);
+
+      try {
+        await supabase.from("auth_audit_log").insert([{
+          user_id: adminProfile?.id || "admin",
+          user_type: "ADMIN",
+          event_type: "CLIENT_APPLICATION_REOPENED",
+          details: {
+            companyId: client.id,
+            companyName: client.company_name,
+            reviewerName: adminProfile?.name || "NECL Compliance Desk"
+          }
+        }]);
+      } catch {}
+
+      setToastMsg(`Application for "${client.company_name}" reopened for review.`);
+      setTimeout(() => setToastMsg(null), 3000);
+      await loadClientDetailsFromDB(true);
+    } catch (err: any) {
+      console.error("Reopen application error:", err);
       setToastMsg(`Error: ${err.message}`);
       setTimeout(() => setToastMsg(null), 3000);
     } finally {
@@ -769,39 +1124,146 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
     }
   };
 
-  // Create real requirement in Supabase
+  // Create real requirement in Supabase with complete schema validation and canonical ID
   const handleCreateRequirement = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!client) return;
+    if (!client || isSubmittingAction) return;
+
+    // Validate form inputs
+    const origin = newReqForm.origin.trim();
+    const originPin = newReqForm.originPincode.trim();
+    const destination = newReqForm.destination.trim();
+    const destinationPin = newReqForm.destinationPincode.trim();
+    const material = newReqForm.material.trim();
+    const truck = newReqForm.truckType.trim();
+    const capMt = parseFloat(newReqForm.capacityMt);
+    const qty = parseInt(newReqForm.vehicleQuantity, 10) || 1;
+
+    if (!origin) {
+      setToastMsg("Please specify the pickup location / address.");
+      setTimeout(() => setToastMsg(null), 3000);
+      return;
+    }
+
+    if (!originPin || !/^\d{6}$/.test(originPin)) {
+      setToastMsg("Please enter a valid 6-digit origin PIN code.");
+      setTimeout(() => setToastMsg(null), 3000);
+      return;
+    }
+
+    if (!destination) {
+      setToastMsg("Please specify the destination location / depot.");
+      setTimeout(() => setToastMsg(null), 3000);
+      return;
+    }
+
+    if (!destinationPin || !/^\d{6}$/.test(destinationPin)) {
+      setToastMsg("Please enter a valid 6-digit destination PIN code.");
+      setTimeout(() => setToastMsg(null), 3000);
+      return;
+    }
+
+    if (!material) {
+      setToastMsg("Please specify the freight material type.");
+      setTimeout(() => setToastMsg(null), 3000);
+      return;
+    }
+
+    if (!truck) {
+      setToastMsg("Please select a required vehicle type.");
+      setTimeout(() => setToastMsg(null), 3000);
+      return;
+    }
+
+    if (!capMt || capMt <= 0) {
+      setToastMsg("Required capacity must be greater than 0 MT.");
+      setTimeout(() => setToastMsg(null), 3000);
+      return;
+    }
+
+    if (qty < 1) {
+      setToastMsg("Vehicle quantity must be at least 1.");
+      setTimeout(() => setToastMsg(null), 3000);
+      return;
+    }
+
+    if (!newReqForm.loadingDate) {
+      setToastMsg("Please select the scheduled loading date.");
+      setTimeout(() => setToastMsg(null), 3000);
+      return;
+    }
 
     setIsSubmittingAction(true);
+    // Canonical NECL ID format matching platform standard: REQ-YYYYMMDD-XXXX
     const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    const randNum = Math.floor(100 + Math.random() * 900);
+    const randNum = Math.floor(1000 + Math.random() * 9000);
     const newReqId = `REQ-${dateStr}-${randNum}`;
+
+    let loadingIso = new Date(Date.now() + 86400000).toISOString();
+    try {
+      const parsedTime = newReqForm.loadingTime || "10:00";
+      loadingIso = new Date(`${newReqForm.loadingDate}T${parsedTime}:00`).toISOString();
+    } catch {}
+
+    const specialNotes = qty > 1
+      ? `[Vehicle Quantity: ${qty} trucks] ${newReqForm.specialInstructions || ""}`.trim()
+      : (newReqForm.specialInstructions?.trim() || null);
 
     try {
       const { error: insErr } = await supabase.from("requirements").insert({
         id: newReqId,
         client_id: client.id,
-        pickup_pincode: "500039",
-        pickup_address: newReqForm.origin,
-        destination_pincode: "440016",
-        destination_address: newReqForm.destination,
-        required_capacity_mt: parseFloat(newReqForm.capacityMt) || 30,
-        vehicle_type: newReqForm.truckType,
-        material_type: newReqForm.material,
-        loading_datetime: new Date(Date.now() + 86400000).toISOString(),
-        status: "NEW_REQUIREMENT"
+        pickup_pincode: originPin,
+        pickup_address: origin,
+        destination_pincode: destinationPin,
+        destination_address: destination,
+        required_capacity_mt: capMt,
+        vehicle_type: truck,
+        material_type: material,
+        loading_datetime: loadingIso,
+        special_instructions: specialNotes,
+        status: "NEW_REQUIREMENT",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       });
 
       if (insErr) throw insErr;
 
+      // Audit Log for Requirement Creation
+      try {
+        await supabase.from("auth_audit_log").insert([{
+          user_id: adminProfile?.id || "admin",
+          user_type: "ADMIN",
+          event_type: "REQUIREMENT_CREATED",
+          details: {
+            requirementId: newReqId,
+            clientId: client.id,
+            clientName: client.company_name,
+            origin,
+            destination,
+            material,
+            truck,
+            capacityMt: capMt,
+            quantity: qty
+          }
+        }]);
+      } catch {}
+
       setToastMsg(`Requirement ${newReqId} saved in database!`);
-      setTimeout(() => setToastMsg(null), 3000);
+      setTimeout(() => setToastMsg(null), 3500);
       setActiveModal(null);
 
-      // Refresh real data from DB
-      await loadClientDetailsFromDB();
+      // Reset form fields
+      setNewReqForm(prev => ({
+        ...prev,
+        destination: "",
+        destinationPincode: "",
+        destinationCity: "",
+        specialInstructions: ""
+      }));
+
+      // Refresh real data from DB immediately
+      await loadClientDetailsFromDB(true);
     } catch (err: any) {
       setError(err.message || "Failed to create requirement in database");
     } finally {
@@ -1301,6 +1763,899 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
     );
   };
 
+  const renderContactsTab = () => (
+    <div className="profile-table-card" style={{ marginTop: 20 }}>
+      <div className="profile-table-header">
+        <div>
+          <h3 className="profile-table-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Users size={18} color="#F05A22" />
+            <span>Client Key Contacts & Representatives</span>
+          </h3>
+          <p style={{ margin: "4px 0 0", fontSize: 13, color: "#64748B" }}>
+            Authorized signatories, operations managers, and logistics coordinators for {client.company_name}
+          </p>
+        </div>
+        <div className="profile-table-header-actions">
+          <button
+            className="btn-table-orange-sm"
+            onClick={() => setActiveModal("SEND_MESSAGE")}
+          >
+            <MessageSquare size={13} />
+            <span>Send Message</span>
+          </button>
+        </div>
+      </div>
+
+      {contacts.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "48px 16px", color: "#64748B" }}>
+          <Users size={36} color="#94A3B8" style={{ marginBottom: 12 }} />
+          <div style={{ fontWeight: 600, color: "#111111", fontSize: 15, marginBottom: 4 }}>
+            No contacts listed
+          </div>
+          <div style={{ fontSize: 13 }}>
+            Use Edit Client to add key contact persons for this account.
+          </div>
+        </div>
+      ) : (
+        <div className="profile-table-responsive">
+          <table className="profile-mini-table">
+            <thead>
+              <tr>
+                <th>Contact Name</th>
+                <th>Role / Designation</th>
+                <th>Mobile Number</th>
+                <th>Email Address</th>
+                <th>Contact Status</th>
+                <th>Registered Date</th>
+                <th style={{ textAlign: "center" }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {contacts.map((c: any) => (
+                <tr key={c.id || c.mobile}>
+                  <td>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div className="add-avatar-sm" style={{ background: c.is_primary ? "#F45325" : "#64748B" }}>
+                        {c.full_name ? c.full_name[0].toUpperCase() : "C"}
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 700, color: "#111111" }}>{c.full_name || "Representative"}</div>
+                        {c.is_primary && (
+                          <span className="primary-tag" style={{ marginLeft: 0, marginTop: 2, display: "inline-block" }}>
+                            Primary Authorized Contact
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <span style={{ fontWeight: 500, color: "#334155" }}>
+                      {c.designation || c.role || "Operational Contact"}
+                    </span>
+                  </td>
+                  <td>
+                    <span style={{ fontWeight: 600, color: "#111111" }}>+91 {c.mobile}</span>
+                  </td>
+                  <td>
+                    {c.email ? (
+                      <a href={`mailto:${c.email}`} style={{ color: "#2563EB", textDecoration: "none" }}>
+                        {c.email}
+                      </a>
+                    ) : (
+                      <span style={{ color: "#94A3B8" }}>—</span>
+                    )}
+                  </td>
+                  <td>
+                    <span className="badge-status-pill open" style={{ background: "#DCFCE7", color: "#15803D" }}>
+                      {c.status || "ACTIVE"}
+                    </span>
+                  </td>
+                  <td style={{ color: "#64748B" }}>
+                    {c.created_at ? new Date(c.created_at).toLocaleDateString("en-IN") : "—"}
+                  </td>
+                  <td style={{ textAlign: "center" }}>
+                    <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
+                      <a
+                        href={`https://wa.me/91${(c.mobile || "").replace(/\D/g, "")}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="contact-icon-btn whatsapp"
+                        title="Send WhatsApp"
+                      >
+                        <MessageSquare size={13} />
+                      </a>
+                      <a
+                        href={`tel:${c.mobile}`}
+                        className="contact-icon-btn"
+                        title="Call"
+                      >
+                        <Phone size={13} />
+                      </a>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderAddressesTab = () => (
+    <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 20 }}>
+      <div className="profile-table-card">
+        <div className="profile-table-header">
+          <div>
+            <h3 className="profile-table-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Building2 size={18} color="#F05A22" />
+              <span>Registered Corporate & Branch Offices</span>
+            </h3>
+            <p style={{ margin: "4px 0 0", fontSize: 13, color: "#64748B" }}>
+              Legal and billing address registered with GSTIN and incorporation filings
+            </p>
+          </div>
+          <button
+            className="btn-table-orange-sm"
+            onClick={() => {
+              window.open(
+                `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(client.registered_address)}`,
+                "_blank"
+              );
+            }}
+          >
+            <MapPin size={13} />
+            <span>Open in Google Maps</span>
+          </button>
+        </div>
+
+        <div style={{ padding: 24 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 20 }}>
+            <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 12, padding: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                <MapPin size={20} color="#F45325" />
+                <span style={{ fontWeight: 700, fontSize: 15, color: "#111111" }}>Principal Place of Business</span>
+              </div>
+              <div style={{ fontSize: 14, color: "#334155", lineHeight: 1.6, marginBottom: 16 }}>
+                {client.registered_address || "No registered address provided."}
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, paddingTop: 12, borderTop: "1px solid #E2E8F0", fontSize: 13 }}>
+                <div>
+                  <span style={{ color: "#64748B", display: "block" }}>City / State</span>
+                  <strong style={{ color: "#111111" }}>{client.city || "—"}, {client.state || "—"}</strong>
+                </div>
+                <div>
+                  <span style={{ color: "#64748B", display: "block" }}>Postal Code</span>
+                  <strong style={{ color: "#111111", fontFamily: "var(--font-mono, monospace)" }}>
+                    {client.postal_code || client.pincode || "—"}
+                  </strong>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 12, padding: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                <Truck size={20} color="#2563EB" />
+                <span style={{ fontWeight: 700, fontSize: 15, color: "#111111" }}>Frequent Operational Hubs</span>
+              </div>
+              <p style={{ fontSize: 13, color: "#64748B", margin: "0 0 12px" }}>
+                Active loading and dispatch hubs extracted from live transport requirements:
+              </p>
+              {requirements.length === 0 ? (
+                <div style={{ fontSize: 13, color: "#94A3B8", fontStyle: "italic" }}>
+                  No transport requirements logged yet to detect frequent shipping lanes.
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {[...new Set(requirements.map(r => r.pickup_address?.split(",")[0]).filter(Boolean))].slice(0, 4).map((hub, idx) => (
+                    <div key={idx} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#1E293B" }}>
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#F45325" }} />
+                      <span>{hub}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderHistoryTab = () => (
+    <div className="profile-table-card" style={{ marginTop: 20 }}>
+      <div className="profile-table-header">
+        <div>
+          <h3 className="profile-table-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Package size={18} color="#F05A22" />
+            <span>Complete Transport Requirements History</span>
+          </h3>
+          <p style={{ margin: "4px 0 0", fontSize: 13, color: "#64748B" }}>
+            All freight load requirements raised for {client.company_name} ({requirements.length} total)
+          </p>
+        </div>
+        <div className="profile-table-header-actions">
+          <button
+            className="btn-table-orange-sm"
+            onClick={() => setActiveModal("CREATE_REQ")}
+          >
+            <Plus size={13} />
+            <span>Create Requirement</span>
+          </button>
+        </div>
+      </div>
+
+      <div style={{ padding: "14px 20px", borderBottom: "1px solid #E2E8F0", display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", background: "#F8FAFC" }}>
+        <div style={{ position: "relative", flex: "1 1 240px", minWidth: 200 }}>
+          <Search size={15} color="#94A3B8" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
+          <input
+            type="text"
+            className="form-field-input"
+            style={{ paddingLeft: 34, height: 36 }}
+            placeholder="Search by REQ ID, Route, Material, Vehicle..."
+            value={reqSearch}
+            onChange={e => setReqSearch(e.target.value)}
+          />
+        </div>
+
+        <div style={{ flex: "0 0 180px" }}>
+          <select
+            className="form-field-input"
+            style={{ height: 36 }}
+            value={reqStatusFilter}
+            onChange={e => setReqStatusFilter(e.target.value)}
+          >
+            <option value="ALL">All Statuses</option>
+            <option value="NEW_REQUIREMENT">New Requirement</option>
+            <option value="QUOTED">Quoted</option>
+            <option value="BOOKED">Booked</option>
+            <option value="IN_TRANSIT">In Transit</option>
+            <option value="COMPLETED">Completed</option>
+            <option value="CANCELLED">Cancelled</option>
+          </select>
+        </div>
+
+        <span style={{ fontSize: 13, color: "#64748B", fontWeight: 600 }}>
+          Showing {filteredClientRequirements.length} of {requirements.length}
+        </span>
+      </div>
+
+      {reqFetchError ? (
+        <div style={{ margin: "16px", padding: "14px 16px", background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#991B1B", fontSize: 13 }}>
+            <AlertTriangle size={16} />
+            <span>Failed to load transport requirements: {reqFetchError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => loadClientDetailsFromDB(true)}
+            style={{ cursor: "pointer", padding: "5px 12px", fontSize: 12, fontWeight: 600, background: "#FFFFFF", border: "1px solid #DC2626", color: "#DC2626", borderRadius: 6, display: "flex", alignItems: "center", gap: 4 }}
+          >
+            <RotateCcw size={12} />
+            Retry
+          </button>
+        </div>
+      ) : filteredClientRequirements.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "48px 16px", color: "#64748B" }}>
+          <Package size={36} color="#94A3B8" style={{ marginBottom: 12 }} />
+          <div style={{ fontWeight: 600, color: "#111111", fontSize: 15, marginBottom: 4 }}>
+            No matching requirements found
+          </div>
+          <div style={{ fontSize: 13, marginBottom: 16 }}>
+            {reqSearch || reqStatusFilter !== "ALL"
+              ? "Try adjusting your search query or status filter."
+              : `Create the first transport requirement for ${client.company_name}.`}
+          </div>
+          <button
+            className="btn-create-gold"
+            onClick={() => setActiveModal("CREATE_REQ")}
+          >
+            <Plus size={14} />
+            <span>Create Requirement</span>
+          </button>
+        </div>
+      ) : (
+        <div className="profile-table-responsive">
+          <table className="profile-mini-table">
+            <thead>
+              <tr>
+                <th>REQ ID</th>
+                <th>Created Date</th>
+                <th>Origin (Pickup)</th>
+                <th>Destination</th>
+                <th>Material Type</th>
+                <th>Vehicle Type</th>
+                <th>Required Capacity</th>
+                <th>Scheduled Loading</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredClientRequirements.map(req => (
+                <tr key={req.id}>
+                  <td>
+                    <span style={{ color: "#F45325", fontWeight: 700, fontFamily: "var(--font-mono, monospace)" }}>
+                      {req.id}
+                    </span>
+                  </td>
+                  <td style={{ color: "#64748B" }}>
+                    {new Date(req.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                  </td>
+                  <td>
+                    <div style={{ fontWeight: 600, color: "#111111" }}>{req.pickup_address || "—"}</div>
+                    {req.pickup_pincode && (
+                      <div style={{ fontSize: 11.5, color: "#64748B", fontFamily: "var(--font-mono, monospace)" }}>
+                        PIN: {req.pickup_pincode}
+                      </div>
+                    )}
+                  </td>
+                  <td>
+                    <div style={{ fontWeight: 600, color: "#111111" }}>{req.destination_address || "—"}</div>
+                    {req.destination_pincode && (
+                      <div style={{ fontSize: 11.5, color: "#64748B", fontFamily: "var(--font-mono, monospace)" }}>
+                        PIN: {req.destination_pincode}
+                      </div>
+                    )}
+                  </td>
+                  <td>{req.material_type || "General Cargo"}</td>
+                  <td style={{ color: "#64748B" }}>{req.vehicle_type}</td>
+                  <td style={{ fontWeight: 700, color: "#111111" }}>{req.required_capacity_mt} MT</td>
+                  <td style={{ color: "#64748B" }}>
+                    {req.loading_datetime ? new Date(req.loading_datetime).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "Immediate"}
+                  </td>
+                  <td>
+                    <span className="badge-status-pill open">
+                      {req.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderFinanceTab = () => (
+    <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* Finance KPI Row */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 }}>
+        <div style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 12, padding: 18 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 600, color: "#64748B", marginBottom: 6 }}>Total Quotations Issued</div>
+          <div style={{ fontSize: 24, fontWeight: 700, color: "#1E293B" }}>{clientQuotes.length}</div>
+          <div style={{ fontSize: 12, color: "#166534", marginTop: 4 }}>
+            {clientQuotes.filter(q => q.status === "ACCEPTED").length} Accepted by Client
+          </div>
+        </div>
+
+        <div style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 12, padding: 18 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 600, color: "#64748B", marginBottom: 6 }}>Confirmed Bookings Value</div>
+          <div style={{ fontSize: 24, fontWeight: 700, color: "#166534" }}>
+            {canViewMargins()
+              ? `₹${bookings.reduce((sum, b) => sum + (Number(b.grand_total || b.quote_amount || 0)), 0).toLocaleString("en-IN")}`
+              : "Commercial Data Restricted"}
+          </div>
+          <div style={{ fontSize: 12, color: "#64748B", marginTop: 4 }}>
+            Across {bookings.length} confirmed freight orders
+          </div>
+        </div>
+
+        <div style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 12, padding: 18 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 600, color: "#64748B", marginBottom: 6 }}>Invoicing & Receivables</div>
+          <div style={{ fontSize: 24, fontWeight: 700, color: "#D97706" }}>
+            {bookings.filter(b => b.payment_status === "PAYMENT_PENDING").length} Pending
+          </div>
+          <div style={{ fontSize: 12, color: "#64748B", marginTop: 4 }}>
+            Standard commercial billing terms: 30 days post-POD
+          </div>
+        </div>
+      </div>
+
+      {/* Quotations List */}
+      <div className="profile-table-card">
+        <div className="profile-table-header">
+          <div>
+            <h3 className="profile-table-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <DollarSign size={18} color="#F05A22" />
+              <span>Commercial Quotations & Agreed Rates</span>
+            </h3>
+            <p style={{ margin: "4px 0 0", fontSize: 13, color: "#64748B" }}>
+              Formal rate quotes submitted to {client.company_name} for freight approval
+            </p>
+          </div>
+        </div>
+
+        {clientQuotes.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "48px 16px", color: "#64748B" }}>
+            <DollarSign size={36} color="#94A3B8" style={{ marginBottom: 12 }} />
+            <div style={{ fontWeight: 600, color: "#111111", fontSize: 15, marginBottom: 4 }}>
+              No commercial quotations issued yet
+            </div>
+            <div style={{ fontSize: 13 }}>
+              When rates are submitted for requirements, formal quotes will appear here.
+            </div>
+          </div>
+        ) : (
+          <div className="profile-table-responsive">
+            <table className="profile-mini-table">
+              <thead>
+                <tr>
+                  <th>Quote ID</th>
+                  <th>Requirement ID</th>
+                  <th>Date Issued</th>
+                  <th>Total Amount (₹)</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {clientQuotes.map(q => (
+                  <tr key={q.id}>
+                    <td>
+                      <span style={{ color: "#F45325", fontWeight: 700, fontFamily: "var(--font-mono, monospace)" }}>
+                        {formatDisplayId("QT", q.id, q.created_at)}
+                      </span>
+                    </td>
+                    <td style={{ fontFamily: "var(--font-mono, monospace)" }}>
+                      {q.requirement_id}
+                    </td>
+                    <td style={{ color: "#64748B" }}>
+                      {new Date(q.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                    </td>
+                    <td style={{ fontWeight: 700, color: "#166534" }}>
+                      {canViewMargins() ? `₹${Number(q.total_client_amount || 0).toLocaleString("en-IN")}` : "Restricted"}
+                    </td>
+                    <td>
+                      <span className={`badge-status-pill ${q.status === "ACCEPTED" ? "open" : ""}`} style={{
+                        background: q.status === "ACCEPTED" ? "#DCFCE7" : "#FEF3C7",
+                        color: q.status === "ACCEPTED" ? "#15803D" : "#B45309"
+                      }}>
+                        {q.status}
+                      </span>
+                    </td>
+                    <td>
+                      {q.status === "ACCEPTED" && hasPermission("bookings", "create") && (
+                        <button
+                          className="btn-table-orange-sm"
+                          onClick={() => {
+                            setSelectedQuoteForBooking(q.id);
+                            setSelectedReqForBooking(q.requirement_id);
+                            setActiveModal("CREATE_BOOKING");
+                          }}
+                        >
+                          <Truck size={12} />
+                          <span>Convert to Booking</span>
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderNotesTab = () => (
+    <div className="profile-table-card" style={{ marginTop: 20 }}>
+      <div className="profile-table-header">
+        <div>
+          <h3 className="profile-table-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Archive size={18} color="#F05A22" />
+            <span>Administrative & Operational Notes</span>
+          </h3>
+          <p style={{ margin: "4px 0 0", fontSize: 13, color: "#64748B" }}>
+            Internal handling instructions, client preferences, and audit remarks
+          </p>
+        </div>
+        <button
+          className="btn-table-orange-sm"
+          onClick={() => setActiveModal("ADD_NOTE")}
+        >
+          <Plus size={13} />
+          <span>Add Note</span>
+        </button>
+      </div>
+
+      <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
+        {client.correction_notes && (
+          <div style={{ background: "#FAF5FF", border: "1px solid #E9D5FF", borderRadius: 10, padding: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#7E22CE", fontWeight: 700, fontSize: 13.5, marginBottom: 6 }}>
+              <Edit2 size={15} />
+              <span>Active Correction Request Note (Visible to Client)</span>
+            </div>
+            <div style={{ fontSize: 13.5, color: "#581C87", lineHeight: 1.5 }}>
+              {client.correction_notes}
+            </div>
+          </div>
+        )}
+
+        {client.rejection_reason && (
+          <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, padding: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#DC2626", fontWeight: 700, fontSize: 13.5, marginBottom: 6 }}>
+              <AlertTriangle size={15} />
+              <span>Registration / Suspension Remark</span>
+            </div>
+            <div style={{ fontSize: 13.5, color: "#991B1B", lineHeight: 1.5 }}>
+              {client.rejection_reason}
+            </div>
+          </div>
+        )}
+
+        <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, padding: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#334155", marginBottom: 6 }}>
+            General Account Notes
+          </div>
+          <div style={{ fontSize: 13.5, color: "#64748B", lineHeight: 1.5 }}>
+            {client.notes || "No special administrative instructions logged for this account."}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderActivityTab = () => (
+    <div className="profile-table-card" style={{ marginTop: 20 }}>
+      <div className="profile-table-header">
+        <div>
+          <h3 className="profile-table-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Activity size={18} color="#F05A22" />
+            <span>Compliance & Operations Activity Log</span>
+          </h3>
+          <p style={{ margin: "4px 0 0", fontSize: 13, color: "#64748B" }}>
+            Immutable audit trail of administrative decisions, requirements, and compliance reviews
+          </p>
+        </div>
+        <button
+          className="btn-table-orange-sm"
+          onClick={() => loadClientDetailsFromDB(true)}
+        >
+          <RotateCcw size={13} />
+          <span>Refresh Log</span>
+        </button>
+      </div>
+
+      {auditLogs.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "48px 16px", color: "#64748B" }}>
+          <Activity size={36} color="#94A3B8" style={{ marginBottom: 12 }} />
+          <div style={{ fontWeight: 600, color: "#111111", fontSize: 15, marginBottom: 4 }}>
+            No activity records found
+          </div>
+          <div style={{ fontSize: 13 }}>
+            Operational actions such as registration approval, requirement creation, and KYC checks will appear here.
+          </div>
+        </div>
+      ) : (
+        <div style={{ padding: 24 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {auditLogs.map((log: any, idx: number) => {
+              const eventTitle = (log.event_type || "ACTIVITY")
+                .replace(/_/g, " ")
+                .toLowerCase()
+                .replace(/\b\w/g, (c: string) => c.toUpperCase());
+              const actor = log.details?.reviewerName || log.user_id || "Compliance Desk";
+              const dateStr = log.created_at ? new Date(log.created_at).toLocaleString("en-IN") : "—";
+
+              return (
+                <div
+                  key={log.id || idx}
+                  style={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: 14,
+                    padding: "14px 16px",
+                    background: "#F8FAFC",
+                    border: "1px solid #E2E8F0",
+                    borderRadius: 10
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: "50%",
+                      background: log.event_type?.includes("REJECT")
+                        ? "#FEE2E2"
+                        : log.event_type?.includes("APPROV")
+                        ? "#DCFCE7"
+                        : "#EFF6FF",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                      marginTop: 2
+                    }}
+                  >
+                    {log.event_type?.includes("REJECT") ? (
+                      <X size={18} color="#DC2626" />
+                    ) : log.event_type?.includes("APPROV") ? (
+                      <CheckCircle2 size={18} color="#166534" />
+                    ) : (
+                      <Activity size={18} color="#2563EB" />
+                    )}
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
+                      <span style={{ fontWeight: 700, fontSize: 14, color: "#1E293B" }}>
+                        {eventTitle}
+                      </span>
+                      <span style={{ fontSize: 12, color: "#64748B", display: "flex", alignItems: "center", gap: 4 }}>
+                        <Clock size={12} />
+                        {dateStr}
+                      </span>
+                    </div>
+
+                    <div style={{ fontSize: 13, color: "#475569", marginTop: 4 }}>
+                      Actor: <strong>{actor}</strong>
+                    </div>
+
+                    {log.details && (
+                      <div style={{ fontSize: 12.5, color: "#64748B", marginTop: 4 }}>
+                        {log.details.reason && <div>Reason: <em>"{log.details.reason}"</em></div>}
+                        {log.details.requirementId && <div>Requirement: <span style={{ fontFamily: "monospace" }}>{log.details.requirementId}</span> ({log.details.origin} → {log.details.destination})</div>}
+                        {log.details.bookingId && <div>Booking: <span style={{ fontFamily: "monospace" }}>{log.details.bookingId}</span></div>}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderKycDocumentsCard = (isFullTab: boolean = false) => (
+    <div className="profile-table-card" id="kyc-documents-card" style={{ marginTop: isFullTab ? 20 : 20 }}>
+      <div className="profile-table-header">
+        <div>
+          <h3 className="profile-table-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <FileText size={17} color="#F05A22" />
+            <span>KYC Compliance & Business Documents</span>
+          </h3>
+          <p style={{ margin: "3px 0 0", fontSize: 12.5, color: "#64748B" }}>
+            Verify GST, PAN, and Incorporation proofs before approving client account.
+          </p>
+        </div>
+
+        <div className="profile-table-header-actions">
+          <span
+            style={{
+              fontSize: 12,
+              fontWeight: 700,
+              padding: "4px 10px",
+              borderRadius: 6,
+              background: complianceStats.isEligibleForApproval ? "#DCFCE7" : "#FEF3C7",
+              color: complianceStats.isEligibleForApproval ? "#15803D" : "#B45309"
+            }}
+          >
+            {complianceStats.verifiedMandatory.length} / {Math.max(complianceStats.mandatoryDocs.length, 3)} Mandatory Verified
+          </span>
+        </div>
+      </div>
+
+      {docFetchError ? (
+        <div style={{ margin: "16px", padding: "14px 16px", background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#991B1B", fontSize: 13 }}>
+            <AlertTriangle size={16} />
+            <span>Failed to load KYC compliance documents: {docFetchError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => loadClientDetailsFromDB(true)}
+            style={{ cursor: "pointer", padding: "5px 12px", fontSize: 12, fontWeight: 600, background: "#FFFFFF", border: "1px solid #DC2626", color: "#DC2626", borderRadius: 6, display: "flex", alignItems: "center", gap: 4 }}
+          >
+            <RotateCcw size={12} />
+            Retry
+          </button>
+        </div>
+      ) : documents.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "36px 16px", color: "#64748B" }}>
+          <FileText size={32} color="#94A3B8" style={{ marginBottom: 8 }} />
+          <div style={{ fontWeight: 600, color: "#111111", marginBottom: 4 }}>
+            No KYC documents uploaded yet
+          </div>
+          <div style={{ fontSize: 13 }}>
+            Client registration documents submitted via mobile app will appear here for verification.
+          </div>
+        </div>
+      ) : (
+        <div className="profile-table-responsive">
+          <table className="profile-mini-table">
+            <thead>
+              <tr>
+                <th>Document Name</th>
+                <th>Requirement</th>
+                <th>Upload Responsibility</th>
+                <th>Uploaded File</th>
+                <th>Upload Date</th>
+                <th>Verification Status</th>
+                <th>Audit Notes</th>
+                <th style={{ textAlign: "center" }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {documents.map((doc: any) => {
+                const resolved = resolveClientDocumentType(doc);
+                const isCoreMandatory = resolved.key === "GST_CERTIFICATE" || resolved.key === "COMPANY_PAN";
+                const isWhenApplicable = resolved.key === "INCORPORATION_PROOF";
+                const isVerified = doc.verification_status === "VERIFIED" || doc.verification_status === "APPROVED";
+                const isRejected = doc.verification_status === "REJECTED";
+                const isReplaced = doc.verification_status === "REPLACEMENT_REQUESTED" || doc.verification_status === "RE_UPLOADED";
+                const isPendingUpload = doc.verification_status === "PENDING_UPLOAD";
+                const isClientResp = doc.uploaded_by === "CLIENT" ||
+                  doc.metadata?.upload_responsibility === "CLIENT" ||
+                  isCoreMandatory || isWhenApplicable;
+
+                return (
+                  <tr key={doc.id}>
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{ width: 28, height: 28, borderRadius: 6, background: "#F1F5F9", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <FileText size={15} color="#F05A22" />
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 700, color: "#111111", fontSize: 13 }}>
+                            {resolved.label}
+                          </div>
+                          <div style={{ fontSize: 11, color: "#64748B", textTransform: "uppercase" }}>
+                            {doc.document_type || "DOCUMENT"}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+
+                    <td>
+                      {isCoreMandatory ? (
+                        <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 4, background: "#FEE2E2", color: "#DC2626" }}>
+                          Mandatory
+                        </span>
+                      ) : isWhenApplicable ? (
+                        <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 4, background: "#FEF3C7", color: "#B45309" }}>
+                          When Applicable
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 4, background: "#F1F5F9", color: "#64748B" }}>
+                          Optional
+                        </span>
+                      )}
+                    </td>
+
+                    <td>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: isClientResp ? "#4338CA" : "#0F766E" }}>
+                        {isClientResp ? "Client (Signatory)" : "NECL Desk"}
+                      </span>
+                    </td>
+
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ fontSize: 12.5, fontWeight: 500, color: "#111111", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {resolved.cleanFileName}
+                        </span>
+                        {doc.file_size && (
+                          <span style={{ fontSize: 11, color: "#94A3B8" }}>
+                            ({(doc.file_size / 1024).toFixed(0)} KB)
+                          </span>
+                        )}
+                      </div>
+                    </td>
+
+                    <td style={{ color: "#64748B", fontSize: 12 }}>
+                      {doc.created_at ? new Date(doc.created_at).toLocaleDateString("en-IN") : "—"}
+                    </td>
+
+                    <td>
+                      {isVerified ? (
+                        <span className="badge-status-pill open" style={{ background: "#DCFCE7", color: "#15803D", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                          <CheckCircle2 size={12} />
+                          <span>Verified</span>
+                        </span>
+                      ) : isRejected ? (
+                        <span className="badge-status-pill error" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                          <X size={12} />
+                          <span>Rejected</span>
+                        </span>
+                      ) : isReplaced ? (
+                        <span className="badge-status-pill pending" style={{ background: "#FEF3C7", color: "#B45309", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                          <RotateCcw size={12} />
+                          <span>Re-Upload Requested</span>
+                        </span>
+                      ) : isPendingUpload ? (
+                        <span className="badge-status-pill pending" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                          <Clock size={12} />
+                          <span>Awaiting Upload</span>
+                        </span>
+                      ) : (
+                        <span className="badge-status-pill pending" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                          <Clock size={12} />
+                          <span>Pending Review</span>
+                        </span>
+                      )}
+                    </td>
+
+                    <td>
+                      <div style={{ fontSize: 12, color: "#64748B", maxWidth: 180 }}>
+                        {doc.rejection_reason ? (
+                          <span style={{ color: "#DC2626", fontWeight: 500 }}>
+                            Note: {doc.rejection_reason}
+                          </span>
+                        ) : isVerified ? (
+                          <span style={{ color: "#15803D" }}>
+                            Verified by {doc.verified_by || adminProfile?.name || "NECL Compliance"}
+                          </span>
+                        ) : (
+                          <span style={{ color: "#94A3B8" }}>—</span>
+                        )}
+                      </div>
+                    </td>
+
+                    <td style={{ textAlign: "center" }}>
+                      <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
+                        <button
+                          type="button"
+                          className="row-action-btn-circle"
+                          title="Preview Document"
+                          style={{ width: 28, height: 28 }}
+                          onClick={() => setPreviewDoc(doc)}
+                        >
+                          <Eye size={12} />
+                        </button>
+
+                        <button
+                          type="button"
+                          className="row-action-btn-circle"
+                          title="Verify Document"
+                          style={{ width: 28, height: 28, background: "#DCFCE7", color: "#16A34A", border: "1px solid #86EFAC" }}
+                          disabled={isVerified}
+                          onClick={() => handleVerifyDocument(doc.id)}
+                        >
+                          <Check size={12} />
+                        </button>
+
+                        <button
+                          type="button"
+                          className="row-action-btn-circle"
+                          title="Request Replacement"
+                          style={{ width: 28, height: 28, background: "#FEF3C7", color: "#D97706", border: "1px solid #FCD34D" }}
+                          onClick={() => {
+                            setSelectedDocForAction(doc);
+                            setActionReason("");
+                            setActiveModal("REPLACE_DOC");
+                          }}
+                        >
+                          <RotateCcw size={11} />
+                        </button>
+
+                        <button
+                          type="button"
+                          className="row-action-btn-circle"
+                          title="Reject Document"
+                          style={{ width: 28, height: 28, background: "#FEE2E2", color: "#DC2626", border: "1px solid #FCA5A5" }}
+                          onClick={() => {
+                            setSelectedDocForAction(doc);
+                            setActionReason("");
+                            setActiveModal("REJECT_DOC");
+                          }}
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+
   if (loading) {
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 400, gap: 14 }}>
@@ -1354,10 +2709,51 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
           <div className="profile-title-block">
             <h1 className="profile-company-heading">{client.company_name}</h1>
             {(() => {
-              const st = client.status?.toUpperCase() || "PENDING";
+              const st = (client.status || "PENDING_APPROVAL").toUpperCase();
               const isApp = st === "APPROVED" || st === "ACTIVE";
               const isRej = st === "REJECTED";
               const isCorr = st === "CORRECTIONS_REQUESTED";
+              const isSusp = st === "SUSPENDED";
+              const isInact = st === "INACTIVE";
+
+              let bg = "#FEF3C7";
+              let text = "#92400E";
+              let border = "#FDE68A";
+              let label = "Pending Approval";
+              let Icon = Clock;
+
+              if (isApp) {
+                bg = "#DCFCE7";
+                text = "#166534";
+                border = "#86EFAC";
+                label = "Approved & Active";
+                Icon = CheckCircle;
+              } else if (isRej) {
+                bg = "#FEE2E2";
+                text = "#991B1B";
+                border = "#FCA5A5";
+                label = "Application Rejected";
+                Icon = AlertCircle;
+              } else if (isCorr) {
+                bg = "#FAF5FF";
+                text = "#7E22CE";
+                border = "#D8B4FE";
+                label = "Corrections Requested";
+                Icon = Edit2;
+              } else if (isSusp) {
+                bg = "#FFF7ED";
+                text = "#C2410C";
+                border = "#FDBA74";
+                label = "Account Suspended";
+                Icon = AlertTriangle;
+              } else if (isInact) {
+                bg = "#F1F5F9";
+                text = "#475569";
+                border = "#CBD5E1";
+                label = "Account Inactive";
+                Icon = Clock;
+              }
+
               return (
                 <span
                   style={{
@@ -1365,21 +2761,21 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
                     fontWeight: 700,
                     padding: "3px 10px",
                     borderRadius: 9999,
-                    background: isApp ? "#DCFCE7" : isRej ? "#FEE2E2" : isCorr ? "#FAF5FF" : "#FEF3C7",
-                    color: isApp ? "#166534" : isRej ? "#991B1B" : isCorr ? "#7E22CE" : "#92400E",
-                    border: `1px solid ${isApp ? "#86EFAC" : isRej ? "#FCA5A5" : isCorr ? "#D8B4FE" : "#FDE68A"}`,
+                    background: bg,
+                    color: text,
+                    border: `1px solid ${border}`,
                     display: "inline-flex",
                     alignItems: "center",
                     gap: 4
                   }}
                 >
-                  {isApp ? <CheckCircle size={12} /> : isRej ? <AlertCircle size={12} /> : <Clock size={12} />}
-                  <span>{isApp ? "Approved & Active" : isRej ? "Application Rejected" : isCorr ? "Corrections Requested" : "Pending Approval"}</span>
+                  <Icon size={12} />
+                  <span>{label}</span>
                 </span>
               );
             })()}
             <span className="type-badge manufacturer">
-              {client.client_type || "Client"}
+              {client.client_type || client.business_type || "Client"}
             </span>
           </div>
 
@@ -1447,7 +2843,19 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
           <div>
             <div className="banner-company-name-row">
               <h2 className="banner-company-title">{client.company_name}</h2>
-              <span className="type-badge manufacturer">Verified Business</span>
+              {(() => {
+                const st = (client.status || "PENDING_APPROVAL").toUpperCase();
+                const isApp = st === "APPROVED" || st === "ACTIVE";
+                return isApp ? (
+                  <span className="type-badge manufacturer" style={{ background: "#DCFCE7", color: "#166534", border: "1px solid #86EFAC" }}>
+                    <CheckCircle size={11} style={{ marginRight: 4 }} /> Verified Business
+                  </span>
+                ) : (
+                  <span className="type-badge manufacturer" style={{ background: "#FEF3C7", color: "#92400E", border: "1px solid #FDE68A" }}>
+                    <Clock size={11} style={{ marginRight: 4 }} /> Verification Pending
+                  </span>
+                );
+              })()}
             </div>
             <div className="banner-company-desc">
               {client.city} • Registered Logistics Account
@@ -1477,7 +2885,14 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
         {/* Right Metadata Grid */}
         <div className="banner-meta-grid">
           <div className="banner-meta-item">
-            <span className="banner-meta-label">GSTIN</span>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+              <span className="banner-meta-label">GSTIN</span>
+              {complianceStats.isGstVerified ? (
+                <span style={{ fontSize: 10, fontWeight: 700, color: "#15803D", background: "#DCFCE7", border: "1px solid #86EFAC", padding: "1px 5px", borderRadius: 4 }}>Verified</span>
+              ) : (
+                <span style={{ fontSize: 10, fontWeight: 600, color: "#94A3B8", background: "#F1F5F9", border: "1px solid #E2E8F0", padding: "1px 5px", borderRadius: 4 }}>Unverified</span>
+              )}
+            </div>
             <div className="banner-meta-value mono-text" style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <span>{client.gstin || "—"}</span>
               {client.gstin && (
@@ -1499,7 +2914,14 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
           </div>
 
           <div className="banner-meta-item">
-            <span className="banner-meta-label">PAN Number</span>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+              <span className="banner-meta-label">PAN Number</span>
+              {complianceStats.isPanVerified ? (
+                <span style={{ fontSize: 10, fontWeight: 700, color: "#15803D", background: "#DCFCE7", border: "1px solid #86EFAC", padding: "1px 5px", borderRadius: 4 }}>Verified</span>
+              ) : (
+                <span style={{ fontSize: 10, fontWeight: 600, color: "#94A3B8", background: "#F1F5F9", border: "1px solid #E2E8F0", padding: "1px 5px", borderRadius: 4 }}>Unverified</span>
+              )}
+            </div>
             <div className="banner-meta-value mono-text" style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <span>{client.pan || "—"}</span>
               {client.pan && (
@@ -1526,7 +2948,7 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
         </div>
       </div>
 
-      {/* ── Registration Application Verification & Decision Bar (Phase 8) ── */}
+      {/* ── Registration Application Verification & Decision Bar (Phase 8 & Remediation) ── */}
       <div
         className="registration-decision-card"
         style={{
@@ -1534,22 +2956,22 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
           marginBottom: 16,
           padding: "20px 24px",
           borderRadius: 14,
-          background:
-            client.status === "APPROVED" || client.status === "ACTIVE"
-              ? "linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%)"
-              : client.status === "REJECTED"
-              ? "linear-gradient(135deg, #FEF2F2 0%, #FEE2E2 100%)"
-              : client.status === "CORRECTIONS_REQUESTED"
-              ? "linear-gradient(135deg, #FAF5FF 0%, #F3E8FF 100%)"
-              : "linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%)",
-          border:
-            client.status === "APPROVED" || client.status === "ACTIVE"
-              ? "1px solid #86EFAC"
-              : client.status === "REJECTED"
-              ? "1px solid #FCA5A5"
-              : client.status === "CORRECTIONS_REQUESTED"
-              ? "1px solid #D8B4FE"
-              : "1px solid #FCD34D",
+          background: (() => {
+            const st = (client.status || "PENDING_APPROVAL").toUpperCase();
+            if (st === "APPROVED" || st === "ACTIVE") return "linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%)";
+            if (st === "REJECTED") return "linear-gradient(135deg, #FEF2F2 0%, #FEE2E2 100%)";
+            if (st === "CORRECTIONS_REQUESTED") return "linear-gradient(135deg, #FAF5FF 0%, #F3E8FF 100%)";
+            if (st === "SUSPENDED") return "linear-gradient(135deg, #FFF7ED 0%, #FFEDD5 100%)";
+            return "linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%)";
+          })(),
+          border: (() => {
+            const st = (client.status || "PENDING_APPROVAL").toUpperCase();
+            if (st === "APPROVED" || st === "ACTIVE") return "1px solid #86EFAC";
+            if (st === "REJECTED") return "1px solid #FCA5A5";
+            if (st === "CORRECTIONS_REQUESTED") return "1px solid #D8B4FE";
+            if (st === "SUSPENDED") return "1px solid #FDBA74";
+            return "1px solid #FCD34D";
+          })(),
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -1567,70 +2989,87 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
               alignItems: "center",
               justifyContent: "center",
               flexShrink: 0,
-              background:
-                client.status === "APPROVED" || client.status === "ACTIVE"
-                  ? "#22C55E"
-                  : client.status === "REJECTED"
-                  ? "#EF4444"
-                  : client.status === "CORRECTIONS_REQUESTED"
-                  ? "#A855F7"
-                  : "#F59E0B",
+              background: (() => {
+                const st = (client.status || "PENDING_APPROVAL").toUpperCase();
+                if (st === "APPROVED" || st === "ACTIVE") return "#22C55E";
+                if (st === "REJECTED") return "#EF4444";
+                if (st === "CORRECTIONS_REQUESTED") return "#A855F7";
+                if (st === "SUSPENDED") return "#EA580C";
+                return "#F59E0B";
+              })(),
               color: "#FFFFFF"
             }}
           >
-            {client.status === "APPROVED" || client.status === "ACTIVE" ? (
-              <ShieldCheck size={24} />
-            ) : client.status === "REJECTED" ? (
-              <AlertCircle size={24} />
-            ) : client.status === "CORRECTIONS_REQUESTED" ? (
-              <Edit2 size={22} />
-            ) : (
-              <Clock size={24} />
-            )}
+            {(() => {
+              const st = (client.status || "PENDING_APPROVAL").toUpperCase();
+              if (st === "APPROVED" || st === "ACTIVE") return <ShieldCheck size={24} />;
+              if (st === "REJECTED") return <AlertCircle size={24} />;
+              if (st === "CORRECTIONS_REQUESTED") return <Edit2 size={22} />;
+              if (st === "SUSPENDED") return <AlertTriangle size={22} />;
+              return <Clock size={24} />;
+            })()}
           </div>
 
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#0F172A" }}>
-                {client.status === "APPROVED" || client.status === "ACTIVE"
-                  ? "Client Registration Approved & Active"
-                  : client.status === "REJECTED"
-                  ? "Client Registration Rejected"
-                  : client.status === "CORRECTIONS_REQUESTED"
-                  ? "Corrections Requested from Client"
-                  : "Registration Awaiting Admin Verification"}
-              </h3>
+            {(() => {
+              const st = (client.status || "PENDING_APPROVAL").toUpperCase();
+              const isApp = st === "APPROVED" || st === "ACTIVE";
+              const isRej = st === "REJECTED";
+              const isCorr = st === "CORRECTIONS_REQUESTED";
+              const isSusp = st === "SUSPENDED";
+              const isInact = st === "INACTIVE";
 
-              <span
-                style={{
-                  fontSize: 11.5,
-                  fontWeight: 700,
-                  padding: "2px 10px",
-                  borderRadius: 9999,
-                  background:
-                    client.status === "APPROVED" || client.status === "ACTIVE"
-                      ? "#15803D"
-                      : client.status === "REJECTED"
-                      ? "#DC2626"
-                      : client.status === "CORRECTIONS_REQUESTED"
-                      ? "#7E22CE"
-                      : "#D97706",
-                  color: "#FFFFFF"
-                }}
-              >
-                {client.status}
-              </span>
-            </div>
+              let heading = "Registration Awaiting Admin Verification";
+              let desc = `Submitted on ${new Date(client.created_at).toLocaleDateString("en-IN")}. Contact: ${client.company_phone || "Awaiting Verification"}. All mandatory compliance documents must be verified prior to approval.`;
+              let badgeColor = "#D97706";
 
-            <p style={{ margin: "4px 0 0", fontSize: 13, color: "#334155" }}>
-              {client.status === "APPROVED" || client.status === "ACTIVE"
-                ? `Approved on ${client.approved_at ? new Date(client.approved_at).toLocaleDateString("en-IN") : "Record"} by ${client.approved_by || "Compliance Desk"}. Client has verified phone and full access to operational dashboard.`
-                : client.status === "REJECTED"
-                ? `Rejection Reason: "${client.rejection_reason || "Compliance criteria not met"}". Client access to dashboard is blocked.`
-                : client.status === "CORRECTIONS_REQUESTED"
-                ? `Correction Notes: "${client.correction_notes || "Document re-upload or details required"}". Waiting for client to resubmit.`
-                : `Submitted on ${new Date(client.created_at).toLocaleDateString("en-IN")}. Contact: ${client.company_phone || "Verified"}. All mandatory compliance documents must be verified prior to approval.`}
-            </p>
+              if (isApp) {
+                heading = "Client Registration Approved & Active";
+                desc = `Approved on ${client.approved_at ? new Date(client.approved_at).toLocaleDateString("en-IN") : "Record"} by ${client.approved_by || "Compliance Desk"}. Client has full access to operational mobile app dashboard and requirement creation.`;
+                badgeColor = "#15803D";
+              } else if (isRej) {
+                heading = "Client Registration Rejected";
+                desc = `Rejection Reason: "${client.rejection_reason || "Compliance criteria not met"}". Client access to dashboard is blocked.`;
+                badgeColor = "#DC2626";
+              } else if (isCorr) {
+                heading = "Corrections Requested from Client";
+                desc = `Correction Instructions: "${client.correction_notes || "Document re-upload or details required"}". Client notified via mobile app to resubmit required information.`;
+                badgeColor = "#7E22CE";
+              } else if (isSusp) {
+                heading = "Client Account Suspended";
+                desc = `Account suspended: "${client.rejection_reason || "Administrative review in progress"}". Dashboard access temporarily restricted.`;
+                badgeColor = "#C2410C";
+              } else if (isInact) {
+                heading = "Client Account Inactive";
+                desc = "Account is inactive. Access to operational workflows is paused.";
+                badgeColor = "#475569";
+              }
+
+              return (
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#0F172A" }}>
+                      {heading}
+                    </h3>
+                    <span
+                      style={{
+                        fontSize: 11.5,
+                        fontWeight: 700,
+                        padding: "2px 10px",
+                        borderRadius: 9999,
+                        background: badgeColor,
+                        color: "#FFFFFF"
+                      }}
+                    >
+                      {st}
+                    </span>
+                  </div>
+                  <p style={{ margin: "4px 0 0", fontSize: 13, color: "#334155" }}>
+                    {desc}
+                  </p>
+                </div>
+              );
+            })()}
 
             {/* Document progress counter */}
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8, flexWrap: "wrap" }}>
@@ -1649,7 +3088,7 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
                 ) : (
                   <Clock size={14} color="#D97706" />
                 )}
-                Mandatory Documents: {complianceStats.verifiedMandatory.length} of {Math.max(complianceStats.mandatoryDocs.length, 3)} verified
+                Mandatory Documents: {complianceStats.verifiedMandatory.length} of {complianceStats.mandatoryDocs.length} verified
               </span>
 
               {complianceStats.rejectedDocs.length > 0 && (
@@ -1733,51 +3172,194 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
           </div>
         </div>
 
-        {/* Action Buttons */}
+        {/* Action Buttons: Conditional based on Client Status */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <button
-            type="button"
-            className="btn-create-gold"
-            style={{
-              background: complianceStats.isEligibleForApproval ? "linear-gradient(135deg, #16A34A 0%, #15803D 100%)" : "#94A3B8",
-              borderColor: complianceStats.isEligibleForApproval ? "#15803D" : "#94A3B8",
-              color: "#FFFFFF",
-              fontWeight: 700,
-              boxShadow: complianceStats.isEligibleForApproval ? "0 4px 12px rgba(22, 163, 74, 0.25)" : "none",
-              cursor: isSubmittingAction ? "wait" : "pointer"
-            }}
-            disabled={isSubmittingAction}
-            onClick={handleApproveRegistration}
-          >
-            {isSubmittingAction ? <Loader size={15} className="spin-icon" /> : <ShieldCheck size={16} />}
-            <span>Approve Registration</span>
-          </button>
+          {(() => {
+            const st = (client.status || "PENDING_APPROVAL").toUpperCase();
+            const isApp = st === "APPROVED" || st === "ACTIVE";
+            const isRej = st === "REJECTED";
+            const isCorr = st === "CORRECTIONS_REQUESTED";
+            const isSusp = st === "SUSPENDED";
+            const isInact = st === "INACTIVE";
 
-          <button
-            type="button"
-            className="btn-header-outline"
-            style={{ background: "#FFFFFF", borderColor: "#CBD5E1", color: "#334155" }}
-            onClick={() => {
-              setActionReason("");
-              setActiveModal("REQUEST_CORRECTIONS");
-            }}
-          >
-            <Edit2 size={14} />
-            <span>Request Corrections</span>
-          </button>
+            if (isApp) {
+              // POST-APPROVAL ACTIONS: Inappropriate initial approve/reject actions are hidden
+              return (
+                <>
+                  <button
+                    type="button"
+                    className="btn-create-gold"
+                    onClick={() => setActiveModal("CREATE_REQ")}
+                    id="btn-approved-create-req"
+                  >
+                    <Plus size={15} />
+                    <span>Create Requirement</span>
+                  </button>
 
-          <button
-            type="button"
-            className="btn-header-outline"
-            style={{ background: "#FFFFFF", borderColor: "#FCA5A5", color: "#DC2626" }}
-            onClick={() => {
-              setActionReason("");
-              setActiveModal("REJECT_REG");
-            }}
-          >
-            <X size={14} />
-            <span>Reject Registration</span>
-          </button>
+                  <button
+                    type="button"
+                    className="btn-header-outline"
+                    style={{ background: "#FFFFFF", borderColor: "#CBD5E1", color: "#172B4D" }}
+                    onClick={() => setActiveModal("CREATE_BOOKING")}
+                    id="btn-approved-create-booking"
+                  >
+                    <Truck size={14} />
+                    <span>Create Booking</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn-header-outline"
+                    style={{ background: "#FFFFFF", borderColor: "#FDBA74", color: "#C2410C" }}
+                    onClick={() => {
+                      setActionReason("");
+                      setActiveModal("SUSPEND_CLIENT");
+                    }}
+                    id="btn-suspend-account"
+                  >
+                    <AlertTriangle size={14} />
+                    <span>Suspend Account</span>
+                  </button>
+                </>
+              );
+            }
+
+            if (isSusp || isInact) {
+              return (
+                <button
+                  type="button"
+                  className="btn-create-gold"
+                  style={{ background: "linear-gradient(135deg, #16A34A 0%, #15803D 100%)", borderColor: "#15803D" }}
+                  disabled={isSubmittingAction}
+                  onClick={handleReactivateClient}
+                  id="btn-reactivate-client"
+                >
+                  {isSubmittingAction ? <Loader size={14} className="spin-icon" /> : <RotateCcw size={14} />}
+                  <span>Reactivate Client</span>
+                </button>
+              );
+            }
+
+            if (isRej) {
+              return (
+                <button
+                  type="button"
+                  className="btn-header-outline"
+                  style={{ background: "#FFFFFF", borderColor: "#CBD5E1", color: "#0F172A", fontWeight: 700 }}
+                  disabled={isSubmittingAction}
+                  onClick={handleReopenApplication}
+                  id="btn-reopen-app"
+                >
+                  {isSubmittingAction ? <Loader size={14} className="spin-icon" /> : <RotateCcw size={14} />}
+                  <span>Reopen for Review</span>
+                </button>
+              );
+            }
+
+            if (isCorr) {
+              return (
+                <>
+                  <button
+                    type="button"
+                    className="btn-create-gold"
+                    style={{
+                      background: complianceStats.isEligibleForApproval ? "linear-gradient(135deg, #16A34A 0%, #15803D 100%)" : "#94A3B8",
+                      borderColor: complianceStats.isEligibleForApproval ? "#15803D" : "#94A3B8",
+                      color: "#FFFFFF",
+                      fontWeight: 700,
+                      boxShadow: complianceStats.isEligibleForApproval ? "0 4px 12px rgba(22, 163, 74, 0.25)" : "none"
+                    }}
+                    disabled={isSubmittingAction}
+                    onClick={handleApproveRegistration}
+                    id="btn-rereview-approve"
+                  >
+                    {isSubmittingAction ? <Loader size={15} className="spin-icon" /> : <ShieldCheck size={16} />}
+                    <span>Re-Review & Approve</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn-header-outline"
+                    style={{ background: "#FFFFFF", borderColor: "#D8B4FE", color: "#7E22CE" }}
+                    onClick={() => {
+                      setActionReason(client.correction_notes || "");
+                      setActiveModal("REQUEST_CORRECTIONS");
+                    }}
+                    id="btn-update-corrections"
+                  >
+                    <Edit2 size={14} />
+                    <span>Update Correction Instructions</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn-header-outline"
+                    style={{ background: "#FFFFFF", borderColor: "#FCA5A5", color: "#DC2626" }}
+                    onClick={() => {
+                      setActionReason("");
+                      setActiveModal("REJECT_REG");
+                    }}
+                    id="btn-reject-reg-corr"
+                  >
+                    <X size={14} />
+                    <span>Reject Registration</span>
+                  </button>
+                </>
+              );
+            }
+
+            // Default: PENDING_APPROVAL
+            return (
+              <>
+                <button
+                  type="button"
+                  className="btn-create-gold"
+                  style={{
+                    background: complianceStats.isEligibleForApproval ? "linear-gradient(135deg, #16A34A 0%, #15803D 100%)" : "#94A3B8",
+                    borderColor: complianceStats.isEligibleForApproval ? "#15803D" : "#94A3B8",
+                    color: "#FFFFFF",
+                    fontWeight: 700,
+                    boxShadow: complianceStats.isEligibleForApproval ? "0 4px 12px rgba(22, 163, 74, 0.25)" : "none",
+                    cursor: isSubmittingAction ? "wait" : "pointer"
+                  }}
+                  disabled={isSubmittingAction}
+                  onClick={handleApproveRegistration}
+                  id="btn-approve-registration"
+                >
+                  {isSubmittingAction ? <Loader size={15} className="spin-icon" /> : <ShieldCheck size={16} />}
+                  <span>Approve Registration</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-header-outline"
+                  style={{ background: "#FFFFFF", borderColor: "#CBD5E1", color: "#334155" }}
+                  onClick={() => {
+                    setActionReason("");
+                    setActiveModal("REQUEST_CORRECTIONS");
+                  }}
+                  id="btn-request-corrections"
+                >
+                  <Edit2 size={14} />
+                  <span>Request Corrections</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-header-outline"
+                  style={{ background: "#FFFFFF", borderColor: "#FCA5A5", color: "#DC2626" }}
+                  onClick={() => {
+                    setActionReason("");
+                    setActiveModal("REJECT_REG");
+                  }}
+                  id="btn-reject-registration"
+                >
+                  <X size={14} />
+                  <span>Reject Registration</span>
+                </button>
+              </>
+            );
+          })()}
         </div>
       </div>
 
@@ -1924,12 +3506,32 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
         </div>
       </div>
 
-      {/* Main Two-Column Content Grid or Dedicated Tab */}
-      {activeTab === "bookings" ? (
+      {/* Dedicated Tab Views or Overview Grid */}
+      {activeTab === "bookings" && (
         <div style={{ marginTop: 20 }}>
           {renderBookingHistoryCard(true)}
         </div>
-      ) : (
+      )}
+
+      {activeTab === "contacts" && renderContactsTab()}
+
+      {activeTab === "addresses" && renderAddressesTab()}
+
+      {activeTab === "history" && renderHistoryTab()}
+
+      {activeTab === "finance" && renderFinanceTab()}
+
+      {activeTab === "documents" && (
+        <div style={{ marginTop: 20 }}>
+          {renderKycDocumentsCard(true)}
+        </div>
+      )}
+
+      {activeTab === "notes" && renderNotesTab()}
+
+      {activeTab === "activity" && renderActivityTab()}
+
+      {activeTab === "overview" && (
         <div className="profile-main-grid">
         {/* Left Column: Requirements Table + Bookings Table */}
         <div className="profile-left-tables">
@@ -1948,7 +3550,22 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
               </div>
             </div>
 
-            {requirements.length === 0 ? (
+            {reqFetchError ? (
+              <div style={{ margin: "16px", padding: "14px 16px", background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#991B1B", fontSize: 13 }}>
+                  <AlertTriangle size={16} />
+                  <span>Failed to load transport requirements: {reqFetchError}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => loadClientDetailsFromDB(true)}
+                  style={{ cursor: "pointer", padding: "5px 12px", fontSize: 12, fontWeight: 600, background: "#FFFFFF", border: "1px solid #DC2626", color: "#DC2626", borderRadius: 6, display: "flex", alignItems: "center", gap: 4 }}
+                >
+                  <RotateCcw size={12} />
+                  Retry
+                </button>
+              </div>
+            ) : requirements.length === 0 ? (
               <div style={{ textAlign: "center", padding: "36px 16px", color: "#64748B" }}>
                 <Package size={32} color="#94A3B8" style={{ marginBottom: 8 }} />
                 <div style={{ fontWeight: 600, color: "#111111", marginBottom: 4 }}>
@@ -1966,44 +3583,46 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
                 </button>
               </div>
             ) : (
-              <table className="profile-mini-table">
-                <thead>
-                  <tr>
-                    <th>REQ ID</th>
-                    <th>Date</th>
-                    <th>Origin → Destination</th>
-                    <th>Material</th>
-                    <th>Truck Type</th>
-                    <th>Capacity</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {requirements.map(req => (
-                    <tr key={req.id}>
-                      <td>
-                        <span style={{ color: "#F45325", fontWeight: 600, fontFamily: "var(--font-mono, monospace)" }}>
-                          {req.id}
-                        </span>
-                      </td>
-                      <td style={{ color: "#64748B" }}>
-                        {new Date(req.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
-                      </td>
-                      <td style={{ fontWeight: 600, color: "#111111" }}>
-                        {req.pickup_address?.split(",")[0] || "Origin"} → {req.destination_address?.split(",")[0] || "Destination"}
-                      </td>
-                      <td>{req.material_type}</td>
-                      <td style={{ color: "#64748B" }}>{req.vehicle_type}</td>
-                      <td style={{ fontWeight: 600 }}>{req.required_capacity_mt} MT</td>
-                      <td>
-                        <span className="badge-status-pill open">
-                          {req.status}
-                        </span>
-                      </td>
+              <div className="profile-table-responsive">
+                <table className="profile-mini-table">
+                  <thead>
+                    <tr>
+                      <th>REQ ID</th>
+                      <th>Date</th>
+                      <th>Origin → Destination</th>
+                      <th>Material</th>
+                      <th>Truck Type</th>
+                      <th>Capacity</th>
+                      <th>Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {requirements.map(req => (
+                      <tr key={req.id}>
+                        <td>
+                          <span style={{ color: "#F45325", fontWeight: 600, fontFamily: "var(--font-mono, monospace)" }}>
+                            {req.id}
+                          </span>
+                        </td>
+                        <td style={{ color: "#64748B" }}>
+                          {new Date(req.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                        </td>
+                        <td style={{ fontWeight: 600, color: "#111111" }}>
+                          {req.pickup_address?.split(",")[0] || "Origin"} → {req.destination_address?.split(",")[0] || "Destination"}
+                        </td>
+                        <td>{req.material_type}</td>
+                        <td style={{ color: "#64748B" }}>{req.vehicle_type}</td>
+                        <td style={{ fontWeight: 600 }}>{req.required_capacity_mt} MT</td>
+                        <td>
+                          <span className="badge-status-pill open">
+                            {req.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
 
@@ -2011,251 +3630,7 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
           {renderBookingHistoryCard(false)}
 
           {/* Section 3: Submitted KYC & Business Compliance Documents (Phase 8) */}
-          <div className="profile-table-card" id="kyc-documents-card" style={{ marginTop: 20 }}>
-            <div className="profile-table-header">
-              <div>
-                <h3 className="profile-table-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <FileText size={17} color="#F05A22" />
-                  <span>KYC Compliance & Business Documents</span>
-                </h3>
-                <p style={{ margin: "3px 0 0", fontSize: 12.5, color: "#64748B" }}>
-                  Verify GST, PAN, and Incorporation proofs before approving client account.
-                </p>
-              </div>
-
-              <div className="profile-table-header-actions">
-                <span
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 700,
-                    padding: "4px 10px",
-                    borderRadius: 6,
-                    background: complianceStats.isEligibleForApproval ? "#DCFCE7" : "#FEF3C7",
-                    color: complianceStats.isEligibleForApproval ? "#15803D" : "#B45309"
-                  }}
-                >
-                  {complianceStats.verifiedMandatory.length} / {Math.max(complianceStats.mandatoryDocs.length, 3)} Mandatory Verified
-                </span>
-              </div>
-            </div>
-
-            {documents.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "36px 16px", color: "#64748B" }}>
-                <FileText size={32} color="#94A3B8" style={{ marginBottom: 8 }} />
-                <div style={{ fontWeight: 600, color: "#111111", marginBottom: 4 }}>
-                  No KYC documents uploaded yet
-                </div>
-                <div style={{ fontSize: 13 }}>
-                  Client registration documents submitted via mobile app will appear here for verification.
-                </div>
-              </div>
-            ) : (
-              <table className="profile-mini-table">
-                <thead>
-                  <tr>
-                    <th>Document Name</th>
-                    <th>Requirement</th>
-                    <th>Upload Responsibility</th>
-                    <th>Uploaded File</th>
-                    <th>Upload Date</th>
-                    <th>Verification Status</th>
-                    <th>Audit Notes</th>
-                    <th style={{ textAlign: "center" }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {documents.map((doc: any) => {
-                    const resolved = resolveClientDocumentType(doc);
-                    const isMandatory = resolved.key !== "MSME_UDYAM" && resolved.key !== "OTHER";
-                    const isVerified = doc.verification_status === "VERIFIED" || doc.verification_status === "APPROVED";
-                    const isRejected = doc.verification_status === "REJECTED";
-                    const isReplaced = doc.verification_status === "REPLACEMENT_REQUESTED" || doc.verification_status === "RE_UPLOADED";
-                    const isPendingUpload = doc.verification_status === "PENDING_UPLOAD";
-                    const isClientResp = doc.uploaded_by === "CLIENT" ||
-                      doc.metadata?.upload_responsibility === "CLIENT" ||
-                      client?.document_upload_responsibility?.[resolved.key] === "CLIENT";
-                    const docTitle = resolved.label;
-
-                    return (
-                      <tr key={doc.id}>
-                        <td>
-                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                            <div
-                              style={{
-                                width: 34,
-                                height: 34,
-                                borderRadius: 8,
-                                background: isVerified ? "#F0FDF4" : isRejected ? "#FEF2F2" : isPendingUpload ? "#EFF6FF" : "#FFF7ED",
-                                border: "1px solid #E2E8F0",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                flexShrink: 0
-                              }}
-                            >
-                              <FileText size={17} color={isVerified ? "#16A34A" : isRejected ? "#DC2626" : isPendingUpload ? "#2563EB" : "#EA580C"} />
-                            </div>
-                            <div>
-                              <div style={{ fontWeight: 700, color: "#0F172A", fontSize: 13 }}>
-                                {docTitle}
-                              </div>
-                              <div style={{ fontSize: 11, color: "#64748B", marginTop: 1 }}>
-                                {isMandatory ? "Required for company registration" : "Optional verification record"}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-
-                        <td>
-                          {isMandatory ? (
-                            <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 7px", borderRadius: 4, background: "#EFF6FF", color: "#1D4ED8", border: "1px solid #BFDBFE" }}>
-                              Mandatory
-                            </span>
-                          ) : (
-                            <span style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 7px", borderRadius: 4, background: "#F1F5F9", color: "#64748B", border: "1px solid #E2E8F0" }}>
-                              Optional
-                            </span>
-                          )}
-                        </td>
-
-                        <td>
-                          <span
-                            style={{
-                              fontSize: 10.5,
-                              fontWeight: 700,
-                              padding: "2px 8px",
-                              borderRadius: 9999,
-                              background: isClientResp ? "#F5F3FF" : "#F0FDF4",
-                              color: isClientResp ? "#6D28D9" : "#166534",
-                              border: `1px solid ${isClientResp ? "#DDD6FE" : "#BBF7D0"}`,
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: 4
-                            }}
-                          >
-                            {isClientResp ? "Client Upload" : "Admin Upload"}
-                          </span>
-                        </td>
-
-                        <td>
-                          <div>
-                            <div
-                              style={{ fontSize: 12, fontWeight: 600, color: "#334155", fontFamily: "monospace", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                              title={resolved.cleanFileName}
-                            >
-                              {resolved.cleanFileName}
-                            </div>
-                            <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>
-                              {doc.file_size ? `${(parseInt(doc.file_size) / 1024).toFixed(1)} KB` : isPendingUpload ? "Awaiting Upload" : "—"}
-                            </div>
-                          </div>
-                        </td>
-
-                        <td>
-                          <span style={{ fontSize: 12, color: "#475569" }}>
-                            {doc.created_at ? new Date(doc.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
-                          </span>
-                        </td>
-
-                        <td>
-                          {isPendingUpload ? (
-                            <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 6, background: "#EFF6FF", color: "#1D4ED8", display: "inline-flex", alignItems: "center", gap: 3 }}>
-                              <Clock size={11} /> Pending Client Upload
-                            </span>
-                          ) : isVerified ? (
-                            <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 6, background: "#DCFCE7", color: "#15803D", display: "inline-flex", alignItems: "center", gap: 3 }}>
-                              <CheckCircle size={11} /> Verified
-                            </span>
-                          ) : isRejected ? (
-                            <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 6, background: "#FEE2E2", color: "#DC2626", display: "inline-flex", alignItems: "center", gap: 3 }}>
-                              <AlertCircle size={11} /> Rejected
-                            </span>
-                          ) : isReplaced ? (
-                            <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 6, background: "#FAF5FF", color: "#7E22CE", display: "inline-flex", alignItems: "center", gap: 3 }}>
-                              <RotateCcw size={11} /> Re-upload
-                            </span>
-                          ) : (
-                            <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 6, background: "#FFFBEB", color: "#D97706", display: "inline-flex", alignItems: "center", gap: 3 }}>
-                              <Clock size={11} /> Pending Review
-                            </span>
-                          )}
-                        </td>
-
-                        <td>
-                          <div
-                            style={{
-                              maxWidth: 150,
-                              fontSize: 11.5,
-                              color: isRejected ? "#DC2626" : "#64748B",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap"
-                            }}
-                            title={doc.rejection_reason || (doc.verified_by ? `Verified by ${doc.verified_by}` : "Pending review")}
-                          >
-                            {doc.rejection_reason ? `Rejected: ${doc.rejection_reason}` : doc.verified_by ? `By ${doc.verified_by}` : "Pending review"}
-                          </div>
-                        </td>
-
-                        <td style={{ textAlign: "center" }}>
-                          <div style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                            <button
-                              type="button"
-                              className="row-action-btn-circle"
-                              title="Preview Document Securely"
-                              style={{ width: 28, height: 28, background: "#0F172A", color: "#FFFFFF" }}
-                              onClick={() => handlePreviewDocument(doc)}
-                            >
-                              <Eye size={12} />
-                            </button>
-
-                            <button
-                              type="button"
-                              className="row-action-btn-circle"
-                              title="Mark as Verified"
-                              style={{ width: 28, height: 28, background: "#DCFCE7", color: "#16A34A", border: "1px solid #86EFAC" }}
-                              disabled={isSubmittingAction || isVerified}
-                              onClick={() => handleVerifyDocument(doc.id)}
-                            >
-                              <Check size={12} />
-                            </button>
-
-                            <button
-                              type="button"
-                              className="row-action-btn-circle"
-                              title="Request Re-upload"
-                              style={{ width: 28, height: 28, background: "#FAF5FF", color: "#7E22CE", border: "1px solid #D8B4FE" }}
-                              onClick={() => {
-                                setSelectedDocForAction(doc);
-                                setActionReason("");
-                                setActiveModal("REPLACE_DOC");
-                              }}
-                            >
-                              <RotateCcw size={11} />
-                            </button>
-
-                            <button
-                              type="button"
-                              className="row-action-btn-circle"
-                              title="Reject Document"
-                              style={{ width: 28, height: 28, background: "#FEE2E2", color: "#DC2626", border: "1px solid #FCA5A5" }}
-                              onClick={() => {
-                                setSelectedDocForAction(doc);
-                                setActionReason("");
-                                setActiveModal("REJECT_DOC");
-                              }}
-                            >
-                              <X size={12} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-          </div>
+          {renderKycDocumentsCard(false)}
         </div>
 
         {/* Right Column: Quick Actions + Real Contacts + Registered Address */}
@@ -2461,7 +3836,7 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
       {/* 1. Create Requirement Modal */}
       {activeModal === "CREATE_REQ" && (
         <div className="create-modal-backdrop">
-          <div className="create-modal-card">
+          <div className="create-modal-card" style={{ maxWidth: 640, maxHeight: "90vh", overflowY: "auto" }}>
             <div className="create-modal-header">
               <div>
                 <h3 className="create-modal-title">Create Transport Requirement</h3>
@@ -2476,64 +3851,209 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
 
             <form onSubmit={handleCreateRequirement}>
               <div className="create-modal-body">
-                <div className="form-group-grid">
+                {/* 1. Route Locations */}
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                    <MapPin size={15} color="#F05A22" />
+                    <span>Origin & Pickup Location</span>
+                  </div>
                   <div className="form-field-group">
-                    <label className="form-field-label">Pickup Address / Hub</label>
+                    <label className="form-field-label">Pickup Address / Hub Location *</label>
                     <input
                       type="text"
                       className="form-field-input"
+                      placeholder="e.g. Plot 42, Beltola Logistics Park, Guwahati"
                       value={newReqForm.origin}
                       onChange={e => setNewReqForm({ ...newReqForm, origin: e.target.value })}
                       required
                     />
                   </div>
+                  <div className="form-group-grid" style={{ marginTop: 8 }}>
+                    <div className="form-field-group">
+                      <label className="form-field-label">Pickup PIN Code (6 Digits) *</label>
+                      <input
+                        type="text"
+                        className="form-field-input"
+                        placeholder="e.g. 781028"
+                        maxLength={6}
+                        pattern="[0-9]{6}"
+                        value={newReqForm.originPincode}
+                        onChange={e => setNewReqForm({ ...newReqForm, originPincode: e.target.value.replace(/\D/g, "").slice(0, 6) })}
+                        required
+                      />
+                    </div>
+                    <div className="form-field-group">
+                      <label className="form-field-label">Pickup City / Hub Name</label>
+                      <input
+                        type="text"
+                        className="form-field-input"
+                        placeholder="e.g. Guwahati"
+                        value={newReqForm.originCity}
+                        onChange={e => setNewReqForm({ ...newReqForm, originCity: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 16, paddingTop: 14, borderTop: "1px dashed #E2E8F0" }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                    <MapPin size={15} color="#2563EB" />
+                    <span>Destination & Delivery Depot</span>
+                  </div>
                   <div className="form-field-group">
-                    <label className="form-field-label">Destination Address / Depot</label>
+                    <label className="form-field-label">Destination Address / Unloading Depot *</label>
                     <input
                       type="text"
                       className="form-field-input"
+                      placeholder="e.g. Warehouse 7, Dankuni Industrial Complex, Hooghly"
                       value={newReqForm.destination}
                       onChange={e => setNewReqForm({ ...newReqForm, destination: e.target.value })}
                       required
                     />
                   </div>
+                  <div className="form-group-grid" style={{ marginTop: 8 }}>
+                    <div className="form-field-group">
+                      <label className="form-field-label">Destination PIN Code (6 Digits) *</label>
+                      <input
+                        type="text"
+                        className="form-field-input"
+                        placeholder="e.g. 712311"
+                        maxLength={6}
+                        pattern="[0-9]{6}"
+                        value={newReqForm.destinationPincode}
+                        onChange={e => setNewReqForm({ ...newReqForm, destinationPincode: e.target.value.replace(/\D/g, "").slice(0, 6) })}
+                        required
+                      />
+                    </div>
+                    <div className="form-field-group">
+                      <label className="form-field-label">Destination City / Depot Name</label>
+                      <input
+                        type="text"
+                        className="form-field-input"
+                        placeholder="e.g. Kolkata / Dankuni"
+                        value={newReqForm.destinationCity}
+                        onChange={e => setNewReqForm({ ...newReqForm, destinationCity: e.target.value })}
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                <div className="form-group-grid">
-                  <div className="form-field-group">
-                    <label className="form-field-label">Material Type</label>
-                    <input
-                      type="text"
+                {/* 2. Cargo & Vehicle Details */}
+                <div style={{ marginBottom: 16, paddingTop: 14, borderTop: "1px dashed #E2E8F0" }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                    <Package size={15} color="#F05A22" />
+                    <span>Cargo & Vehicle Specifications</span>
+                  </div>
+
+                  <div className="form-group-grid">
+                    <div className="form-field-group">
+                      <label className="form-field-label">Material Type *</label>
+                      <input
+                        type="text"
+                        className="form-field-input"
+                        placeholder="e.g. Steel Coils, FMCG, Cement, Machinery"
+                        value={newReqForm.material}
+                        onChange={e => setNewReqForm({ ...newReqForm, material: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="form-field-group">
+                      <label className="form-field-label">Vehicle Type *</label>
+                      <select
+                        className="form-field-input"
+                        value={newReqForm.truckType}
+                        onChange={e => {
+                          const val = e.target.value;
+                          let defaultCap = newReqForm.capacityMt;
+                          if (val.includes("25 MT")) defaultCap = "25";
+                          else if (val.includes("28 MT")) defaultCap = "28";
+                          else if (val.includes("35 MT")) defaultCap = "35";
+                          else if (val.includes("40 MT")) defaultCap = "40";
+                          else if (val.includes("45 MT")) defaultCap = "45";
+                          else if (val.includes("18 MT")) defaultCap = "18";
+                          else if (val.includes("9 MT")) defaultCap = "9";
+                          setNewReqForm({ ...newReqForm, truckType: val, capacityMt: defaultCap });
+                        }}
+                      >
+                        <option value="10 Wheeler (25 MT)">10 Wheeler (25 MT)</option>
+                        <option value="12 Wheeler (28 MT)">12 Wheeler (28 MT)</option>
+                        <option value="16 Wheeler (35 MT)">16 Wheeler (35 MT)</option>
+                        <option value="20 Wheeler (40 MT)">20 Wheeler (40 MT)</option>
+                        <option value="22 Wheeler (45 MT)">22 Wheeler (45 MT)</option>
+                        <option value="32 Ft MXL Container (18 MT)">32 Ft MXL Container (18 MT)</option>
+                        <option value="32 Ft SXL Container (9 MT)">32 Ft SXL Container (9 MT)</option>
+                        <option value="Any Standard Heavy Truck">Any Standard Heavy Truck</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="form-group-grid" style={{ marginTop: 8 }}>
+                    <div className="form-field-group">
+                      <label className="form-field-label">Required Capacity (MT) *</label>
+                      <input
+                        type="number"
+                        className="form-field-input"
+                        step="0.1"
+                        min="0.1"
+                        value={newReqForm.capacityMt}
+                        onChange={e => setNewReqForm({ ...newReqForm, capacityMt: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="form-field-group">
+                      <label className="form-field-label">Vehicle Quantity *</label>
+                      <input
+                        type="number"
+                        className="form-field-input"
+                        min="1"
+                        value={newReqForm.vehicleQuantity}
+                        onChange={e => setNewReqForm({ ...newReqForm, vehicleQuantity: e.target.value })}
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Schedule & Instructions */}
+                <div style={{ paddingTop: 14, borderTop: "1px dashed #E2E8F0" }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                    <Calendar size={15} color="#F05A22" />
+                    <span>Loading Schedule & Instructions</span>
+                  </div>
+
+                  <div className="form-group-grid">
+                    <div className="form-field-group">
+                      <label className="form-field-label">Scheduled Loading Date *</label>
+                      <input
+                        type="date"
+                        className="form-field-input"
+                        value={newReqForm.loadingDate}
+                        onChange={e => setNewReqForm({ ...newReqForm, loadingDate: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="form-field-group">
+                      <label className="form-field-label">Scheduled Loading Time</label>
+                      <input
+                        type="time"
+                        className="form-field-input"
+                        value={newReqForm.loadingTime}
+                        onChange={e => setNewReqForm({ ...newReqForm, loadingTime: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-field-group" style={{ marginTop: 8 }}>
+                    <label className="form-field-label">Special Handling Instructions</label>
+                    <textarea
+                      rows={3}
                       className="form-field-input"
-                      value={newReqForm.material}
-                      onChange={e => setNewReqForm({ ...newReqForm, material: e.target.value })}
-                      required
+                      style={{ height: "auto", padding: 10 }}
+                      placeholder="e.g. Tarpaulin cover mandatory, loading dock clearance required, fragile palletized goods..."
+                      value={newReqForm.specialInstructions}
+                      onChange={e => setNewReqForm({ ...newReqForm, specialInstructions: e.target.value })}
                     />
                   </div>
-                  <div className="form-field-group">
-                    <label className="form-field-label">Truck Type</label>
-                    <select
-                      className="form-field-input"
-                      value={newReqForm.truckType}
-                      onChange={e => setNewReqForm({ ...newReqForm, truckType: e.target.value })}
-                    >
-                      <option value="10 Wheeler">10 Wheeler (25 MT)</option>
-                      <option value="12 Wheeler">12 Wheeler (28 MT)</option>
-                      <option value="16 Wheeler">16 Wheeler (35 MT)</option>
-                      <option value="20 Wheeler">20 Wheeler (40 MT)</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="form-field-group">
-                  <label className="form-field-label">Capacity (MT)</label>
-                  <input
-                    type="number"
-                    className="form-field-input"
-                    value={newReqForm.capacityMt}
-                    onChange={e => setNewReqForm({ ...newReqForm, capacityMt: e.target.value })}
-                    required
-                  />
                 </div>
               </div>
 
@@ -3088,6 +4608,65 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
         </div>
       )}
 
+      {/* 8b. Suspend Client Account Modal */}
+      {activeModal === "SUSPEND_CLIENT" && (
+        <div className="create-modal-backdrop">
+          <div className="create-modal-card">
+            <div className="create-modal-header">
+              <div>
+                <h3 className="create-modal-title" style={{ color: "#DC2626" }}>Suspend Client Account</h3>
+                <p className="create-modal-subtitle">
+                  Company: {client.company_name} | Account access and requirement posting will be paused
+                </p>
+              </div>
+              <button className="create-modal-close-btn" onClick={() => setActiveModal(null)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="create-modal-body">
+              <div className="form-field-group">
+                <label className="form-field-label">Suspension Reason (Required)</label>
+                <textarea
+                  rows={4}
+                  className="form-field-input"
+                  style={{ height: "auto", padding: 12 }}
+                  placeholder="Explain why this account is being suspended (e.g. payment defaults, compliance non-fulfillment, regulatory notice)..."
+                  value={actionReason}
+                  onChange={e => setActionReason(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="create-modal-footer">
+              <button className="btn-cancel-modal" onClick={() => setActiveModal(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-submit-modal"
+                style={{ background: "#DC2626", borderColor: "#DC2626" }}
+                disabled={isSubmittingAction || !actionReason.trim()}
+                onClick={handleSuspendClient}
+              >
+                {isSubmittingAction ? (
+                  <>
+                    <Loader size={14} className="spin-icon" />
+                    <span>Suspending...</span>
+                  </>
+                ) : (
+                  <>
+                    <AlertTriangle size={16} />
+                    <span>Confirm Suspension</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 9. Reject Document Modal (Phase 8) */}
       {activeModal === "REJECT_DOC" && selectedDocForAction && (
         <div className="create-modal-backdrop">
@@ -3218,6 +4797,7 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
           rejectionReason={previewDoc.rejection_reason}
           uploadedAt={previewDoc.created_at}
           fileSize={previewDoc.file_size}
+          mimeType={previewDoc.mime_type}
           onVerify={() => {
             handleVerifyDocument(previewDoc.id);
             setPreviewDoc((prev: any) => prev ? { ...prev, verification_status: "VERIFIED", rejection_reason: null } : null);

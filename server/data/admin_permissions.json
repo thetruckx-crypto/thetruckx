@@ -1,0 +1,257 @@
+{
+  "a7f9847d-6540-474a-9b1f-fe1f213d894c": {
+    "dashboard": {
+      "enabled": true,
+      "actions": {
+        "view": true,
+        "export": true
+      },
+      "scope": "ALL"
+    },
+    "clients": {
+      "enabled": true,
+      "actions": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "approve": true,
+        "reject": true,
+        "suspend": false,
+        "export": true,
+        "delete": false
+      },
+      "scope": "ALL"
+    },
+    "vendors": {
+      "enabled": true,
+      "actions": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "approve": true,
+        "reject": true,
+        "suspend": false,
+        "export": true,
+        "delete": false
+      },
+      "scope": "ALL"
+    },
+    "drivers": {
+      "enabled": true,
+      "actions": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "approve": true,
+        "reject": true,
+        "suspend": false,
+        "verify": true,
+        "export": true,
+        "delete": false
+      },
+      "scope": "ALL"
+    },
+    "fleet": {
+      "enabled": true,
+      "actions": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "approve": true,
+        "reject": true,
+        "suspend": false,
+        "verify": true,
+        "export": true,
+        "delete": false
+      },
+      "scope": "ALL"
+    },
+    "requirements": {
+      "enabled": true,
+      "actions": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "approve": true,
+        "reject": true,
+        "assign": true,
+        "export": true,
+        "delete": false
+      },
+      "scope": "ALL"
+    },
+    "quotations": {
+      "enabled": true,
+      "actions": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "assign": true,
+        "export": true,
+        "delete": false
+      },
+      "scope": "ALL"
+    },
+    "vendor_quotes": {
+      "enabled": true,
+      "actions": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "approve": true,
+        "reject": true,
+        "export": true,
+        "view_margins": false
+      },
+      "scope": "ALL"
+    },
+    "pricing": {
+      "enabled": true,
+      "actions": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "approve": true,
+        "reject": true,
+        "export": true,
+        "view_margins": false
+      },
+      "scope": "ALL"
+    },
+    "bookings": {
+      "enabled": true,
+      "actions": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "assign": true,
+        "close": true,
+        "export": true,
+        "delete": false
+      },
+      "scope": "ALL"
+    },
+    "pretrip": {
+      "enabled": true,
+      "actions": {
+        "view": true,
+        "edit": true,
+        "verify": true,
+        "upload": true,
+        "export": true
+      },
+      "scope": "ALL"
+    },
+    "tracking": {
+      "enabled": true,
+      "actions": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "export": true
+      },
+      "scope": "ALL"
+    },
+    "weighbridge": {
+      "enabled": true,
+      "actions": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "verify": true,
+        "upload": true,
+        "export": true
+      },
+      "scope": "ALL"
+    },
+    "documents": {
+      "enabled": true,
+      "actions": {
+        "view": true,
+        "verify": true,
+        "upload": true,
+        "reject": true,
+        "export": true,
+        "delete": false
+      },
+      "scope": "ALL"
+    },
+    "pod": {
+      "enabled": true,
+      "actions": {
+        "view": true,
+        "approve": true,
+        "reject": true,
+        "close": true,
+        "export": true
+      },
+      "scope": "ALL"
+    },
+    "payments": {
+      "enabled": false,
+      "actions": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "export": false,
+        "view_margins": false
+      },
+      "scope": "ALL"
+    },
+    "exceptions": {
+      "enabled": true,
+      "actions": {
+        "view": true,
+        "create": true,
+        "edit": true,
+        "close": true,
+        "export": true
+      },
+      "scope": "ALL"
+    },
+    "communications": {
+      "enabled": true,
+      "actions": {
+        "view": true,
+        "create": true,
+        "export": true
+      },
+      "scope": "ALL"
+    },
+    "reports": {
+      "enabled": true,
+      "actions": {
+        "view": true,
+        "export": true,
+        "view_margins": false
+      },
+      "scope": "ALL"
+    },
+    "settings": {
+      "enabled": false,
+      "actions": {
+        "view": false,
+        "edit": false
+      },
+      "scope": "ALL"
+    },
+    "audit_logs": {
+      "enabled": false,
+      "actions": {
+        "view": false,
+        "export": false
+      },
+      "scope": "ALL"
+    },
+    "superadmin": {
+      "enabled": false,
+      "actions": {
+        "view": false,
+        "create": false,
+        "edit": false,
+        "delete": false
+      },
+      "scope": "ALL"
+    }
+  }
+}

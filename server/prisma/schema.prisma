@@ -1,0 +1,382 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// 1. CLIENT MANAGEMENT
+model ClientCompany {
+  id                String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  companyName       String       @map("company_name")
+  gstin             String?
+  pan               String?
+  registeredAddress String       @map("registered_address")
+  city              String
+  pincode           String
+  status            String       @default("ACTIVE")
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt         DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  users             ClientUser[]
+  requirements      Requirement[]
+  bookings          Booking[]
+  chatThreads       ChatThread[]
+
+  @@map("client_companies")
+}
+
+model ClientUser {
+  id        String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clientId  String        @map("client_id") @db.Uuid
+  mobile    String        @unique
+  fullName  String        @map("full_name")
+  email     String?
+  status    String        @default("ACTIVE")
+  createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz()
+
+  client    ClientCompany @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  @@map("client_users")
+}
+
+// 2. VENDOR & FLEET MANAGEMENT
+model VendorCompany {
+  id               String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vendorName       String              @map("vendor_name")
+  pan              String
+  gstin            String?
+  address          String
+  status           String              @default("PENDING")
+  onboardingSource String              @default("SELF_REGISTERED") @map("onboarding_source")
+  approvedBy       String?             @map("approved_by")
+  approvedAt       DateTime?           @map("approved_at") @db.Timestamptz()
+  createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt        DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  users            VendorUser[]
+  vehicleLinks     VendorVehicleLink[]
+  drivers          Driver[]
+  vendorRequests   VendorRequest[]
+  trips            Trip[]
+  chatThreads      ChatThread[]
+
+  @@map("vendor_companies")
+}
+
+model VendorUser {
+  id        String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vendorId  String        @map("vendor_id") @db.Uuid
+  mobile    String        @unique
+  fullName  String        @map("full_name")
+  email     String?
+  status    String        @default("ACTIVE")
+  createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz()
+
+  vendor    VendorCompany @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+
+  @@map("vendor_users")
+}
+
+model Vehicle {
+  id                 String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  registrationNumber String              @unique @map("registration_number")
+  vehicleType        String              @map("vehicle_type")
+  ratedCapacityMt    Decimal             @map("rated_capacity_mt") @db.Decimal(6, 2)
+  minimumCapacityMt  Decimal             @map("minimum_capacity_mt") @db.Decimal(6, 2)
+  rcNumber           String?             @map("rc_number")
+  status             String              @default("ACTIVE")
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz()
+
+  vendorLinks        VendorVehicleLink[]
+  quotations         VendorQuotation[]
+  trips              Trip[]
+
+  @@map("vehicles")
+}
+
+model VendorVehicleLink {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vendorId       String        @map("vendor_id") @db.Uuid
+  vehicleId      String        @map("vehicle_id") @db.Uuid
+  status         String        @default("PENDING")
+  tieUpProofUrl  String?       @map("tie_up_proof_url")
+  approvedBy     String?       @map("approved_by")
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz()
+
+  vendor         VendorCompany @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  vehicle        Vehicle       @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+
+  @@unique([vendorId, vehicleId], map: "uq_vendor_vehicle")
+  @@map("vendor_vehicle_links")
+}
+
+model Driver {
+  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  primaryVendorId   String            @map("primary_vendor_id") @db.Uuid
+  fullName          String            @map("full_name")
+  mobile            String            @unique
+  licenceNumber     String            @map("licence_number")
+  licenceExpiryDate DateTime          @map("licence_expiry_date") @db.Date
+  status            String            @default("PENDING")
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz()
+
+  vendor            VendorCompany     @relation(fields: [primaryVendorId], references: [id], onDelete: Restrict)
+  quotations        VendorQuotation[]
+  trips             Trip[]
+  chatThreads       ChatThread[]
+
+  @@map("drivers")
+}
+
+// 3. REQUIREMENTS & SOURCING
+model Requirement {
+  id                   String          @id // REQ-YYYYMMDD-####
+  clientId             String          @map("client_id") @db.Uuid
+  assignedAdminId      String?         @map("assigned_admin_id")
+  pickupPincode        String          @map("pickup_pincode")
+  pickupAddress        String          @map("pickup_address")
+  destinationPincode   String          @map("destination_pincode")
+  destinationAddress   String          @map("destination_address")
+  requiredCapacityMt   Decimal         @map("required_capacity_mt") @db.Decimal(6, 2)
+  vehicleType          String          @map("vehicle_type")
+  materialType         String          @map("material_type")
+  loadingDatetime      DateTime        @map("loading_datetime") @db.Timestamptz()
+  specialInstructions  String?         @map("special_instructions")
+  status               String          @default("NEW_REQUIREMENT")
+  createdAt            DateTime        @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt            DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  client               ClientCompany   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  vendorRequests       VendorRequest[]
+  clientQuotes         ClientQuote[]
+  bookings             Booking[]
+  chatThreads          ChatThread[]
+
+  @@map("requirements")
+}
+
+model VendorRequest {
+  id            String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  requirementId String            @map("requirement_id")
+  vendorId      String            @map("vendor_id") @db.Uuid
+  deadlineAt    DateTime          @map("deadline_at") @db.Timestamptz()
+  status        String            @default("PENDING")
+  createdAt     DateTime          @default(now()) @map("created_at") @db.Timestamptz()
+
+  requirement   Requirement       @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  vendor        VendorCompany     @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  quotations    VendorQuotation[]
+
+  @@map("vendor_requests")
+}
+
+model VendorQuotation {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vendorRequestId String        @map("vendor_request_id") @db.Uuid
+  vehicleId       String        @map("vehicle_id") @db.Uuid
+  driverId        String        @map("driver_id") @db.Uuid
+  quotedRate      Decimal       @map("quoted_rate") @db.Decimal(12, 2)
+  version         Int           @default(1)
+  isLocked        Boolean       @default(false) @map("is_locked")
+  submittedAt     DateTime      @default(now()) @map("submitted_at") @db.Timestamptz()
+
+  vendorRequest   VendorRequest @relation(fields: [vendorRequestId], references: [id], onDelete: Cascade)
+  vehicle         Vehicle       @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  driver          Driver        @relation(fields: [driverId], references: [id], onDelete: Restrict)
+
+  @@map("vendor_quotations")
+}
+
+model ClientQuote {
+  id                 String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  requirementId      String      @map("requirement_id")
+  version            Int         @default(1)
+  vendorBaseCost     Decimal     @map("vendor_base_cost") @db.Decimal(12, 2)
+  adminMargin        Decimal     @map("admin_margin") @db.Decimal(12, 2)
+  gstRatePercent     Decimal     @default(18.00) @map("gst_rate_percent") @db.Decimal(5, 2)
+  gstAmount          Decimal     @map("gst_amount") @db.Decimal(12, 2)
+  totalClientAmount  Decimal     @map("total_client_amount") @db.Decimal(12, 2)
+  validityExpiresAt  DateTime    @map("validity_expires_at") @db.Timestamptz()
+  status             String      @default("DRAFT")
+  createdAt          DateTime    @default(now()) @map("created_at") @db.Timestamptz()
+
+  requirement        Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  bookings           Booking[]
+
+  @@map("client_quotes")
+}
+
+// 4. BOOKINGS & MULTI-TRIP EXECUTION
+model Booking {
+  id              String          @id // BOOK-YYYYMMDD-####
+  requirementId   String          @map("requirement_id")
+  clientId        String          @map("client_id") @db.Uuid
+  acceptedQuoteId String?         @map("accepted_quote_id") @db.Uuid
+  bookingStatus   String          @default("CLIENT_ACCEPTED") @map("booking_status")
+  paymentStatus   String          @default("NOT_DUE") @map("payment_status")
+  confirmedAt     DateTime        @default(now()) @map("confirmed_at") @db.Timestamptz()
+
+  requirement     Requirement     @relation(fields: [requirementId], references: [id], onDelete: Restrict)
+  client          ClientCompany   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  acceptedQuote   ClientQuote?    @relation(fields: [acceptedQuoteId], references: [id], onDelete: SetNull)
+  trips           Trip[]
+  chargeLines     ChargeLine[]
+  paymentRecords  PaymentRecord[]
+  chatThreads     ChatThread[]
+
+  @@map("bookings")
+}
+
+model Trip {
+  id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookingId   String        @map("booking_id")
+  vehicleId   String        @map("vehicle_id") @db.Uuid
+  driverId    String        @map("driver_id") @db.Uuid
+  vendorId    String        @map("vendor_id") @db.Uuid
+  vendorRate  Decimal       @map("vendor_rate") @db.Decimal(12, 2)
+  tripStatus  String        @default("LORRY_ASSIGNED") @map("trip_status")
+  startedAt   DateTime?     @map("started_at") @db.Timestamptz()
+  completedAt DateTime?     @map("completed_at") @db.Timestamptz()
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz()
+
+  booking     Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  vehicle     Vehicle       @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  driver      Driver        @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  vendor      VendorCompany @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  weighments  Weighment[]
+  chargeLines ChargeLine[]
+
+  @@map("trips")
+}
+
+model Weighment {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tripId          String    @map("trip_id") @db.Uuid
+  stage           String    // LOADING, UNLOADING
+  grossWeightMt   Decimal   @map("gross_weight_mt") @db.Decimal(8, 2)
+  tareWeightMt    Decimal   @map("tare_weight_mt") @db.Decimal(8, 2)
+  netWeightMt     Decimal   @map("net_weight_mt") @db.Decimal(8, 2)
+  slipDocumentUrl String?   @map("slip_document_url")
+  verifiedBy      String?   @map("verified_by")
+  status          String    @default("PENDING")
+  recordedAt      DateTime  @default(now()) @map("recorded_at") @db.Timestamptz()
+
+  trip            Trip      @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@map("weighments")
+}
+
+model ChargeLine {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookingId          String   @map("booking_id")
+  tripId             String?  @map("trip_id") @db.Uuid
+  chargeType         String   @map("charge_type")
+  amount             Decimal  @db.Decimal(10, 2)
+  isBillableToClient Boolean  @default(true) @map("is_billable_to_client")
+  notes              String?
+  enteredBy          String   @map("entered_by")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  booking            Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  trip               Trip?    @relation(fields: [tripId], references: [id], onDelete: SetNull)
+
+  @@map("charge_lines")
+}
+
+model Document {
+  id                     String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  category               String    // VEHICLE, DRIVER, CLIENT_TRANSIT, TRIP
+  documentType           String    @map("document_type")
+  referenceId            String    @map("reference_id")
+  fileUrl                String    @map("file_url")
+  validityExpiryDate     DateTime? @map("validity_expiry_date") @db.Date
+  verificationStatus     String    @default("PENDING") @map("verification_status")
+  rejectionReason        String?   @map("rejection_reason")
+  consigneeStampVerified Boolean   @default(false) @map("consignee_stamp_verified")
+  uploadedBy             String    @map("uploaded_by")
+  verifiedBy             String?   @map("verified_by")
+  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+
+  @@map("documents")
+}
+
+model PaymentRecord {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookingId            String   @map("booking_id")
+  amountCollected      Decimal  @map("amount_collected") @db.Decimal(12, 2)
+  paymentDate          DateTime @map("payment_date") @db.Date
+  paymentMode          String   @map("payment_mode")
+  transactionReference String   @map("transaction_reference")
+  receiptDocUrl        String?  @map("receipt_doc_url")
+  recordedBy           String   @map("recorded_by")
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  booking              Booking  @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+
+  @@map("payment_records")
+}
+
+model ChatThread {
+  id            String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  threadType    String         @map("thread_type")
+  bookingId     String?        @map("booking_id")
+  requirementId String?        @map("requirement_id")
+  clientId      String?        @map("client_id") @db.Uuid
+  vendorId      String?        @map("vendor_id") @db.Uuid
+  driverId      String?        @map("driver_id") @db.Uuid
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz()
+
+  booking       Booking?       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  requirement   Requirement?   @relation(fields: [requirementId], references: [id], onDelete: SetNull)
+  client        ClientCompany? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  vendor        VendorCompany? @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  driver        Driver?        @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  messages      ChatMessage[]
+
+  @@map("chat_threads")
+}
+
+model ChatMessage {
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  threadId     String           @map("thread_id") @db.Uuid
+  senderUserId String           @map("sender_user_id")
+  senderRole   String           @map("sender_role")
+  messageText  String           @map("message_text")
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz()
+
+  thread       ChatThread       @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  attachments  ChatAttachment[]
+
+  @@map("chat_messages")
+}
+
+model ChatAttachment {
+  id                    String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  messageId             String      @map("message_id") @db.Uuid
+  fileUrl               String      @map("file_url")
+  fileType              String      @map("file_type")
+  convertedToDocumentId String?     @map("converted_to_document_id") @db.Uuid
+  createdAt             DateTime    @default(now()) @map("created_at") @db.Timestamptz()
+
+  message               ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@map("chat_attachments")
+}
+
+model AuditLog {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String   @map("user_id")
+  userRole      String   @map("user_role")
+  action        String
+  entityType    String   @map("entity_type")
+  entityId      String   @map("entity_id")
+  payloadBefore Json?    @map("payload_before")
+  payloadAfter  Json?    @map("payload_after")
+  ipAddress     String?  @map("ip_address")
+  timestamp     DateTime @default(now()) @db.Timestamptz()
+
+  @@map("audit_logs")
+}

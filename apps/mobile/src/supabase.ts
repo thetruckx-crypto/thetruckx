@@ -22,7 +22,7 @@ let lastAuthAttemptTime = 0;
 /**
  * Ensures the mobile client has an active authenticated Supabase session.
  * Authenticates with NECL system credentials to allow direct persistence
- * (e.g. client, vendor, driver registration submissions and real-time syncing)
+ * (e.g. client, vendor, driver registration verification and real-time syncing)
  * without hitting "permission denied for table client_companies" RLS errors.
  */
 export async function ensureMobileSession(): Promise<boolean> {
@@ -44,17 +44,27 @@ export async function ensureMobileSession(): Promise<boolean> {
 
     mobileSessionPromise = (async () => {
       try {
-        const { data: authData, error } = await supabase.auth.signInWithPassword({
-          email: 'admin@necl.com',
-          password: 'admin123',
-        });
-        if (error) {
-          console.warn('[Mobile Supabase] Auth notice:', error.message);
-          return false;
+        // Fallback: anonymous sign-in if enabled
+        if (typeof (supabase.auth as any).signInAnonymously === 'function') {
+          const { data: anonData, error: anonErr } = await (supabase.auth as any).signInAnonymously();
+          if (!anonErr && anonData?.session) {
+            return true;
+          }
         }
-        return Boolean(authData?.session);
+
+        // Development/testing mode only: strictly blocked in production builds
+        const isDev = typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !== 'production';
+        if (isDev) {
+          const { data: authData, error } = await supabase.auth.signInWithPassword({
+            email: 'admin@necl.com',
+            password: 'admin123',
+          });
+          if (!error && authData?.session) {
+            return true;
+          }
+        }
+        return false;
       } catch (err: any) {
-        console.warn('[Mobile Supabase] Auth exception:', err?.message);
         return false;
       } finally {
         mobileSessionPromise = null;
@@ -63,7 +73,10 @@ export async function ensureMobileSession(): Promise<boolean> {
 
     return await mobileSessionPromise;
   } catch (err: any) {
-    console.warn('[Mobile Supabase] Session error:', err.message);
     return false;
   }
 }
+
+// Proactively initialize session in the background
+ensureMobileSession().catch(() => {});
+

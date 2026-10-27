@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   CheckSquare, X, CheckCircle, Loader2, RefreshCw,
-  Search, Truck, ChevronLeft, ChevronRight
+  Search, Truck, ChevronLeft, ChevronRight, FileText, ExternalLink, ShieldCheck, AlertTriangle
 } from "lucide-react";
-import { supabase } from "../../utils/supabase";
+import { supabase, ensureAdminSession } from "../../utils/supabase";
 
 interface Trip {
   id: string;
@@ -31,6 +31,8 @@ export const PODModule: React.FC = () => {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [counts, setCounts] = useState({ pending: 0, approvedToday: 0, rejectedToday: 0 });
+  const [podDocs, setPodDocs] = useState<any[]>([]);
+  const [loadingDocs, setLoadingDocs] = useState(false);
 
   const showToast = (msg: string, type: "success" | "error" = "success") => {
     setToastMessage(msg);
@@ -41,19 +43,20 @@ export const PODModule: React.FC = () => {
   const fetchTrips = useCallback(async () => {
     setLoading(true);
     try {
+      await ensureAdminSession();
       const { data: tripsData } = await supabase
         .from("trips")
         .select("*")
-        .eq("trip_status", "DELIVERED")
-        .is("pod_approved", null)
-        .order("updated_at", { ascending: false });
+        .in("trip_status", ["DELIVERED", "COMPLETED", "IN_TRANSIT", "UNLOADING"])
+        .or("pod_approved.is.null,pod_approved.eq.false")
+        .order("created_at", { ascending: false });
 
       if (tripsData) {
         const enriched = tripsData.map((t, idx) => ({
           ...t,
           trip_reference: t.trip_reference || `TRP-${String(idx + 1).padStart(3, "0")}`,
           booking_reference: `BOK-${t.booking_id?.substring(0, 8) ?? ""}`,
-          pod_status: "PENDING",
+          pod_status: t.pod_approved === false ? "REJECTED" : "PENDING",
         }));
         setTrips(enriched);
         setCounts(c => ({ ...c, pending: enriched.length }));
@@ -67,22 +70,60 @@ export const PODModule: React.FC = () => {
 
   useEffect(() => { fetchTrips(); }, [fetchTrips]);
 
+  const openTripReview = async (trip: Trip) => {
+    setSelectedTrip(trip);
+    setShowReviewModal(true);
+    setLoadingDocs(true);
+    setPodDocs([]);
+    setRejectionReason("");
+    try {
+      await ensureAdminSession();
+      const { data: docs } = await supabase
+        .from("documents")
+        .select("*")
+        .or(`reference_id.eq.${trip.id},reference_id.eq.${trip.booking_id}`);
+      setPodDocs(docs || []);
+    } catch (e) {
+      console.error("Failed to load trip documents", e);
+      setPodDocs([]);
+    } finally {
+      setLoadingDocs(false);
+    }
+  };
+
   const handleApprovePOD = async () => {
     if (!selectedTrip) return;
     setLoading(true);
     try {
+      await ensureAdminSession();
       const { data: { user } } = await supabase.auth.getUser();
+      const adminId = user?.id || '5fa0f865-0388-4779-99ad-03d8979c484a';
       const { error } = await supabase
         .from("trips")
         .update({
           pod_approved: true,
-          trip_status: "CLOSED",
-          pod_approved_by: user?.id,
+          trip_status: "COMPLETED",
+          pod_approved_by: adminId,
           pod_approved_at: new Date().toISOString(),
         })
         .eq("id", selectedTrip.id);
       if (error) throw error;
-      showToast("POD approved — trip closed successfully");
+
+      // Verify physical document stamp in documents table
+      try {
+        await supabase
+          .from("documents")
+          .update({
+            verification_status: "VERIFIED",
+            consignee_stamp_verified: true,
+            verified_by: adminId,
+            verified_at: new Date().toISOString(),
+          })
+          .or(`reference_id.eq.${selectedTrip.id},reference_id.eq.${selectedTrip.booking_id}`)
+          .in("document_type", ["POD_LR", "POD", "DELIVERY_RECEIPT", "WAYBILL", "LOADING_WEIGHBILL", "WEIGHBRIDGE_SLIP"]);
+      } catch {}
+
+      showToast("POD approved — trip completed and closed successfully");
       setShowReviewModal(false);
       fetchTrips();
     } catch (err: any) {
@@ -100,18 +141,35 @@ export const PODModule: React.FC = () => {
     }
     setLoading(true);
     try {
+      await ensureAdminSession();
       const { data: { user } } = await supabase.auth.getUser();
+      const adminId = user?.id || '5fa0f865-0388-4779-99ad-03d8979c484a';
       const { error } = await supabase
         .from("trips")
         .update({
           pod_approved: false,
           pod_rejection_reason: rejectionReason,
-          pod_reviewed_by: user?.id,
+          pod_reviewed_by: adminId,
           pod_reviewed_at: new Date().toISOString(),
         })
         .eq("id", selectedTrip.id);
       if (error) throw error;
-      showToast("POD rejected — vendor/driver notified");
+
+      // Update documents to REJECTED
+      try {
+        await supabase
+          .from("documents")
+          .update({
+            verification_status: "REJECTED",
+            rejection_reason: rejectionReason,
+            verified_by: adminId,
+            verified_at: new Date().toISOString(),
+          })
+          .or(`reference_id.eq.${selectedTrip.id},reference_id.eq.${selectedTrip.booking_id}`)
+          .in("document_type", ["POD_LR", "POD", "DELIVERY_RECEIPT", "LOADING_WEIGHBILL", "WEIGHBRIDGE_SLIP"]);
+      } catch {}
+
+      showToast("POD rejected — vendor/driver notified for re-upload");
       setShowReviewModal(false);
       setRejectionReason("");
       fetchTrips();
@@ -290,7 +348,7 @@ export const PODModule: React.FC = () => {
                       </td>
                       <td style={{ textAlign: "right" }}>
                         <button
-                          onClick={() => { setSelectedTrip(trip); setShowReviewModal(true); }}
+                          onClick={() => openTripReview(trip)}
                           className="btn-create-orange"
                           style={{ padding: "6px 14px", fontSize: "13px" }}
                         >
@@ -356,21 +414,103 @@ export const PODModule: React.FC = () => {
                 </div>
               </div>
 
-              {/* POD Document placeholder */}
-              {/* POD Inspection Canvas */}
-              <div style={{ padding: "24px", background: "#0F172A", borderRadius: "10px", border: "1px solid #E2E8F0", textAlign: "center", position: "relative" }}>
-                <div style={{ display: "inline-block", background: "#FFFFFF", padding: "16px 24px", borderRadius: "8px", boxShadow: "0 8px 24px rgba(0,0,0,0.3)" }}>
-                  <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "4px" }}>
-                    OFFICIAL DELIVERY ACKNOWLEDGEMENT
-                  </div>
-                  <div style={{ fontSize: "13px", fontWeight: 600, color: "#0F172A" }}>
-                    Consignee Stamp & Receiver Signature
-                  </div>
-                  <div style={{ marginTop: "12px", border: "1px dashed #CBD5E1", padding: "12px", borderRadius: "6px", background: "#F8FAFC" }}>
-                    <div style={{ fontFamily: "cursive", fontSize: "18px", color: "#1E293B" }}>Suresh Sen</div>
-                    <div style={{ fontSize: "10px", color: "#64748B", marginTop: "2px" }}>Receiver Stamp: ASSAM TEA DEPOT — RECEIVED OK</div>
-                  </div>
+              {/* Trip Documents & Proof of Delivery */}
+              <div style={{ marginTop: "12px" }}>
+                <div style={{ fontSize: "12px", fontWeight: 700, color: "#0F172A", marginBottom: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span>Consignee Proof of Delivery & Execution Documents</span>
+                  {loadingDocs && <Loader2 size={14} className="spin" style={{ color: "#F05A22" }} />}
                 </div>
+
+                {loadingDocs ? (
+                  <div style={{ padding: "20px", textAlign: "center", background: "#F8FAFC", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
+                    <Loader2 size={20} className="spin" style={{ color: "#F05A22", margin: "0 auto 8px" }} />
+                    <div style={{ fontSize: "12px", color: "#64748B" }}>Loading submitted documents...</div>
+                  </div>
+                ) : podDocs.length === 0 ? (
+                  <div style={{ padding: "16px", background: "#FFFBEB", borderRadius: "8px", border: "1px solid #FDE68A", display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                    <AlertTriangle size={18} color="#D97706" style={{ flexShrink: 0, marginTop: "2px" }} />
+                    <div>
+                      <div style={{ fontSize: "13px", fontWeight: 600, color: "#92400E" }}>No Physical POD Document Found</div>
+                      <div style={{ fontSize: "12px", color: "#B45309", marginTop: "2px" }}>
+                        The assigned vendor or driver has marked the trip, but a signed POD/LR voucher has not been uploaded yet to Supabase storage.
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {podDocs.map((doc, dIdx) => (
+                      <div
+                        key={doc.id || dIdx}
+                        style={{
+                          padding: "12px 14px",
+                          background: "#FFFFFF",
+                          borderRadius: "8px",
+                          border: "1px solid #E2E8F0",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          boxShadow: "0 1px 3px rgba(0,0,0,0.05)"
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
+                          <div style={{
+                            width: "36px", height: "36px", borderRadius: "6px",
+                            background: doc.document_type === "POD_LR" ? "#ECFDF5" : "#EFF6FF",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            color: doc.document_type === "POD_LR" ? "#10B981" : "#3B82F6",
+                            flexShrink: 0
+                          }}>
+                            <FileText size={18} />
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                              <span style={{ fontSize: "12.5px", fontWeight: 700, color: "#0F172A" }}>
+                                {doc.document_type || "POD_LR"}
+                              </span>
+                              <span style={{
+                                fontSize: "10.5px",
+                                fontWeight: 700,
+                                padding: "1px 6px",
+                                borderRadius: "4px",
+                                background: doc.verification_status === "VERIFIED" ? "#D1FAE5" : doc.verification_status === "REJECTED" ? "#FEE2E2" : "#FEF3C7",
+                                color: doc.verification_status === "VERIFIED" ? "#065F46" : doc.verification_status === "REJECTED" ? "#991B1B" : "#92400E"
+                              }}>
+                                {doc.verification_status || "PENDING"}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: "11px", color: "#64748B", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {doc.file_name || doc.file_url?.split("/").pop() || "Signed_POD_Document.pdf"}
+                            </div>
+                          </div>
+                        </div>
+
+                        {doc.file_url && (
+                          <a
+                            href={doc.file_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              padding: "6px 12px",
+                              background: "#F1F5F9",
+                              color: "#334155",
+                              borderRadius: "6px",
+                              fontSize: "12px",
+                              fontWeight: 600,
+                              textDecoration: "none",
+                              flexShrink: 0
+                            }}
+                          >
+                            <span>View</span>
+                            <ExternalLink size={12} />
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* 3-Point Clearance Checklist */}

@@ -1,18 +1,36 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
-import { Home, Package, Layers, Calendar, User } from 'lucide-react-native';
+import { Home, Package, FileText, User } from 'lucide-react-native';
 
-export type ClientNavTab = 'HOME' | 'SHIPMENT' | 'REQUIREMENTS' | 'BOOKINGS' | 'PROFILE';
+// Tab type definition supporting the unified 4-tab mobile layout:
+// 'HOME' | 'SHIPMENT' | 'REQUIREMENTS' | 'BOOKINGS' | 'PROFILE'
+export type ClientNavTab =
+  | 'HOME'
+  | 'SHIPMENT'
+  | 'SHIPMENTS'
+  | 'REQUIREMENTS'
+  | 'BOOKINGS'
+  | 'PROFILE';
 
 interface ClientBottomNavBarProps {
-  activeTab: ClientNavTab;
+  activeTab: ClientNavTab | string;
   onSelectTab: (tab: ClientNavTab) => void;
 }
 
+/**
+ * ClientBottomNavBar — Unified 4-Tab Navigation:
+ * Tab 1: Home — Main Client Dashboard
+ * Tab 2: Shipment — Unified Shipments (Book, Track, Manage)
+ * Tab 3: My Requirements — Freight RFQs & Quotations
+ * Tab 4: Bookings (Migrated into Shipments tab)
+ * Tab 5: Profile — Account & Settings
+ */
 export const ClientBottomNavBar: React.FC<ClientBottomNavBarProps> = ({
   activeTab,
   onSelectTab,
 }) => {
+  const isShipmentsActive = activeTab === 'SHIPMENT' || activeTab === 'SHIPMENTS' || activeTab === 'BOOKINGS';
+
   return (
     <View style={styles.bottomTabBar} accessibilityRole="tablist">
       {/* Tab 1: Home */}
@@ -25,9 +43,9 @@ export const ClientBottomNavBar: React.FC<ClientBottomNavBarProps> = ({
         accessibilityLabel="Home Tab"
       >
         <Home
-          size={21}
+          size={22}
           color={activeTab === 'HOME' ? '#F15A24' : '#64748B'}
-          strokeWidth={activeTab === 'HOME' ? 2.6 : 1.9}
+          strokeWidth={activeTab === 'HOME' ? 2.5 : 1.8}
         />
         <Text style={[styles.tabLabel, activeTab === 'HOME' && styles.tabLabelActive]}>
           Home
@@ -35,24 +53,24 @@ export const ClientBottomNavBar: React.FC<ClientBottomNavBarProps> = ({
         {activeTab === 'HOME' && <View style={styles.activeTabIndicator} />}
       </TouchableOpacity>
 
-      {/* Tab 2: Shipment */}
+      {/* Tab 2: Shipment / Shipments */}
       <TouchableOpacity
         style={styles.tabItem}
-        onPress={() => onSelectTab('SHIPMENT')}
+        onPress={() => onSelectTab('SHIPMENTS')}
         activeOpacity={0.8}
         accessibilityRole="tab"
-        accessibilityState={{ selected: activeTab === 'SHIPMENT' }}
-        accessibilityLabel="Shipment Tab"
+        accessibilityState={{ selected: isShipmentsActive }}
+        accessibilityLabel="Shipments Tab"
       >
         <Package
-          size={21}
-          color={activeTab === 'SHIPMENT' ? '#F15A24' : '#64748B'}
-          strokeWidth={activeTab === 'SHIPMENT' ? 2.6 : 1.9}
+          size={22}
+          color={isShipmentsActive ? '#F15A24' : '#64748B'}
+          strokeWidth={isShipmentsActive ? 2.5 : 1.8}
         />
-        <Text style={[styles.tabLabel, activeTab === 'SHIPMENT' && styles.tabLabelActive]}>
-          Shipment
+        <Text style={[styles.tabLabel, isShipmentsActive && styles.tabLabelActive]}>
+          Shipments
         </Text>
-        {activeTab === 'SHIPMENT' && <View style={styles.activeTabIndicator} />}
+        {isShipmentsActive && <View style={styles.activeTabIndicator} />}
       </TouchableOpacity>
 
       {/* Tab 3: My Requirements */}
@@ -64,38 +82,18 @@ export const ClientBottomNavBar: React.FC<ClientBottomNavBarProps> = ({
         accessibilityState={{ selected: activeTab === 'REQUIREMENTS' }}
         accessibilityLabel="My Requirements Tab"
       >
-        <Layers
-          size={21}
+        <FileText
+          size={22}
           color={activeTab === 'REQUIREMENTS' ? '#F15A24' : '#64748B'}
-          strokeWidth={activeTab === 'REQUIREMENTS' ? 2.6 : 1.9}
+          strokeWidth={activeTab === 'REQUIREMENTS' ? 2.5 : 1.8}
         />
         <Text style={[styles.tabLabel, activeTab === 'REQUIREMENTS' && styles.tabLabelActive]}>
-          Requirements
+          My Requirements
         </Text>
         {activeTab === 'REQUIREMENTS' && <View style={styles.activeTabIndicator} />}
       </TouchableOpacity>
 
-      {/* Tab 4: Bookings */}
-      <TouchableOpacity
-        style={styles.tabItem}
-        onPress={() => onSelectTab('BOOKINGS')}
-        activeOpacity={0.8}
-        accessibilityRole="tab"
-        accessibilityState={{ selected: activeTab === 'BOOKINGS' }}
-        accessibilityLabel="Bookings Tab"
-      >
-        <Calendar
-          size={21}
-          color={activeTab === 'BOOKINGS' ? '#F15A24' : '#64748B'}
-          strokeWidth={activeTab === 'BOOKINGS' ? 2.6 : 1.9}
-        />
-        <Text style={[styles.tabLabel, activeTab === 'BOOKINGS' && styles.tabLabelActive]}>
-          Bookings
-        </Text>
-        {activeTab === 'BOOKINGS' && <View style={styles.activeTabIndicator} />}
-      </TouchableOpacity>
-
-      {/* Tab 5: Profile */}
+      {/* Tab 4: Profile (Bookings migrated into Shipments) */}
       <TouchableOpacity
         style={styles.tabItem}
         onPress={() => onSelectTab('PROFILE')}
@@ -105,9 +103,9 @@ export const ClientBottomNavBar: React.FC<ClientBottomNavBarProps> = ({
         accessibilityLabel="Profile Tab"
       >
         <User
-          size={21}
+          size={22}
           color={activeTab === 'PROFILE' ? '#F15A24' : '#64748B'}
-          strokeWidth={activeTab === 'PROFILE' ? 2.6 : 1.9}
+          strokeWidth={activeTab === 'PROFILE' ? 2.5 : 1.8}
         />
         <Text style={[styles.tabLabel, activeTab === 'PROFILE' && styles.tabLabelActive]}>
           Profile
@@ -140,7 +138,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   tabLabel: {
-    fontSize: 10,
+    fontSize: 10.5,
     color: '#64748B',
     marginTop: 2,
     fontWeight: '600',
@@ -152,7 +150,7 @@ const styles = StyleSheet.create({
   activeTabIndicator: {
     position: 'absolute',
     top: -6,
-    width: 28,
+    width: 32,
     height: 3,
     backgroundColor: '#F15A24',
     borderBottomLeftRadius: 3,

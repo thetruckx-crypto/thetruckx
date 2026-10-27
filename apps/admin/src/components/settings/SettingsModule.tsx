@@ -23,10 +23,10 @@ export const SettingsModule: React.FC = () => {
 
   // Profile fields
   const [adminUser, setAdminUser] = useState<any>(null);
-  const [name, setName] = useState("Rahul (Admin)");
-  const [email, setEmail] = useState("admin@necl.com");
-  const [phone, setPhone] = useState("+91 98765 43210");
-  const [role, setRole] = useState("SUPER_ADMIN");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [role, setRole] = useState("");
 
   // Notifications preferences
   const [notifs, setNotifs] = useState({

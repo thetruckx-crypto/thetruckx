@@ -8,16 +8,16 @@ describe('NECL Client Mobile App - Shipments & Bookings Separation & Booking Flo
   const appPath = path.join(mobileRoot, 'App.tsx');
   const appCode = fs.readFileSync(appPath, 'utf-8');
 
-  const shipmentsPath = path.join(mobileSrc, 'screens/MyShipmentsScreen.tsx');
+  const shipmentsPath = path.join(mobileSrc, 'screens/client/shipments/MyShipmentsScreen.tsx');
   const shipmentsCode = fs.readFileSync(shipmentsPath, 'utf-8');
 
-  const bookingsPath = path.join(mobileSrc, 'screens/MyBookingsScreen.tsx');
+  const bookingsPath = path.join(mobileSrc, 'screens/client/bookings/MyBookingsScreen.tsx');
   const bookingsCode = fs.readFileSync(bookingsPath, 'utf-8');
 
-  const step1Path = path.join(mobileSrc, 'screens/CreateTransportRequirementScreen.tsx');
+  const step1Path = path.join(mobileSrc, 'screens/client/requirements/CreateTransportRequirementScreen.tsx');
   const step1Code = fs.readFileSync(step1Path, 'utf-8');
 
-  const step2Path = path.join(mobileSrc, 'screens/CargoDetailsScreen.tsx');
+  const step2Path = path.join(mobileSrc, 'screens/client/requirements/CargoDetailsScreen.tsx');
   const step2Code = fs.readFileSync(step2Path, 'utf-8');
 
   const typesPath = path.join(mobileSrc, 'types.ts');
@@ -32,7 +32,7 @@ describe('NECL Client Mobile App - Shipments & Bookings Separation & Booking Flo
   const clockModalPath = path.join(mobileSrc, 'components/InteractiveAnalogClockModal.tsx');
   const clockModalCode = fs.readFileSync(clockModalPath, 'utf-8');
 
-  const step3Path = path.join(mobileSrc, 'screens/PickupDeliveryDetailsScreen.tsx');
+  const step3Path = path.join(mobileSrc, 'screens/client/requirements/PickupDeliveryDetailsScreen.tsx');
   const step3Code = fs.readFileSync(step3Path, 'utf-8');
 
   const staticMapTilePath = path.join(mobileSrc, 'components/StaticMapPreviewTile.tsx');
@@ -44,31 +44,31 @@ describe('NECL Client Mobile App - Shipments & Bookings Separation & Booking Flo
   const driverServicePath = path.join(mobileSrc, 'services/driverService.ts');
   const driverServiceCode = fs.readFileSync(driverServicePath, 'utf-8');
 
-  const myReqPath = path.join(mobileSrc, 'screens/MyRequirementsScreen.tsx');
+  const myReqPath = path.join(mobileSrc, 'screens/client/requirements/MyRequirementsScreen.tsx');
   const myReqCode = fs.readFileSync(myReqPath, 'utf-8');
 
-  const reqDetailsPath = path.join(mobileSrc, 'screens/RequirementDetailsScreen.tsx');
+  const reqDetailsPath = path.join(mobileSrc, 'screens/client/requirements/RequirementDetailsScreen.tsx');
   const reqDetailsCode = fs.readFileSync(reqDetailsPath, 'utf-8');
 
-  const reqReviewPath = path.join(mobileSrc, 'screens/RequirementReviewScreen.tsx');
+  const reqReviewPath = path.join(mobileSrc, 'screens/client/requirements/RequirementReviewScreen.tsx');
   const reqReviewCode = fs.readFileSync(reqReviewPath, 'utf-8');
 
-  const settingsPath = path.join(mobileSrc, 'screens/SettingsScreen.tsx');
+  const settingsPath = path.join(mobileSrc, 'screens/common/settings/SettingsScreen.tsx');
   const settingsCode = fs.readFileSync(settingsPath, 'utf-8');
 
-  const shipmentTrackingPath = path.join(mobileSrc, 'screens/ShipmentTrackingScreen.tsx');
+  const shipmentTrackingPath = path.join(mobileSrc, 'screens/client/shipments/ShipmentTrackingScreen.tsx');
   const shipmentTrackingCode = fs.readFileSync(shipmentTrackingPath, 'utf-8');
 
   const bottomNavPath = path.join(mobileSrc, 'components/ClientBottomNavBar.tsx');
   const bottomNavCode = fs.readFileSync(bottomNavPath, 'utf-8');
 
-  const dashboardPath = path.join(mobileSrc, 'screens/ClientDashboardScreen.tsx');
+  const dashboardPath = path.join(mobileSrc, 'screens/client/dashboard/ClientDashboardScreen.tsx');
   const dashboardCode = fs.readFileSync(dashboardPath, 'utf-8');
 
-  const notifDetailsPath = path.join(mobileSrc, 'screens/NotificationDetailsScreen.tsx');
+  const notifDetailsPath = path.join(mobileSrc, 'screens/common/notifications/NotificationDetailsScreen.tsx');
   const notifDetailsCode = fs.readFileSync(notifDetailsPath, 'utf-8');
 
-  const bookingDetailsPath = path.join(mobileSrc, 'screens/BookingDetailsScreen.tsx');
+  const bookingDetailsPath = path.join(mobileSrc, 'screens/client/bookings/BookingDetailsScreen.tsx');
   const bookingDetailsCode = fs.readFileSync(bookingDetailsPath, 'utf-8');
 
   describe('1. Module Separation & Navigation Routing', () => {
@@ -78,7 +78,7 @@ describe('NECL Client Mobile App - Shipments & Bookings Separation & Booking Flo
     });
 
     it('should import and render MyShipmentsScreen separately in App.tsx', () => {
-      expect(appCode).toContain("import { MyShipmentsScreen } from './src/screens/MyShipmentsScreen';");
+      expect(appCode).toContain("import { MyShipmentsScreen } from './src/screens/client/shipments/MyShipmentsScreen';");
       expect(appCode).toContain("currentScreen === 'MY_SHIPMENTS'");
       expect(appCode).toContain("<MyShipmentsScreen");
     });

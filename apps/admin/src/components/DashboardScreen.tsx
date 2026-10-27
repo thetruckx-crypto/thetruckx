@@ -156,7 +156,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
       // Fetch real database records with lightweight column projections
       let reqsQuery = supabase.from('requirements').select('id, status, loading_datetime, client_companies(company_name)');
-      let booksQuery = supabase.from('bookings').select('id, booking_status, payment_status, confirmed_at, created_at, client_companies(company_name)');
+      let booksQuery = supabase.from('bookings').select('id, booking_status, payment_status, confirmed_at, client_companies(company_name)');
       let tripsQuery = supabase.from('trips').select('id, trip_status, vendor_rate, started_at, created_at, vehicles(registration_number, vehicle_type), drivers(full_name), bookings(id, requirements(pickup_address, destination_address))');
 
       if (!isAllTime) {
@@ -262,7 +262,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       // Build real activities
       const activities: ActivityItem[] = [];
       bookings.slice(0, 4).forEach(b => {
-        const time = b.confirmed_at ? new Date(b.confirmed_at) : new Date(b.created_at || Date.now());
+        const time = b.confirmed_at ? new Date(b.confirmed_at) : new Date();
         activities.push({
           id: `bok-${b.id}`,
           icon: 'booking',

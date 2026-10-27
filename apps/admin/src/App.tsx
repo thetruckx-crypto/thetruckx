@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import {
   BrowserRouter,
   Routes,
@@ -9,45 +9,52 @@ import {
   useParams,
 } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { ToastProvider } from './context/ToastContext';
+import { ToastProvider, useToast } from './context/ToastContext';
 import { ToastContainer } from './components/common/ToastContainer';
+import { setupForegroundNotificationListener } from './services/firebase';
 import { BrandLogo } from './components/BrandLogo';
 import { LoginScreen } from './components/LoginScreen';
 import { TwoFactorScreen } from './components/TwoFactorScreen';
 import { DashboardScreen } from './components/DashboardScreen';
 import { GlobalSearchModal } from './components/GlobalSearchModal';
 import { NotificationsDrawer } from './components/NotificationsDrawer';
-import { ClientDirectory } from './components/clients/ClientDirectory';
-import { CreateClient } from './components/clients/CreateClient';
-import { ClientProfile } from './components/clients/ClientProfile';
-import { VendorDirectory } from './components/vendors/VendorDirectory';
-import { InviteVendor } from './components/vendors/InviteVendor';
-import { VendorProfile } from './components/vendors/VendorProfile';
-import { VendorVerificationRequests } from './components/vendors/VendorVerificationRequests';
-import { VendorDocumentApprovals } from './components/vendors/VendorDocumentApprovals';
-import { SharedVehicleMasterDirectory } from './components/fleet/SharedVehicleMasterDirectory';
-import { VehicleVerificationScreen } from './components/fleet/VehicleVerificationScreen';
-import { VendorVehicleTieupApproval } from './components/fleet/VendorVehicleTieupApproval';
-import { CreateSharedVehicle } from './components/fleet/CreateSharedVehicle';
 import { getVehicles } from './services/vehicleService';
-import { DriverVerificationQueue } from './components/drivers/DriverVerificationQueue';
-import { PricingModule } from './components/pricing/PricingModule';
-import { RequirementsModule } from './components/requirements/RequirementsModule';
-import { QuotationsModule } from './components/quotations/QuotationsModule';
-import { BookingsModule } from './components/bookings/BookingsModule';
-import { DocumentClearanceModule } from './components/documents/DocumentClearanceModule';
-import { TrackingModule } from './components/tracking/TrackingModule';
-import { TripDetailView } from './components/tracking/TripDetailView';
-import { WeighbridgeModule } from './components/weighbridge/WeighbridgeModule';
-import { PODModule } from './components/pod/PODModule';
-import { PaymentsModule } from './components/payments/PaymentsModule';
-import { PaymentHistoryView } from './components/payments/PaymentHistoryView';
-import { ExceptionsModule } from './components/exceptions/ExceptionsModule';
-import { ExceptionDetailView } from './components/exceptions/ExceptionDetailView';
-import { CommunicationsModule } from './components/communications/CommunicationsModule';
-import { ReportsModule } from './components/reports/ReportsModule';
-import { SettingsModule } from './components/settings/SettingsModule';
-import { AdminUserManagement, RBACManagement, CommercialAnalytics, AuditLogs, SystemParameters } from './components/superadmin/SuperAdminModules';
+
+// Lazy-loaded route modules for fast initial page load and optimized chunking
+const ClientDirectory = React.lazy(() => import('./components/clients/ClientDirectory').then(m => ({ default: m.ClientDirectory })));
+const CreateClient = React.lazy(() => import('./components/clients/CreateClient').then(m => ({ default: m.CreateClient })));
+const ClientProfile = React.lazy(() => import('./components/clients/ClientProfile').then(m => ({ default: m.ClientProfile })));
+const VendorDirectory = React.lazy(() => import('./components/vendors/VendorDirectory').then(m => ({ default: m.VendorDirectory })));
+const InviteVendor = React.lazy(() => import('./components/vendors/InviteVendor').then(m => ({ default: m.InviteVendor })));
+const VendorProfile = React.lazy(() => import('./components/vendors/VendorProfile').then(m => ({ default: m.VendorProfile })));
+const VendorVerificationRequests = React.lazy(() => import('./components/vendors/VendorVerificationRequests').then(m => ({ default: m.VendorVerificationRequests })));
+const VendorDocumentApprovals = React.lazy(() => import('./components/vendors/VendorDocumentApprovals').then(m => ({ default: m.VendorDocumentApprovals })));
+const SharedVehicleMasterDirectory = React.lazy(() => import('./components/fleet/SharedVehicleMasterDirectory').then(m => ({ default: m.SharedVehicleMasterDirectory })));
+const VehicleVerificationScreen = React.lazy(() => import('./components/fleet/VehicleVerificationScreen').then(m => ({ default: m.VehicleVerificationScreen })));
+const VendorVehicleTieupApproval = React.lazy(() => import('./components/fleet/VendorVehicleTieupApproval').then(m => ({ default: m.VendorVehicleTieupApproval })));
+const CreateSharedVehicle = React.lazy(() => import('./components/fleet/CreateSharedVehicle').then(m => ({ default: m.CreateSharedVehicle })));
+const DriverVerificationQueue = React.lazy(() => import('./components/drivers/DriverVerificationQueue').then(m => ({ default: m.DriverVerificationQueue })));
+const PricingModule = React.lazy(() => import('./components/pricing/PricingModule').then(m => ({ default: m.PricingModule })));
+const RequirementsModule = React.lazy(() => import('./components/requirements/RequirementsModule').then(m => ({ default: m.RequirementsModule })));
+const QuotationsModule = React.lazy(() => import('./components/quotations/QuotationsModule').then(m => ({ default: m.QuotationsModule })));
+const BookingsModule = React.lazy(() => import('./components/bookings/BookingsModule').then(m => ({ default: m.BookingsModule })));
+const DocumentClearanceModule = React.lazy(() => import('./components/documents/DocumentClearanceModule').then(m => ({ default: m.DocumentClearanceModule })));
+const TrackingModule = React.lazy(() => import('./components/tracking/TrackingModule').then(m => ({ default: m.TrackingModule })));
+const TripDetailView = React.lazy(() => import('./components/tracking/TripDetailView').then(m => ({ default: m.TripDetailView })));
+const WeighbridgeModule = React.lazy(() => import('./components/weighbridge/WeighbridgeModule').then(m => ({ default: m.WeighbridgeModule })));
+const PODModule = React.lazy(() => import('./components/pod/PODModule').then(m => ({ default: m.PODModule })));
+const PaymentsModule = React.lazy(() => import('./components/payments/PaymentsModule').then(m => ({ default: m.PaymentsModule })));
+const PaymentHistoryView = React.lazy(() => import('./components/payments/PaymentHistoryView').then(m => ({ default: m.PaymentHistoryView })));
+const ExceptionsModule = React.lazy(() => import('./components/exceptions/ExceptionsModule').then(m => ({ default: m.ExceptionsModule })));
+const ExceptionDetailView = React.lazy(() => import('./components/exceptions/ExceptionDetailView').then(m => ({ default: m.ExceptionDetailView })));
+const CommunicationsModule = React.lazy(() => import('./components/communications/CommunicationsModule').then(m => ({ default: m.CommunicationsModule })));
+const ReportsModule = React.lazy(() => import('./components/reports/ReportsModule').then(m => ({ default: m.ReportsModule })));
+const SettingsModule = React.lazy(() => import('./components/settings/SettingsModule').then(m => ({ default: m.SettingsModule })));
+const AdminUserManagement = React.lazy(() => import('./components/superadmin/SuperAdminModules').then(m => ({ default: m.AdminUserManagement })));
+const RBACManagement = React.lazy(() => import('./components/superadmin/SuperAdminModules').then(m => ({ default: m.RBACManagement })));
+const CommercialAnalytics = React.lazy(() => import('./components/superadmin/SuperAdminModules').then(m => ({ default: m.CommercialAnalytics })));
+const AuditLogs = React.lazy(() => import('./components/superadmin/SuperAdminModules').then(m => ({ default: m.AuditLogs })));
+const SystemParameters = React.lazy(() => import('./components/superadmin/SuperAdminModules').then(m => ({ default: m.SystemParameters })));
 import {
   Menu,
   Search,
@@ -91,7 +98,8 @@ function AuthLoadingScreen() {
       alignItems: 'center', justifyContent: 'center',
       background: '#FFFFFF', gap: '1.25rem',
     }}>
-      <BrandLogo theme="light" size="md" />
+      <BrandLogo theme="light" size="auth" />
+
       <div style={{
         width: 40, height: 40, border: '3px solid rgba(244,83,37,0.2)',
         borderTop: '3px solid #F45325', borderRadius: '50%',
@@ -274,8 +282,15 @@ function LoginPage() {
         quotations: { enabled: true, actions: { view: true, create: true } },
         bookings: { enabled: true, actions: { view: true, create: true } },
         tracking: { enabled: true, actions: { view: true } },
+        documents: { enabled: true, actions: { view: true, verify: true } },
+        weighbridge: { enabled: true, actions: { view: true, create: true } },
+        pod: { enabled: true, actions: { view: true, verify: true, close: true } },
+        payments: { enabled: true, actions: { view: true, create: true } },
         billing: { enabled: true, actions: { view: true } },
         exceptions: { enabled: true, actions: { view: true, create: true } },
+        communications: { enabled: true, actions: { view: true, create: true } },
+        reports: { enabled: true, actions: { view: true } },
+        settings: { enabled: true, actions: { view: true } },
       } : undefined,
     });
     navigate(from, { replace: true });
@@ -358,25 +373,30 @@ function VendorDirectoryRoute() {
   const location = useLocation();
   const navigate = useNavigate();
   const params = new URLSearchParams(location.search);
-  const tab = (params.get('tab') ?? 'all') as 'all' | 'verified' | 'pending' | 'rejected' | 'inactive';
+  const tab = (params.get('tab') ?? 'all') as 'all' | 'verified' | 'pending' | 'rejected' | 'inactive' | 'drafts';
   return (
     <VendorDirectory
       initialTab={tab}
-      onNavigateToInvite={() => navigate('/admin/vendors/new')}
+      onNavigateToInvite={(draftId) => navigate(draftId ? `/admin/vendors/new?draftId=${draftId}` : '/admin/vendors/new')}
       onNavigateToProfile={(id) => navigate(`/admin/vendors/${id}`)}
     />
   );
 }
 
 // ─── Vendor Profile Route ─────────────────────────────────────────────────────
-function VendorProfileRoute({ userRole }: { userRole: 'ADMIN' | 'SUPER_ADMIN' }) {
+function VendorProfileRoute({ userRole, initialEdit = false }: { userRole: 'ADMIN' | 'SUPER_ADMIN'; initialEdit?: boolean }) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const isEdit = initialEdit || searchParams.get('action') === 'edit' || searchParams.get('edit') === 'true';
+
   return (
     <VendorProfile
       vendorId={id!}
       onBack={() => navigate('/admin/vendors')}
       userRole={userRole}
+      initialEdit={isEdit}
     />
   );
 }
@@ -541,43 +561,130 @@ function AdminShell() {
     })();
   }, []);
 
-  // Badge counts for sidebar + notification bell
-  useEffect(() => {
-    (async () => {
+  // Dynamic badge counts for sidebar + topbar notification bell backed strictly by live database records
+  const refreshBadges = useCallback(async () => {
+    try {
+      const [
+        { count: reqCount },
+        { count: quotCount },
+        { count: bokCount },
+        { count: docCount },
+        { count: podCount },
+        { count: payCount },
+        { count: driverCount },
+        { count: vendorCount },
+        { count: clientCount },
+        { count: exceptionCount },
+        { count: chatCount },
+      ] = await Promise.all([
+        supabase.from('requirements').select('id', { count: 'exact', head: true }).in('status', ['UNDER_REVIEW', 'NEW_REQUIREMENT', 'PENDING']),
+        supabase.from('vendor_requests').select('id', { count: 'exact', head: true }).eq('status', 'PENDING'),
+        supabase.from('bookings').select('id', { count: 'exact', head: true }).eq('booking_status', 'PENDING_CONFIRMATION'),
+        supabase.from('documents').select('id', { count: 'exact', head: true }).eq('verification_status', 'PENDING'),
+        supabase.from('documents').select('id', { count: 'exact', head: true }).in('document_type', ['POD', 'POD_LR']).eq('verification_status', 'PENDING'),
+        supabase.from('bookings').select('id', { count: 'exact', head: true }).in('payment_status', ['PAYMENT_PENDING', 'PARTIALLY_PAID']),
+        supabase.from('drivers').select('id', { count: 'exact', head: true }).or('status.eq.PENDING,status.eq.PENDING_APPROVAL,verification_status.eq.PENDING'),
+        supabase.from('vendor_companies').select('id', { count: 'exact', head: true }).or('status.eq.PENDING,status.eq.PENDING_APPROVAL'),
+        supabase.from('client_companies').select('id', { count: 'exact', head: true }).or('status.eq.PENDING,status.eq.PENDING_APPROVAL'),
+        supabase.from('exceptions').select('id', { count: 'exact', head: true }).eq('status', 'OPEN'),
+        supabase.from('chat_messages').select('id', { count: 'exact', head: true }).is('read_at', null).neq('sender_type', 'ADMIN'),
+      ]);
+
+      const counts: Record<string, number> = {
+        requirements: reqCount || 0,
+        quotations: quotCount || 0,
+        bookings: bokCount || 0,
+        documents: docCount || 0,
+        pod: podCount || 0,
+        payments: payCount || 0,
+        drivers: driverCount || 0,
+        vendors: vendorCount || 0,
+        clients: clientCount || 0,
+        exceptions: exceptionCount || 0,
+        communications: chatCount || 0,
+      };
+
+      setNavBadges(counts);
+      setUnreadChatCount(chatCount || 0);
+
+      // Check localStorage read IDs for notifications
+      let readIds = new Set<string>();
       try {
-        const [
-          { count: reqCount },
-          { count: quotCount },
-          { count: bokCount },
-          { count: docCount },
-          { count: podCount },
-          { count: payCount },
-          { count: driverCount },
-        ] = await Promise.all([
-          supabase.from('requirements').select('*', { count: 'exact', head: true }).eq('status', 'UNDER_REVIEW'),
-          supabase.from('vendor_requests').select('*', { count: 'exact', head: true }).eq('status', 'PENDING'),
-          supabase.from('bookings').select('*', { count: 'exact', head: true }).in('booking_status', ['CONFIRMED', 'IN_PROGRESS']),
-          supabase.from('documents').select('*', { count: 'exact', head: true }).eq('verification_status', 'PENDING'),
-          supabase.from('documents').select('*', { count: 'exact', head: true }).in('document_type', ['POD', 'POD_LR']).eq('verification_status', 'PENDING'),
-          supabase.from('bookings').select('*', { count: 'exact', head: true }).in('payment_status', ['PAYMENT_PENDING', 'PARTIALLY_PAID']),
-          supabase.from('drivers').select('*', { count: 'exact', head: true }).or('status.eq.PENDING,status.eq.PENDING_APPROVAL'),
-        ]);
-        setNavBadges({
-          requirements: reqCount || 0,
-          quotations: quotCount || 0,
-          bookings: bokCount || 0,
-          documents: docCount || 0,
-          pod: podCount || 0,
-          payments: payCount || 0,
-          exceptions: 0,
-          communications: 0,
-          drivers: driverCount || 0,
-        });
-        setUnreadNotifCount((reqCount || 0) + (driverCount || 0) + (podCount || 0));
-        setUnreadChatCount(0);
+        const stored = localStorage.getItem('necl_read_notifications_v1');
+        if (stored) readIds = new Set(JSON.parse(stored));
       } catch {}
-    })();
+
+      const totalPending =
+        (counts.requirements || 0) +
+        (counts.drivers || 0) +
+        (counts.documents || 0) +
+        (counts.vendors || 0) +
+        (counts.clients || 0) +
+        (counts.exceptions || 0);
+
+      if (totalPending === 0) {
+        setUnreadNotifCount(0);
+      } else {
+        const unread = Math.max(0, totalPending - Math.min(readIds.size, totalPending));
+        setUnreadNotifCount(unread);
+      }
+    } catch {
+      // In case of error or before session is ready, default to 0 to prevent displaying incorrect numbers
+      setNavBadges({});
+      setUnreadNotifCount(0);
+      setUnreadChatCount(0);
+    }
   }, []);
+
+  useEffect(() => {
+    refreshBadges();
+
+    const onCustomRefresh = () => refreshBadges();
+    window.addEventListener('necl:refresh-badges', onCustomRefresh);
+    window.addEventListener('focus', onCustomRefresh);
+
+    const interval = setInterval(refreshBadges, 25000);
+
+    const channel = supabase
+      .channel('admin_nav_badges_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'requirements' }, () => refreshBadges())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'documents' }, () => refreshBadges())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'drivers' }, () => refreshBadges())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'vendor_companies' }, () => refreshBadges())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'client_companies' }, () => refreshBadges())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => refreshBadges())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'vendor_requests' }, () => refreshBadges())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'exceptions' }, () => refreshBadges())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, () => refreshBadges())
+      .subscribe();
+
+    return () => {
+      window.removeEventListener('necl:refresh-badges', onCustomRefresh);
+      window.removeEventListener('focus', onCustomRefresh);
+      clearInterval(interval);
+      supabase.removeChannel(channel);
+    };
+  }, [refreshBadges]);
+
+  useEffect(() => {
+    refreshBadges();
+  }, [location.pathname, refreshBadges]);
+
+  // Firebase Cloud Messaging (FCM) Foreground Notification Listener
+  const { info: showToastInfo } = useToast();
+  useEffect(() => {
+    let cleanupFn: (() => void) | null = null;
+    setupForegroundNotificationListener((payload) => {
+      showToastInfo(payload.body, payload.title || 'Push Notification');
+      refreshBadges();
+    }).then((unsub) => {
+      cleanupFn = unsub;
+    });
+
+    return () => {
+      if (cleanupFn) cleanupFn();
+    };
+  }, [showToastInfo, refreshBadges]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -662,7 +769,14 @@ function AdminShell() {
         }}
       >
         <div className="sidebar-header">
-          <BrandLogo theme="light" size={desktopCollapsed && !isSmallScreen ? "sm" : "sm"} />
+
+          <BrandLogo
+            variant={desktopCollapsed && !isSmallScreen ? 'mark' : 'full'}
+            theme="light"
+            size={desktopCollapsed && !isSmallScreen ? 'sm' : 'sidebar'}
+          />
+
+
           {isSmallScreen && (
             <button
               onClick={() => setSidebarOpen(false)}
@@ -695,6 +809,9 @@ function AdminShell() {
             <div className={`nav-item ${isNav('clients') ? 'active-orange' : ''}`} onClick={() => navTo('/admin/clients')} title="Clients">
               <Users size={18} />
               <span>Clients</span>
+              {Boolean(navBadges.clients && navBadges.clients > 0) && (
+                <span className="nav-badge-red">{navBadges.clients}</span>
+              )}
               <ChevronRight size={14} className="nav-chevron" />
             </div>
           )}
@@ -716,23 +833,21 @@ function AdminShell() {
               >
                 <Building2 size={18} />
                 <span>Vendors</span>
+                {Boolean(navBadges.vendors && navBadges.vendors > 0) && (
+                  <span className="nav-badge-red">{navBadges.vendors}</span>
+                )}
                 <ChevronRight size={14} className={`nav-chevron ${isNav('vendors') && vendorSubOpen ? 'rotated' : ''}`} />
               </div>
 
-              {/* Vendors sub-menu */}
+              {/* Vendors sub-menu: retain only Vendor Directory */}
               {isNav('vendors') && vendorSubOpen && !desktopCollapsed && (
                 <div className="sidebar-subnav-list">
-                  {[
-                    { path: '/admin/vendors', label: 'Vendor Directory', match: location.pathname === '/admin/vendors' && !location.search },
-                    { path: '/admin/vendors/new', label: 'Add Vendor', match: location.pathname === '/admin/vendors/new' },
-                    { path: '/admin/vendors/verification-requests', label: 'Verification Requests', match: location.pathname === '/admin/vendors/verification-requests' },
-                    { path: '/admin/vendors/document-approvals', label: 'Document Approvals', match: location.pathname === '/admin/vendors/document-approvals' },
-                    { path: '/admin/vendors?tab=verified', label: 'Vendor Performance', match: location.search.includes('tab=verified') },
-                  ].map(({ path, label, match }) => (
-                    <div key={label} className={`subnav-item ${match ? 'active-orange-text' : ''}`} onClick={() => navTo(path)}>
-                      <span className="subnav-bullet">•</span><span>{label}</span>
-                    </div>
-                  ))}
+                  <div
+                    className={`subnav-item ${location.pathname === '/admin/vendors' && !location.search ? 'active-orange-text' : ''}`}
+                    onClick={() => navTo('/admin/vendors')}
+                  >
+                    <span className="subnav-bullet">•</span><span>Vendor Directory</span>
+                  </div>
                 </div>
               )}
             </>
@@ -766,8 +881,6 @@ function AdminShell() {
                 <div className="sidebar-subnav-list">
                   {[
                     { path: '/admin/fleet', label: 'Vehicle Directory', match: location.pathname === '/admin/fleet' },
-                    { path: '/admin/fleet/verification', label: 'Vehicle Verification', match: location.pathname.includes('/fleet/verification') },
-                    { path: '/admin/fleet/tie-up-approval', label: 'Vendor Tie-up Approval', match: location.pathname === '/admin/fleet/tie-up-approval' },
                   ].map(({ path, label, match }) => (
                     <div key={label} className={`subnav-item ${match ? 'active-orange-text' : ''}`} onClick={() => navTo(path)}>
                       <span className="subnav-bullet">•</span><span>{label}</span>
@@ -783,6 +896,9 @@ function AdminShell() {
             <div className={`nav-item ${isNav('drivers') ? 'active-orange' : ''}`} onClick={() => navTo('/admin/drivers')} title="Drivers">
               <UserCheck size={18} />
               <span>Drivers</span>
+              {Boolean(navBadges.drivers && navBadges.drivers > 0) && (
+                <span className="nav-badge-red">{navBadges.drivers}</span>
+              )}
               <ChevronRight size={14} className="nav-chevron" />
             </div>
           )}
@@ -791,16 +907,19 @@ function AdminShell() {
           {operationsModules.length > 0 && (
             <>
               <div className="nav-section-label">OPERATIONS</div>
-              {operationsModules.map(({ key, label, Icon }) => (
-                <div key={key} className={`nav-item ${isNav(key) ? 'active-orange' : ''}`} onClick={() => navTo(`/admin/${key}`)} title={label}>
-                  <Icon size={18} />
-                  <span>{label}</span>
-                  {key === 'requirements' && (
-                    <span className="nav-badge-red">{navBadges.requirements > 0 ? navBadges.requirements : 1}</span>
-                  )}
-                  <ChevronRight size={14} className="nav-chevron" />
-                </div>
-              ))}
+              {operationsModules.map(({ key, label, Icon }) => {
+                const count = navBadges[key] || 0;
+                return (
+                  <div key={key} className={`nav-item ${isNav(key) ? 'active-orange' : ''}`} onClick={() => navTo(`/admin/${key}`)} title={label}>
+                    <Icon size={18} />
+                    <span>{label}</span>
+                    {count > 0 && (
+                      <span className="nav-badge-red">{count}</span>
+                    )}
+                    <ChevronRight size={14} className="nav-chevron" />
+                  </div>
+                );
+              })}
             </>
           )}
 
@@ -809,13 +928,19 @@ function AdminShell() {
             <>
               <div className="sidebar-divider" />
               <div className="nav-section-label">FINANCE & EXCEPTIONS</div>
-              {financeModules.map(({ key, label, Icon }) => (
-                <div key={key} className={`nav-item ${isNav(key) ? 'active-orange' : ''}`} onClick={() => navTo(`/admin/${key}`)} title={label}>
-                  <Icon size={18} />
-                  <span>{label}</span>
-                  <ChevronRight size={14} className="nav-chevron" />
-                </div>
-              ))}
+              {financeModules.map(({ key, label, Icon }) => {
+                const count = navBadges[key] || 0;
+                return (
+                  <div key={key} className={`nav-item ${isNav(key) ? 'active-orange' : ''}`} onClick={() => navTo(`/admin/${key}`)} title={label}>
+                    <Icon size={18} />
+                    <span>{label}</span>
+                    {count > 0 && (
+                      <span className="nav-badge-red">{count}</span>
+                    )}
+                    <ChevronRight size={14} className="nav-chevron" />
+                  </div>
+                );
+              })}
             </>
           )}
 
@@ -907,11 +1032,16 @@ function AdminShell() {
           <div className="topbar-right">
             <button className="topbar-icon-btn" title="Notifications" onClick={() => setIsNotifOpen(true)}>
               <Bell size={19} />
-              <span className="badge-count-orange">{unreadNotifCount > 0 ? unreadNotifCount : 3}</span>
+              {unreadNotifCount > 0 && (
+                <span className="badge-count-orange">{unreadNotifCount}</span>
+              )}
             </button>
 
             <button className="topbar-icon-btn" title="Communications" onClick={() => navTo('/admin/communications')}>
               <MessageSquare size={19} />
+              {unreadChatCount > 0 && (
+                <span className="badge-count-orange">{unreadChatCount}</span>
+              )}
             </button>
 
             <button
@@ -945,7 +1075,7 @@ function AdminShell() {
                 <div className="profile-dropdown-card">
                   <div className="profile-dropdown-header">
                     <strong>{adminProfile?.name || 'Rahul'}</strong>
-                    <span>{adminProfile?.email || 'admin@necl.in'}</span>
+                    <span>{adminProfile?.email || 'admin@trucks.in'}</span>
                   </div>
                   <div className="dropdown-divider" />
                   <button className="dropdown-menu-link" onClick={() => {
@@ -974,7 +1104,12 @@ function AdminShell() {
 
         {/* Page content */}
         <div className="dashboard-content-area">
-          <Suspense fallback={<div style={{ padding: '3rem', textAlign: 'center', color: '#64748B', fontWeight: 600 }}>Loading…</div>}>
+          <Suspense fallback={
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '400px', gap: '14px' }}>
+              <div style={{ width: '36px', height: '36px', border: '3px solid #E2E8F0', borderTop: '3px solid #F05A22', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+              <span style={{ fontSize: '13px', fontWeight: 600, color: '#64748B', letterSpacing: '0.3px' }}>Loading module…</span>
+            </div>
+          }>
             <Routes>
               <Route path="dashboard" element={
                 <RequirePermission module="dashboard">
@@ -996,7 +1131,7 @@ function AdminShell() {
               <Route path="clients" element={
                 <RequirePermission module="clients">
                   <ClientDirectory
-                    onNavigateToCreate={() => navigate('/admin/clients/new')}
+                    onNavigateToCreate={(draftId) => navigate(draftId ? `/admin/clients/new?draftId=${draftId}` : '/admin/clients/new')}
                     onNavigateToProfile={(id) => navigate(`/admin/clients/${id}`)}
                   />
                 </RequirePermission>
@@ -1041,6 +1176,11 @@ function AdminShell() {
               <Route path="vendors/:id" element={
                 <RequirePermission module="vendors">
                   <VendorProfileRoute userRole={adminProfile?.role ?? 'ADMIN'} />
+                </RequirePermission>
+              } />
+              <Route path="vendors/:id/edit" element={
+                <RequirePermission module="vendors">
+                  <VendorProfileRoute userRole={adminProfile?.role ?? 'ADMIN'} initialEdit={true} />
                 </RequirePermission>
               } />
 

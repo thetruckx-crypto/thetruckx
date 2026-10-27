@@ -27,17 +27,21 @@ import {
   X,
   Download,
   Calendar,
-  Package
+  Package,
+  Smartphone
 } from 'lucide-react';
-import { supabase } from '../../utils/supabase';
+import { supabase, ensureAdminSession } from '../../utils/supabase';
 import { apiFetch } from '../../utils/api';
 import { DocumentRejectionModal } from './DocumentRejectionModal';
+import { DocumentPreviewModal } from '../common/DocumentPreviewModal';
+import { EditVendorModal } from './EditVendorModal';
 import { formatDisplayId } from '../../utils/idGenerator';
 
 interface VendorProfileProps {
   vendorId: string;
   onBack: () => void;
   userRole?: 'ADMIN' | 'SUPER_ADMIN';
+  initialEdit?: boolean;
 }
 
 type VendorTab =
@@ -45,6 +49,7 @@ type VendorTab =
   | 'requirements'
   | 'trips'
   | 'vehicles'
+  | 'drivers'
   | 'documents'
   | 'payments'
   | 'activity';
@@ -53,6 +58,7 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
   vendorId,
   onBack,
   userRole = 'ADMIN',
+  initialEdit = false,
 }) => {
   const [vendor, setVendor] = useState<any>(null);
   const [primaryContact, setPrimaryContact] = useState<any>(null);
@@ -67,12 +73,16 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [trips, setTrips] = useState<any[]>([]);
   const [requirements, setRequirements] = useState<any[]>([]);
+  const [payments, setPayments] = useState<any[]>([]);
+  const [activities, setActivities] = useState<any[]>([]);
   const [loadedTabs, setLoadedTabs] = useState<Set<string>>(new Set(['overview']));
+  const [fleetConfigs, setFleetConfigs] = useState<any[]>([]);
   
   // UI state
+  const [previewDoc, setPreviewDoc] = useState<any | null>(null);
   const [isRejectionModalOpen, setIsRejectionModalOpen] = useState<boolean>(false);
   const [selectedDocForRejection, setSelectedDocForRejection] = useState<any | null>(null);
-  const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(Boolean(initialEdit));
   const [isActionLoading, setIsActionLoading] = useState<boolean>(false);
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
@@ -81,20 +91,6 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
     onConfirm: () => void;
   } | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-
-  const [editForm, setEditForm] = useState({
-    vendorName: '',
-    vendorType: 'Fleet Owner',
-    gstin: '',
-    pan: '',
-    address: '',
-    website: '',
-    contactName: '',
-    mobile: '',
-    email: '',
-    designation: '',
-    accountStatus: 'PENDING',
-  });
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -106,6 +102,7 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
     setLoading(true);
     setError(null);
     try {
+      await ensureAdminSession();
       // Fetch Vendor Company
       let compData: any = null;
       if (vendorId) {
@@ -136,19 +133,6 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
       }
 
       setVendor(compData);
-      setEditForm({
-        vendorName: compData.vendor_name || '',
-        vendorType: 'Fleet Owner',
-        gstin: compData.gstin || '',
-        pan: compData.pan || '',
-        address: compData.address || '',
-        website: '',
-        contactName: '',
-        mobile: '',
-        email: '',
-        designation: '',
-        accountStatus: compData.status || 'PENDING',
-      });
 
       // Fetch Primary Contact from vendor_users
       const { data: uData } = await supabase
@@ -160,15 +144,33 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
 
       if (uData) {
         setPrimaryContact(uData);
-        setEditForm(prev => ({
-          ...prev,
-          contactName: uData.full_name || '',
-          mobile: uData.mobile || '',
-          email: uData.email || '',
-          designation: uData.designation || '',
-        }));
       } else {
         setPrimaryContact(null);
+      }
+
+      // Fetch mobile registration configs if logged
+      try {
+        const { data: regAudit } = await supabase
+          .from('auth_audit_log')
+          .select('*')
+          .eq('user_id', compData.id)
+          .order('created_at', { ascending: false })
+          .limit(10);
+
+        if (regAudit && regAudit.length > 0) {
+          const subLog = regAudit.find((a: any) =>
+            (a.action === 'VENDOR_REGISTRATION_SUBMITTED' || a.event_type === 'VENDOR_REGISTRATION_SUBMITTED') &&
+            (a.details?.configs || a.details?.vehicleConfigs)
+          );
+          if (subLog) {
+            const cfgs = subLog.details?.configs || subLog.details?.vehicleConfigs;
+            if (Array.isArray(cfgs)) {
+              setFleetConfigs(cfgs);
+            }
+          }
+        }
+      } catch (auditErr) {
+        console.warn('Could not load audit log for vendor fleet configs:', auditErr);
       }
 
     } catch (err: any) {
@@ -184,36 +186,74 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
     if (!vendor || loadedTabs.has(tab)) return;
 
     try {
+      await ensureAdminSession();
       switch (tab) {
-        case 'documents':
+        case 'documents': {
+          const { data: vLinks } = await supabase
+            .from('vendor_vehicle_links')
+            .select('vehicle_id')
+            .eq('vendor_id', vendor.id);
+          const vehicleIds = (vLinks || []).map((l: any) => l.vehicle_id).filter(Boolean);
+
+          const { data: dLinks } = await supabase
+            .from('drivers')
+            .select('id')
+            .eq('primary_vendor_id', vendor.id);
+          const driverIds = (dLinks || []).map((d: any) => d.id).filter(Boolean);
+
+          const allRefIds = [vendor.id, ...vehicleIds, ...driverIds];
+
           const { data: docData } = await supabase
             .from('documents')
             .select('*')
-            .eq('reference_id', vendor.id);
+            .in('reference_id', allRefIds)
+            .order('created_at', { ascending: false });
           setDocuments(docData || []);
           break;
+        }
 
         case 'vehicles':
-          const { data: tData } = await supabase
-            .from('trips')
+          const { data: linkData } = await supabase
+            .from('vendor_vehicle_links')
             .select('*, vehicles(*)')
             .eq('vendor_id', vendor.id);
-          const realTrips = tData || [];
-          setTrips(realTrips);
-          const vehMap = new Map();
-          realTrips.forEach(t => {
-            if (t.vehicles && !vehMap.has(t.vehicles.id)) {
-              vehMap.set(t.vehicles.id, t.vehicles);
-            }
-          });
-          setVehicles(Array.from(vehMap.values()));
+
+          const linkedVehicles = (linkData || [])
+            .map((l: any) => l.vehicles)
+            .filter(Boolean);
+
+          if (linkedVehicles.length > 0) {
+            setVehicles(linkedVehicles);
+          } else {
+            // Also check trips if any vehicle was dispatched
+            const { data: tData } = await supabase
+              .from('trips')
+              .select('*, vehicles(*)')
+              .eq('vendor_id', vendor.id);
+            const vehMap = new Map();
+            (tData || []).forEach((t: any) => {
+              if (t.vehicles && !vehMap.has(t.vehicles.id)) {
+                vehMap.set(t.vehicles.id, t.vehicles);
+              }
+            });
+            setVehicles(Array.from(vehMap.values()));
+          }
+          break;
+
+        case 'drivers':
+          const { data: driverData } = await supabase
+            .from('drivers')
+            .select('*')
+            .eq('primary_vendor_id', vendor.id)
+            .order('created_at', { ascending: false });
+          setDrivers(driverData || []);
           break;
 
         case 'trips':
           if (trips.length === 0) {
             const { data: tData2 } = await supabase
               .from('trips')
-              .select('*, vehicles(registration_number)')
+              .select('*, vehicles(registration_number, vehicle_type), drivers(full_name, mobile), bookings(*, requirements(*, client_companies(company_name))))')
               .eq('vendor_id', vendor.id)
               .order('created_at', { ascending: false });
             setTrips(tData2 || []);
@@ -221,12 +261,79 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
           break;
 
         case 'requirements':
-          const { data: reqData } = await supabase
-            .from('requirements')
+          const { data: vrData } = await supabase
+            .from('vendor_requests')
+            .select('*, requirements(*, client_companies(company_name)), vendor_quotations(*)')
+            .eq('vendor_id', vendor.id)
+            .order('created_at', { ascending: false });
+
+          let mappedReqs: any[] = [];
+          if (vrData && vrData.length > 0) {
+            mappedReqs = vrData.map((vr: any) => ({
+              ...vr.requirements,
+              vendor_request_id: vr.id,
+              vendor_request_status: vr.status,
+              deadline_at: vr.deadline_at,
+              quotations: vr.vendor_quotations || [],
+            }));
+          }
+
+          // Also check direct vendor_quotations
+          const { data: vqData } = await supabase
+            .from('vendor_quotations')
+            .select('*, requirements(*, client_companies(company_name))')
+            .eq('vendor_id', vendor.id)
+            .order('created_at', { ascending: false });
+
+          if (vqData && vqData.length > 0) {
+            const existingIds = new Set(mappedReqs.map((r: any) => r?.id).filter(Boolean));
+            vqData.forEach((vq: any) => {
+              if (vq.requirements && !existingIds.has(vq.requirements.id)) {
+                mappedReqs.push({
+                  ...vq.requirements,
+                  vendor_request_id: vq.vendor_request_id,
+                  vendor_request_status: vq.status,
+                  quotations: [vq],
+                });
+                existingIds.add(vq.requirements.id);
+              }
+            });
+          }
+
+          if (mappedReqs.length > 0) {
+            setRequirements(mappedReqs);
+          } else {
+            setRequirements([]);
+          }
+          break;
+
+        case 'payments':
+          const { data: payData } = await supabase
+            .from('payment_records')
             .select('*')
+            .eq('recipient_id', vendor.id)
+            .order('created_at', { ascending: false });
+
+          if (payData && payData.length > 0) {
+            setPayments(payData);
+          } else {
+            // Fallback from vendor trips
+            const { data: tripPays } = await supabase
+              .from('trips')
+              .select('id, booking_id, vendor_rate, trip_status, created_at, completed_at')
+              .eq('vendor_id', vendor.id);
+            setPayments(tripPays || []);
+          }
+          break;
+
+        case 'activity':
+          const { data: actData } = await supabase
+            .from('auth_audit_log')
+            .select('*')
+            .eq('user_id', vendor.id)
             .order('created_at', { ascending: false })
-            .limit(50);
-          setRequirements(reqData || []);
+            .limit(30);
+          setActivities(actData || []);
           break;
 
         default:
@@ -264,41 +371,96 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
   // Actions
   const handleApproveVendor = () => {
     if (!vendor) return;
+
+    // Comprehensive validation checks prior to approval
+    const missingItems: string[] = [];
+    if (!vendor.vendor_name?.trim()) missingItems.push('Business Legal Name');
+    if (!primaryContact?.full_name?.trim()) missingItems.push('Authorized Contact Person Name');
+    if (!primaryContact?.mobile?.trim()) missingItems.push('Contact Mobile Number');
+    if (!vendor.address?.trim()) missingItems.push('Registered Office Address');
+    if (!vendor.pan?.trim() || vendor.pan === 'NOT_PROVIDED') {
+      const hasPanDoc = documents.some(
+        (d) => d.document_type === 'COMPANY_PAN' || d.document_type === 'PAN'
+      );
+      if (!hasPanDoc) missingItems.push('Company / Transporter PAN or PAN Card document');
+    }
+
+    const hasRejectedDocs = documents.some((d) => d.verification_status === 'REJECTED');
+    if (hasRejectedDocs) {
+      missingItems.push('Unresolved rejected KYC document(s) need resolution');
+    }
+
+    if (missingItems.length > 0) {
+      setConfirmDialog({
+        isOpen: true,
+        title: '⚠️ Compliance Warning: Missing Required Information',
+        message: `This vendor application has incomplete or unverified compliance items:\n• ${missingItems.join('\n• ')}\n\nDo you want to proceed with administrative override approval, or cancel to request vendor updates?`,
+        onConfirm: async () => {
+          await executeVendorApproval();
+        },
+      });
+      return;
+    }
+
     setConfirmDialog({
       isOpen: true,
-      title: 'Approve Vendor',
-      message: `Are you sure you want to approve ${vendor.vendor_name}? This will allow them to receive RFQs and submit quotations.`,
+      title: 'Approve Vendor Application',
+      message: `Are you sure you want to approve "${vendor.vendor_name}"? This verifies their credentials, activates their mobile vendor portal, and allows them to receive broadcast RFQs.`,
       onConfirm: async () => {
-        setIsActionLoading(true);
-        try {
-          const { error: appErr } = await supabase
-            .from('vendor_companies')
-            .update({
-              status: 'APPROVED',
-              approved_by: 'USR-ADM-002',
-              approved_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', vendor.id);
-
-          if (appErr) throw appErr;
-
-          apiFetch('/admin/vendor-approval', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ vendorId: vendor.id, decision: 'APPROVED' }),
-          }).catch(() => {});
-
-          showToast(`✅ Vendor "${vendor.vendor_name}" has been approved!`);
-          await loadVendorData();
-        } catch (err: any) {
-          showToast(`❌ Approval failed: ${err.message}`);
-        } finally {
-          setIsActionLoading(false);
-          setConfirmDialog(null);
-        }
+        await executeVendorApproval();
       },
     });
+  };
+
+  const executeVendorApproval = async () => {
+    setIsActionLoading(true);
+    try {
+      const { error: appErr } = await supabase
+        .from('vendor_companies')
+        .update({
+          status: 'APPROVED',
+          approved_by: 'TRUCKS Compliance Desk',
+          approved_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', vendor.id);
+
+      if (appErr) throw appErr;
+
+      await supabase
+        .from('vendor_users')
+        .update({ status: 'ACTIVE' })
+        .eq('vendor_id', vendor.id);
+
+      // Record in audit log
+      try {
+        await supabase.from('auth_audit_log').insert([
+          {
+            user_id: vendor.id,
+            action: 'VENDOR_APPROVED',
+            details: {
+              approved_by: 'TRUCKS Compliance Desk',
+              timestamp: new Date().toISOString(),
+            },
+          },
+        ]);
+      } catch {}
+
+      apiFetch('/admin/vendor-approval', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vendorId: vendor.id, decision: 'APPROVED' }),
+      }).catch(() => {});
+
+      showToast(`✅ Vendor "${vendor.vendor_name}" has been approved!`);
+      await loadVendorData();
+      await loadTabData('documents');
+    } catch (err: any) {
+      showToast(`❌ Approval failed: ${err.message}`);
+    } finally {
+      setIsActionLoading(false);
+      setConfirmDialog(null);
+    }
   };
 
   const handleRejectVendor = () => {
@@ -306,7 +468,7 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
     setConfirmDialog({
       isOpen: true,
       title: 'Reject Vendor Application',
-      message: `Are you sure you want to reject ${vendor.vendor_name}'s registration application?`,
+      message: `Are you sure you want to reject "${vendor.vendor_name}"? The vendor will be marked as REJECTED in the database and audit trail.`,
       onConfirm: async () => {
         setIsActionLoading(true);
         try {
@@ -319,6 +481,19 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
             .eq('id', vendor.id);
 
           if (rejErr) throw rejErr;
+
+          try {
+            await supabase.from('auth_audit_log').insert([
+              {
+                user_id: vendor.id,
+                action: 'VENDOR_REJECTED',
+                details: {
+                  rejected_by: 'TRUCKS Compliance Desk',
+                  timestamp: new Date().toISOString(),
+                },
+              },
+            ]);
+          } catch {}
 
           apiFetch('/admin/vendor-approval', {
             method: 'POST',
@@ -370,62 +545,6 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
         }
       },
     });
-  };
-
-  const handleSaveEdit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!vendor) return;
-    setIsActionLoading(true);
-    try {
-      // Update vendor company
-      const { error: editErr } = await supabase
-        .from('vendor_companies')
-        .update({
-          vendor_name: editForm.vendorName.trim(),
-          address: editForm.address.trim(),
-          gstin: editForm.gstin.trim().toUpperCase() || null,
-          pan: editForm.pan.trim().toUpperCase() || null,
-          status: userRole === 'SUPER_ADMIN' ? editForm.accountStatus : vendor.status,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', vendor.id);
-
-      if (editErr) throw editErr;
-
-      // Update or insert primary contact
-      if (primaryContact) {
-        const { error: contactErr } = await supabase
-          .from('vendor_users')
-          .update({
-            full_name: editForm.contactName.trim(),
-            mobile: editForm.mobile.trim(),
-            email: editForm.email.trim(),
-          })
-          .eq('id', primaryContact.id);
-
-        if (contactErr) throw contactErr;
-      } else if (editForm.contactName && editForm.mobile) {
-        const { error: insertErr } = await supabase
-          .from('vendor_users')
-          .insert([{
-            vendor_id: vendor.id,
-            full_name: editForm.contactName.trim(),
-            mobile: editForm.mobile.trim(),
-            email: editForm.email.trim(),
-            status: 'ACTIVE',
-          }]);
-
-        if (insertErr) throw insertErr;
-      }
-
-      showToast('✅ Vendor details updated successfully.');
-      setIsEditModalOpen(false);
-      await loadVendorData();
-    } catch (err: any) {
-      showToast(`❌ Update failed: ${err.message}`);
-    } finally {
-      setIsActionLoading(false);
-    }
   };
 
   const handleApproveDocument = async (docId: string) => {
@@ -481,6 +600,8 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
   const activeTripsCount = trips.filter(t => t.trip_status !== 'COMPLETED' && t.trip_status !== 'CANCELLED').length;
   const totalVehiclesCount = vehicles.length;
   const documentsCount = documents.length;
+  const fleetConfigsCount = fleetConfigs.reduce((acc, c) => acc + (Number(c.quantity) || 0), 0);
+  const effectiveFleetStrength = Number(vendor.fleet_size) || (fleetConfigsCount > 0 ? fleetConfigsCount : totalVehiclesCount);
 
   const regDateFormatted = vendor.created_at
     ? new Date(vendor.created_at).toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' })
@@ -528,7 +649,15 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
         <div className="breadcrumbs-row">
           <span className="crumb-root" onClick={onBack} style={{ cursor: 'pointer' }}>Vendors</span>
           <span className="crumb-sep">›</span>
+          <span className="crumb-root" onClick={onBack} style={{ cursor: 'pointer' }}>Vendor Directory</span>
+          <span className="crumb-sep">›</span>
           <span className="crumb-active">{vendor.vendor_name}</span>
+          {isEditModalOpen && (
+            <>
+              <span className="crumb-sep">›</span>
+              <span className="crumb-active" style={{ color: '#F05A22', fontWeight: 600 }}>Edit Vendor</span>
+            </>
+          )}
         </div>
 
         <div className="profile-top-title-row">
@@ -596,6 +725,7 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
                 </button>
               </>
             )}
+
             <button
               className="btn-orange-action"
               onClick={() => setIsEditModalOpen(true)}
@@ -613,6 +743,7 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
               </button>
               {openMenuId === 'more' && (
                 <div className="action-menu-dropdown">
+
                   <button className="menu-item" onClick={() => showToast('Message sent')}>
                     <Send size={14} />
                     <span>Send Message</span>
@@ -673,8 +804,16 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
       {/* Summary Stats Row */}
       <section className="vendor-summary-stats-row">
         <div className="stat-cell">
-          <span className="stat-label">Requirements</span>
-          <span className="stat-value">{loadedTabs.has('requirements') ? requirements.length : '—'}</span>
+          <span className="stat-label">Fleet Strength</span>
+          <span className="stat-value">{effectiveFleetStrength}</span>
+        </div>
+        <div className="stat-cell">
+          <span className="stat-label">Enrolled Vehicles</span>
+          <span className="stat-value">{totalVehiclesCount}</span>
+        </div>
+        <div className="stat-cell">
+          <span className="stat-label">Associated Drivers</span>
+          <span className="stat-value">{drivers.length}</span>
         </div>
         <div className="stat-cell">
           <span className="stat-label">Active Trips</span>
@@ -685,16 +824,12 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
           <span className="stat-value">{completedTripsCount}</span>
         </div>
         <div className="stat-cell">
-          <span className="stat-label">Vehicles</span>
-          <span className="stat-value">{totalVehiclesCount}</span>
+          <span className="stat-label">Requirements / RFQs</span>
+          <span className="stat-value">{loadedTabs.has('requirements') ? requirements.length : '—'}</span>
         </div>
         <div className="stat-cell">
-          <span className="stat-label">Documents</span>
+          <span className="stat-label">KYC Documents</span>
           <span className="stat-value">{documentsCount}</span>
-        </div>
-        <div className="stat-cell">
-          <span className="stat-label">Payments</span>
-          <span className="stat-value">—</span>
         </div>
       </section>
 
@@ -702,12 +837,13 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
       <nav className="vendor-tabs-bar">
         {[
           { key: 'overview', label: 'Overview' },
-          { key: 'requirements', label: 'Requirements' },
-          { key: 'trips', label: 'Trips' },
-          { key: 'vehicles', label: 'Vehicles' },
-          { key: 'documents', label: 'Documents' },
-          { key: 'payments', label: 'Payments' },
-          { key: 'activity', label: 'Activity' },
+          { key: 'requirements', label: 'Requirements & Quotations' },
+          { key: 'trips', label: 'Trips & Bookings' },
+          { key: 'vehicles', label: 'Registered Vehicles' },
+          { key: 'drivers', label: 'Associated Drivers' },
+          { key: 'documents', label: 'KYC & Documents' },
+          { key: 'payments', label: 'Commercial Settlements' },
+          { key: 'activity', label: 'Audit Trail' },
         ].map((tab) => (
           <button
             key={tab.key}
@@ -783,6 +919,124 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
                   </div>
                 ) : (
                   <p className="empty-state-text">No contact person registered.</p>
+                )}
+              </div>
+
+              {/* Fleet Strength & Vehicle Configurations Card */}
+              <div className="profile-section-card">
+                <div className="card-header-bar">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Truck size={18} color="#F05A22" />
+                    <h3 className="section-title">Fleet Strength & Configurations</h3>
+                  </div>
+                  <span className="status-pill active" style={{ fontWeight: 700 }}>
+                    {effectiveFleetStrength} Total Vehicles
+                  </span>
+                </div>
+                <div className="meta-definition-grid" style={{ marginBottom: 14 }}>
+                  <div>
+                    <span className="def-label">Total Fleet Strength</span>
+                    <span className="def-val" style={{ fontSize: '16px', fontWeight: 700, color: '#F05A22' }}>
+                      {effectiveFleetStrength} Vehicles
+                    </span>
+                  </div>
+                  <div>
+                    <span className="def-label">Enrolled Vehicles</span>
+                    <span className="def-val">{totalVehiclesCount} Verified</span>
+                  </div>
+                  <div>
+                    <span className="def-label">Supported Body Types</span>
+                    <span className="def-val">Open Body, Closed Body</span>
+                  </div>
+                  <div>
+                    <span className="def-label">Supported Categories</span>
+                    <span className="def-val">Lorry, Trailer, Van, Heavy Carrier</span>
+                  </div>
+                </div>
+
+                {fleetConfigs.length > 0 && (
+                  <div style={{ marginTop: '12px', borderTop: '1px solid #F1F5F9', paddingTop: '12px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '8px' }}>
+                      Configured Fleet Breakdown (Vendor Step 5 Registered Configurations)
+                    </div>
+                    <table className="profile-data-table" style={{ width: '100%' }}>
+                      <thead>
+                        <tr>
+                          <th>Category</th>
+                          <th>Body Type</th>
+                          <th>Capacity (MT)</th>
+                          <th>Quantity</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {fleetConfigs.map((cfg: any, i: number) => (
+                          <tr key={cfg.id || i}>
+                            <td className="bold-text">{cfg.vehicleType || cfg.category || '—'}</td>
+                            <td>
+                              <span className="status-pill active">{cfg.bodyType || 'Open Body'}</span>
+                            </td>
+                            <td>{cfg.capacity ? `${cfg.capacity} MT` : '—'}</td>
+                            <td style={{ fontWeight: 700, color: '#0F172A' }}>{cfg.quantity || 1}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Associated Drivers Summary Card */}
+              <div className="profile-section-card">
+                <div className="card-header-bar">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Users size={18} color="#F05A22" />
+                    <h3 className="section-title">Associated Drivers ({drivers.length})</h3>
+                  </div>
+                  <button
+                    type="button"
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#F05A22',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => setActiveTab('drivers')}
+                  >
+                    View All Drivers →
+                  </button>
+                </div>
+                {drivers.length === 0 ? (
+                  <p className="empty-state-text">No drivers currently assigned or attached to this vendor.</p>
+                ) : (
+                  <div className="table-responsive-wrapper">
+                    <table className="profile-data-table" style={{ width: '100%' }}>
+                      <thead>
+                        <tr>
+                          <th>Driver Name</th>
+                          <th>Phone</th>
+                          <th>Licence No.</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {drivers.slice(0, 3).map((d: any) => (
+                          <tr key={d.id}>
+                            <td className="bold-text">{d.full_name || 'Driver'}</td>
+                            <td>{d.mobile ? `+91 ${d.mobile}` : '—'}</td>
+                            <td className="mono-text">{d.license_number || d.dl_number || '—'}</td>
+                            <td>
+                              <span className={`status-pill ${d.verification_status === 'VERIFIED' ? 'verified' : 'active'}`}>
+                                <span className="dot-indicator"></span>
+                                {d.verification_status || d.status || 'Active'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </div>
             </div>
@@ -936,20 +1190,18 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
                             </td>
                             <td>
                               <div className="table-actions-group">
-                                {doc.file_url && (
-                                  <button
-                                    className="btn-row-action"
-                                    title="View"
-                                    onClick={() => window.open(doc.file_url, '_blank')}
-                                  >
-                                    <Eye size={14} />
-                                  </button>
-                                )}
-                                {doc.file_url && (
+                                <button
+                                  className="btn-row-action"
+                                  title="View / Preview Document"
+                                  onClick={() => setPreviewDoc(doc)}
+                                >
+                                  <Eye size={14} />
+                                </button>
+                                {(doc.file_url || doc.file_path) && (
                                   <button
                                     className="btn-row-action"
                                     title="Download"
-                                    onClick={() => window.open(doc.file_url, '_blank')}
+                                    onClick={() => window.open(doc.file_url || doc.file_path, '_blank')}
                                   >
                                     <Download size={14} />
                                   </button>
@@ -999,8 +1251,72 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
           <div className="tab-content-single">
             <div className="profile-section-card">
               <div className="card-header-bar">
-                <h3 className="section-title">Vehicles ({totalVehiclesCount})</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Truck size={18} color="#F05A22" />
+                  <h3 className="section-title">Enrolled Vehicles & Fleet Configurations</h3>
+                </div>
+                <span className="status-pill active" style={{ fontWeight: 700 }}>
+                  Total Strength: {effectiveFleetStrength}
+                </span>
               </div>
+
+              {/* Fleet Summary Overview Grid */}
+              <div className="meta-definition-grid" style={{ marginBottom: 16 }}>
+                <div>
+                  <span className="def-label">Total Fleet Strength</span>
+                  <span className="def-val" style={{ fontSize: '16px', fontWeight: 700, color: '#F05A22' }}>
+                    {effectiveFleetStrength} Vehicles
+                  </span>
+                </div>
+                <div>
+                  <span className="def-label">Verified Registered</span>
+                  <span className="def-val">{totalVehiclesCount} Enrolled</span>
+                </div>
+                <div>
+                  <span className="def-label">Supported Body Types</span>
+                  <span className="def-val">Open Body, Closed Body</span>
+                </div>
+                <div>
+                  <span className="def-label">Supported Categories</span>
+                  <span className="def-val">Lorry, Trailer, Van, Heavy Carrier</span>
+                </div>
+              </div>
+
+              {fleetConfigs.length > 0 && (
+                <div style={{ marginBottom: 20 }}>
+                  <h4 style={{ fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '8px' }}>
+                    Registered Fleet Strength Configurations (Mobile Step 5 Data)
+                  </h4>
+                  <div className="table-responsive-wrapper">
+                    <table className="profile-data-table" style={{ width: '100%' }}>
+                      <thead>
+                        <tr>
+                          <th>Category</th>
+                          <th>Body Type</th>
+                          <th>Capacity (MT)</th>
+                          <th>Quantity</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {fleetConfigs.map((cfg: any, i: number) => (
+                          <tr key={cfg.id || i}>
+                            <td className="bold-text">{cfg.vehicleType || cfg.category || '—'}</td>
+                            <td>
+                              <span className="status-pill active">{cfg.bodyType || 'Open Body'}</span>
+                            </td>
+                            <td>{cfg.capacity ? `${cfg.capacity} MT` : '—'}</td>
+                            <td style={{ fontWeight: 700, color: '#0F172A' }}>{cfg.quantity || 1}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              <h4 style={{ fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '8px' }}>
+                Enrolled Individual Vehicles ({totalVehiclesCount})
+              </h4>
 
               {!loadedTabs.has('vehicles') ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: '#64748B' }}>
@@ -1008,14 +1324,15 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
                   <p>Loading vehicles...</p>
                 </div>
               ) : vehicles.length === 0 ? (
-                <div className="empty-state-text">No vehicles enrolled for this vendor.</div>
+                <div className="empty-state-text">No individually registered vehicles enrolled for this vendor yet.</div>
               ) : (
                 <div className="table-responsive-wrapper">
                   <table className="profile-data-table">
                     <thead>
                       <tr>
                         <th>Vehicle No.</th>
-                        <th>Type</th>
+                        <th>Category / Type</th>
+                        <th>Body Type</th>
                         <th>Capacity</th>
                         <th>RC Number</th>
                         <th>Status</th>
@@ -1027,6 +1344,9 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
                         <tr key={v.id}>
                           <td className="bold-text">{v.registration_number}</td>
                           <td>{v.vehicle_type}</td>
+                          <td>
+                            <span className="status-pill active">{v.body_type || 'Open Body'}</span>
+                          </td>
                           <td>{v.rated_capacity_mt} MT</td>
                           <td className="mono-text">{v.rc_number || '—'}</td>
                           <td>
@@ -1054,11 +1374,76 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
           </div>
         )}
 
+        {activeTab === 'drivers' && (
+          <div className="tab-content-single">
+            <div className="profile-section-card">
+              <div className="card-header-bar">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Users size={18} color="#F05A22" />
+                  <h3 className="section-title">Associated Drivers ({drivers.length})</h3>
+                </div>
+              </div>
+
+              {drivers.length === 0 ? (
+                <div className="empty-state-text">No associated drivers found for this vendor.</div>
+              ) : (
+                <div className="table-responsive-wrapper">
+                  <table className="profile-data-table">
+                    <thead>
+                      <tr>
+                        <th>Driver Name</th>
+                        <th>Mobile Number</th>
+                        <th>Driving Licence No.</th>
+                        <th>Association Type</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {drivers.map((d: any) => (
+                        <tr key={d.id}>
+                          <td className="bold-text">{d.full_name || 'Driver'}</td>
+                          <td>{d.mobile ? `+91 ${d.mobile}` : '—'}</td>
+                          <td className="mono-text">{d.license_number || d.dl_number || '—'}</td>
+                          <td>
+                            <span className="status-pill active">
+                              {d.association_type === 'VENDOR_FLEET' ? 'Fleet Driver' : 'Attached'}
+                            </span>
+                          </td>
+                          <td>
+                            <span className={`status-pill ${d.verification_status === 'VERIFIED' ? 'verified' : d.status === 'ACTIVE' ? 'active' : 'pending'}`}>
+                              <span className="dot-indicator"></span>
+                              {d.verification_status || d.status || 'Active'}
+                            </span>
+                          </td>
+                          <td>
+                            <button
+                              type="button"
+                              className="btn-row-action"
+                              title="Driver details"
+                              onClick={() => showToast(`Driver: ${d.full_name} (${d.mobile || 'No phone'})`)}
+                            >
+                              <Eye size={14} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {activeTab === 'trips' && (
           <div className="tab-content-single">
             <div className="profile-section-card">
               <div className="card-header-bar">
-                <h3 className="section-title">Trips ({trips.length})</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Truck size={18} color="#F05A22" />
+                  <h3 className="section-title">Dispatches & Related Bookings ({trips.length})</h3>
+                </div>
               </div>
 
               {!loadedTabs.has('trips') ? (
@@ -1067,44 +1452,56 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
                   <p>Loading trips...</p>
                 </div>
               ) : trips.length === 0 ? (
-                <div className="empty-state-text">No trips recorded for this vendor.</div>
+                <div className="empty-state-text">No trips or bookings recorded for this vendor.</div>
               ) : (
                 <div className="table-responsive-wrapper">
                   <table className="profile-data-table">
                     <thead>
                       <tr>
                         <th>Trip ID</th>
+                        <th>Booking Ref</th>
+                        <th>Route</th>
                         <th>Vehicle</th>
+                        <th>Assigned Driver</th>
                         <th>Status</th>
-                        <th>Rate</th>
+                        <th>Vendor Rate</th>
                         <th>Created</th>
                         <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {trips.map((trip) => (
-                        <tr key={trip.id}>
-                          <td className="mono-text">{formatDisplayId('TRP', trip.id, trip.created_at)}</td>
-                          <td>{trip.vehicles?.registration_number || '—'}</td>
-                          <td>
-                            <span className={`status-pill ${trip.trip_status === 'COMPLETED' ? 'verified' : 'pending'}`}>
-                              <span className="dot-indicator"></span>
-                              {trip.trip_status || 'Active'}
-                            </span>
-                          </td>
-                          <td>₹{Number(trip.vendor_rate || 0).toLocaleString('en-IN')}</td>
-                          <td>{new Date(trip.created_at).toLocaleDateString()}</td>
-                          <td>
-                            <button
-                              className="btn-row-action"
-                              title="View Trip"
-                              onClick={() => showToast(`Trip ${trip.id.slice(0, 8)}`)}
-                            >
-                              <Eye size={14} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                      {trips.map((trip) => {
+                        const routeStr = trip.bookings?.requirements?.origin_city || trip.bookings?.origin || trip.origin
+                          ? `${trip.bookings?.requirements?.origin_city || trip.bookings?.origin || trip.origin} → ${trip.bookings?.requirements?.destination_city || trip.bookings?.destination || trip.destination}`
+                          : 'Operational Route';
+
+                        return (
+                          <tr key={trip.id}>
+                            <td className="mono-text">{formatDisplayId('TRP', trip.id, trip.created_at)}</td>
+                            <td className="mono-text">{trip.bookings?.booking_code || (trip.booking_id ? formatDisplayId('BK', trip.booking_id, trip.created_at) : 'Direct Dispatch')}</td>
+                            <td>{routeStr}</td>
+                            <td className="bold-text">{trip.vehicles?.registration_number || '—'}</td>
+                            <td>{trip.drivers?.full_name ? `${trip.drivers.full_name}` : '—'}</td>
+                            <td>
+                              <span className={`status-pill ${trip.trip_status === 'COMPLETED' ? 'verified' : 'pending'}`}>
+                                <span className="dot-indicator"></span>
+                                {trip.trip_status || 'Active'}
+                              </span>
+                            </td>
+                            <td style={{ fontWeight: 700, color: '#0F172A' }}>₹{Number(trip.vendor_rate || 0).toLocaleString('en-IN')}</td>
+                            <td>{new Date(trip.created_at).toLocaleDateString()}</td>
+                            <td>
+                              <button
+                                className="btn-row-action"
+                                title="View Trip"
+                                onClick={() => showToast(`Trip ${trip.id.slice(0, 8)}`)}
+                              >
+                                <Eye size={14} />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -1117,49 +1514,76 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
           <div className="tab-content-single">
             <div className="profile-section-card">
               <div className="card-header-bar">
-                <h3 className="section-title">Requirements</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <FileText size={18} color="#F05A22" />
+                  <h3 className="section-title">Requirements, RFQs & Quotations ({requirements.length})</h3>
+                </div>
               </div>
 
               {!loadedTabs.has('requirements') ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: '#64748B' }}>
                   <RefreshCw size={24} className="spin" style={{ margin: '0 auto 12px', color: '#F45325' }} />
-                  <p>Loading requirements...</p>
+                  <p>Loading requirements & quotations...</p>
                 </div>
               ) : requirements.length === 0 ? (
-                <div className="empty-state-text">No requirements found.</div>
+                <div className="empty-state-text">No requirements or quotations found.</div>
               ) : (
                 <div className="table-responsive-wrapper">
                   <table className="profile-data-table">
                     <thead>
                       <tr>
-                        <th>Requirement ID</th>
-                        <th>Status</th>
+                        <th>Requirement / RFQ Ref</th>
+                        <th>Client</th>
+                        <th>Route</th>
+                        <th>Vehicle Required</th>
+                        <th>RFQ Status</th>
+                        <th>Quotation (Rate)</th>
+                        <th>Quote Status</th>
                         <th>Created</th>
                         <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {requirements.map((req) => (
-                        <tr key={req.id}>
-                          <td className="mono-text">{formatDisplayId('REQ', req.requirement_reference || req.requirement_code || req.id, req.created_at)}</td>
-                          <td>
-                            <span className="status-pill pending">
-                              <span className="dot-indicator"></span>
-                              {req.status || 'Open'}
-                            </span>
-                          </td>
-                          <td>{new Date(req.created_at).toLocaleDateString()}</td>
-                          <td>
-                            <button
-                              className="btn-row-action"
-                              title="View"
-                              onClick={() => showToast(`Requirement ${req.id.slice(0, 8)}`)}
-                            >
-                              <Eye size={14} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                      {requirements.map((req) => {
+                        const quote = req.quotations?.[0];
+                        const quoteAmount = quote?.quote_amount || quote?.vendor_rate;
+                        const route = (req.origin_city || req.origin)
+                          ? `${req.origin_city || req.origin} → ${req.destination_city || req.destination}`
+                          : 'General Route';
+
+                        return (
+                          <tr key={req.id}>
+                            <td className="mono-text">{formatDisplayId('REQ', req.requirement_reference || req.requirement_code || req.id, req.created_at)}</td>
+                            <td>{req.client_companies?.company_name || 'Enterprise Client'}</td>
+                            <td>{route}</td>
+                            <td>{req.vehicle_type || req.vehicle_category || 'Commercial'}</td>
+                            <td>
+                              <span className="status-pill pending">
+                                <span className="dot-indicator"></span>
+                                {req.vendor_request_status || req.status || 'Open'}
+                              </span>
+                            </td>
+                            <td style={{ fontWeight: 700, color: quoteAmount ? '#0F172A' : '#94A3B8' }}>
+                              {quoteAmount ? `₹${Number(quoteAmount).toLocaleString('en-IN')}` : 'Awaiting Quote'}
+                            </td>
+                            <td>
+                              <span className={`status-pill ${quote?.status === 'ACCEPTED' ? 'verified' : quote ? 'pending' : 'inactive'}`}>
+                                {quote?.status || (quote ? 'Submitted' : 'Pending Response')}
+                              </span>
+                            </td>
+                            <td>{new Date(req.created_at).toLocaleDateString()}</td>
+                            <td>
+                              <button
+                                className="btn-row-action"
+                                title="View Requirement"
+                                onClick={() => showToast(`Requirement ${req.id.slice(0, 8)}`)}
+                              >
+                                <Eye size={14} />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -1172,9 +1596,52 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
           <div className="tab-content-single">
             <div className="profile-section-card">
               <div className="card-header-bar">
-                <h3 className="section-title">Payments</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Receipt size={18} color="#F05A22" />
+                  <h3 className="section-title">Commercial & Payment Settlements</h3>
+                </div>
+                <div style={{ fontSize: '13px', color: '#64748B' }}>
+                  {payments.length} settlement record{payments.length === 1 ? '' : 's'}
+                </div>
               </div>
-              <div className="empty-state-text">Payment history not available yet.</div>
+              {payments.length === 0 ? (
+                <div className="empty-state-text">No payment or settlement records found for this vendor.</div>
+              ) : (
+                <div className="table-responsive">
+                  <table className="client-table">
+                    <thead>
+                      <tr>
+                        <th>Reference / ID</th>
+                        <th>Trip / Booking</th>
+                        <th>Amount (₹)</th>
+                        <th>Payment Type</th>
+                        <th>Status</th>
+                        <th>Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {payments.map((p: any, idx: number) => (
+                        <tr key={p.id || `pay-${idx}`}>
+                          <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                            {p.transaction_id || `PAY-${(p.id || '').substring(0, 8).toUpperCase()}`}
+                          </td>
+                          <td>{p.trip_id || p.booking_id || 'Direct Freight Settlement'}</td>
+                          <td style={{ fontWeight: 700, color: '#0F172A' }}>
+                            ₹{(p.amount || p.vendor_rate || 0).toLocaleString('en-IN')}
+                          </td>
+                          <td>{p.payment_type || 'Vendor Payout'}</td>
+                          <td>
+                            <span className={`status-badge ${(p.status || p.trip_status || 'COMPLETED').toLowerCase()}`}>
+                              {p.status || (p.trip_status === 'COMPLETED' ? 'Settled' : 'Pending')}
+                            </span>
+                          </td>
+                          <td>{new Date(p.created_at || p.completed_at || Date.now()).toLocaleDateString('en-GB')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1183,9 +1650,46 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
           <div className="tab-content-single">
             <div className="profile-section-card">
               <div className="card-header-bar">
-                <h3 className="section-title">Activity Log</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Clock size={18} color="#F05A22" />
+                  <h3 className="section-title">Vendor Audit & Activity Timeline</h3>
+                </div>
+                <div style={{ fontSize: '13px', color: '#64748B' }}>
+                  {activities.length} event{activities.length === 1 ? '' : 's'} logged
+                </div>
               </div>
-              <div className="empty-state-text">Activity log not implemented yet.</div>
+              {activities.length === 0 ? (
+                <div className="empty-state-text">No activity history recorded for this vendor.</div>
+              ) : (
+                <div className="table-responsive">
+                  <table className="client-table">
+                    <thead>
+                      <tr>
+                        <th>Event Type</th>
+                        <th>Source / User</th>
+                        <th>Details</th>
+                        <th>Timestamp</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {activities.map((a: any, idx: number) => (
+                        <tr key={a.id || `act-${idx}`}>
+                          <td style={{ fontWeight: 600, color: '#0F172A' }}>
+                            {a.event_type || 'AUDIT_LOG'}
+                          </td>
+                          <td>{a.user_type || 'VENDOR_SYSTEM'}</td>
+                          <td style={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {typeof a.details === 'object' ? JSON.stringify(a.details) : (a.details || '—')}
+                          </td>
+                          <td style={{ fontSize: '12px', color: '#64748B' }}>
+                            {new Date(a.created_at).toLocaleString('en-GB')}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1205,159 +1709,53 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
       />
 
       {/* Edit Vendor Modal */}
-      {isEditModalOpen && (
-        <div className="modal-backdrop" onClick={() => setIsEditModalOpen(false)}>
-          <div className="edit-vendor-modal-card" onClick={(e) => e.stopPropagation()}>
-            <div className="create-modal-header">
-              <h3 className="create-modal-title">Edit Vendor</h3>
-              <button className="create-modal-close-btn" onClick={() => setIsEditModalOpen(false)}>
-                <X size={18} />
-              </button>
-            </div>
-            <form onSubmit={handleSaveEdit}>
-              <div className="create-modal-body">
-                <h4 className="form-section-heading">Business Information</h4>
-                <div className="form-fields-grid">
-                  <div className="form-field-group">
-                    <label className="field-label">Business Name <span className="req-star">*</span></label>
-                    <input
-                      type="text"
-                      required
-                      value={editForm.vendorName}
-                      onChange={(e) => setEditForm({ ...editForm, vendorName: e.target.value })}
-                      className="field-input"
-                    />
-                  </div>
-                  <div className="form-field-group">
-                    <label className="field-label">Vendor Type</label>
-                    <select
-                      value={editForm.vendorType}
-                      onChange={(e) => setEditForm({ ...editForm, vendorType: e.target.value })}
-                      className="field-input"
-                    >
-                      <option value="Fleet Owner">Fleet Owner</option>
-                      <option value="Broker">Broker</option>
-                      <option value="Aggregator">Aggregator</option>
-                      <option value="Independent">Independent</option>
-                    </select>
-                  </div>
-                  <div className="form-field-group">
-                    <label className="field-label">GSTIN</label>
-                    <input
-                      type="text"
-                      maxLength={15}
-                      value={editForm.gstin}
-                      onChange={(e) => setEditForm({ ...editForm, gstin: e.target.value.toUpperCase() })}
-                      className="field-input"
-                    />
-                  </div>
-                  <div className="form-field-group">
-                    <label className="field-label">PAN Number</label>
-                    <input
-                      type="text"
-                      maxLength={10}
-                      value={editForm.pan}
-                      onChange={(e) => setEditForm({ ...editForm, pan: e.target.value.toUpperCase() })}
-                      className="field-input"
-                    />
-                  </div>
-                  <div className="form-field-group" style={{ gridColumn: '1 / -1' }}>
-                    <label className="field-label">Address</label>
-                    <textarea
-                      rows={2}
-                      value={editForm.address}
-                      onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
-                      className="field-input"
-                    />
-                  </div>
-                  <div className="form-field-group">
-                    <label className="field-label">Website</label>
-                    <input
-                      type="text"
-                      value={editForm.website}
-                      onChange={(e) => setEditForm({ ...editForm, website: e.target.value })}
-                      className="field-input"
-                    />
-                  </div>
-                </div>
+      {isEditModalOpen && vendor && (
+        <EditVendorModal
+          isOpen={true}
+          onClose={() => setIsEditModalOpen(false)}
+          vendor={vendor}
+          primaryContact={primaryContact}
+          userRole={userRole}
+          onSaved={async () => {
+            await loadVendorData();
+            showToast('✅ Vendor details updated successfully.');
+          }}
+        />
+      )}
 
-                <h4 className="form-section-heading">Contact Information</h4>
-                <div className="form-fields-grid">
-                  <div className="form-field-group">
-                    <label className="field-label">Contact Name <span className="req-star">*</span></label>
-                    <input
-                      type="text"
-                      required
-                      value={editForm.contactName}
-                      onChange={(e) => setEditForm({ ...editForm, contactName: e.target.value })}
-                      className="field-input"
-                    />
-                  </div>
-                  <div className="form-field-group">
-                    <label className="field-label">Mobile <span className="req-star">*</span></label>
-                    <input
-                      type="tel"
-                      required
-                      maxLength={10}
-                      value={editForm.mobile}
-                      onChange={(e) => setEditForm({ ...editForm, mobile: e.target.value.replace(/\D/g, '') })}
-                      className="field-input"
-                    />
-                  </div>
-                  <div className="form-field-group">
-                    <label className="field-label">Email <span className="req-star">*</span></label>
-                    <input
-                      type="email"
-                      required
-                      value={editForm.email}
-                      onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
-                      className="field-input"
-                    />
-                  </div>
-                  <div className="form-field-group">
-                    <label className="field-label">Designation</label>
-                    <input
-                      type="text"
-                      value={editForm.designation}
-                      onChange={(e) => setEditForm({ ...editForm, designation: e.target.value })}
-                      className="field-input"
-                    />
-                  </div>
-                </div>
 
-                {userRole === 'SUPER_ADMIN' && (
-                  <>
-                    <h4 className="form-section-heading">Status</h4>
-                    <div className="form-fields-grid">
-                      <div className="form-field-group">
-                        <label className="field-label">Account Status</label>
-                        <select
-                          value={editForm.accountStatus}
-                          onChange={(e) => setEditForm({ ...editForm, accountStatus: e.target.value })}
-                          className="field-input"
-                        >
-                          <option value="PENDING">Pending</option>
-                          <option value="APPROVED">Approved</option>
-                          <option value="REJECTED">Rejected</option>
-                          <option value="INACTIVE">Inactive</option>
-                        </select>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-              <div className="create-modal-footer">
-                <button type="button" className="btn-cancel-modal" onClick={() => setIsEditModalOpen(false)}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn-submit-modal" disabled={isActionLoading}>
-                  <Edit size={15} />
-                  <span>{isActionLoading ? 'Saving...' : 'Save Changes'}</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+
+      {/* Interactive Document Preview Modal */}
+      {previewDoc && (
+        <DocumentPreviewModal
+          isOpen={!!previewDoc}
+          onClose={() => setPreviewDoc(null)}
+          documentTitle={previewDoc.file_name || previewDoc.document_type || 'Vendor KYC Document'}
+          fileName={previewDoc.file_name || previewDoc.document_type || 'Document'}
+          fileUrlOrPath={previewDoc.storage_path || previewDoc.file_url || previewDoc.file_path || ''}
+          verificationStatus={previewDoc.verification_status || 'PENDING'}
+          rejectionReason={previewDoc.rejection_reason}
+          uploadedAt={previewDoc.created_at}
+          fileSize={previewDoc.file_size}
+          mimeType={previewDoc.mime_type}
+          canVerify={userRole === 'ADMIN' || userRole === 'SUPER_ADMIN'}
+          canReject={userRole === 'ADMIN' || userRole === 'SUPER_ADMIN'}
+          onVerify={() => {
+            handleApproveDocument(previewDoc.id);
+            setPreviewDoc(null);
+          }}
+          onReject={() => {
+            const docToReject = previewDoc;
+            setPreviewDoc(null);
+            setSelectedDocForRejection({
+              id: docToReject.id,
+              type: docToReject.document_type,
+              fileName: docToReject.file_name,
+              uploadedAt: new Date(docToReject.created_at).toLocaleDateString(),
+            });
+            setIsRejectionModalOpen(true);
+          }}
+        />
       )}
     </div>
   );

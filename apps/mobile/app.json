@@ -1,8 +1,9 @@
 {
   "expo": {
-    "name": "NECL Mobile",
-    "slug": "necl-mobile",
+    "name": "THE TRUCKX",
+    "slug": "the-truckx-mobile",
     "version": "1.0.0",
+
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -14,14 +15,19 @@
     "assetBundlePatterns": [
       "**/*"
     ],
+    "notification": {
+      "icon": "./assets/icon.png",
+      "color": "#FA5700"
+    },
     "ios": {
       "supportsTablet": true
     },
     "android": {
-      "package": "com.necl.mobile",
+      "package": "com.thetruckx",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#090A0D"
+        "backgroundColor": "#FA5700"
       }
     },
     "plugins": []

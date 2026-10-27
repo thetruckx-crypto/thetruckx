@@ -5,13 +5,13 @@ import * as path from 'path';
 describe('NECL Client Mobile App - My Bookings & Orders Screen Redesign Requirements', () => {
   const bookingsScreenPath = path.resolve(
     __dirname,
-    '../../../../mobile/src/screens/MyBookingsScreen.tsx'
+    '../../../../mobile/src/screens/client/bookings/MyBookingsScreen.tsx'
   );
   const bookingsScreenCode = fs.readFileSync(bookingsScreenPath, 'utf-8');
 
   const bookingDetailsPath = path.resolve(
     __dirname,
-    '../../../../mobile/src/screens/BookingDetailsScreen.tsx'
+    '../../../../mobile/src/screens/client/bookings/BookingDetailsScreen.tsx'
   );
   const bookingDetailsCode = fs.readFileSync(bookingDetailsPath, 'utf-8');
 

@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Alert } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, StyleSheet, Alert, Text, TouchableOpacity, Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
+import { Clock, X, Bell } from 'lucide-react-native';
 import {
   ScreenId,
   MobileRole,
@@ -17,106 +19,107 @@ import {
 } from './src/services/clientService';
 import { vendorService } from './src/services/vendorService';
 import { driverService } from './src/services/driverService';
+import { mobileNotificationService } from './src/services/notificationService';
 
 // The Common Screen Components
-import { SplashScreen } from './src/screens/SplashScreen'; // 01. Splash
-import { OnboardingScreen } from './src/screens/OnboardingScreen'; // 02. Onboarding
-import { LoginScreen } from './src/screens/LoginScreen'; // 03. Login
-import { RegistrationScreen } from './src/screens/RegistrationScreen'; // 04. Registration
-import { OtpScreen } from './src/screens/OtpScreen'; // 05. OTP Verification
-import { RegistrationStatusScreen } from './src/screens/RegistrationStatusScreen'; // 11. Registration & Account Status (Screen 6)
-import { ProfileScreen } from './src/screens/ProfileScreen'; // 12. Profile
-import { EditProfileScreen } from './src/screens/EditProfileScreen'; // 13. Edit Profile
-import { NotificationsScreen } from './src/screens/NotificationsScreen'; // 14. Notifications (Screen 25)
-import { NotificationDetailsScreen } from './src/screens/NotificationDetailsScreen'; // 15. Notification Details
-import { SettingsScreen } from './src/screens/SettingsScreen'; // 16. Settings
-import { HelpSupportScreen } from './src/screens/HelpSupportScreen'; // 17. Help & Support (Screen 26)
+import { SplashScreen } from './src/screens/common/onboarding/SplashScreen'; // 01. Splash
+import { OnboardingScreen } from './src/screens/common/onboarding/OnboardingScreen'; // 02. Onboarding
+import { LoginScreen } from './src/screens/auth/login/LoginScreen'; // 03. Login
+import { RegistrationScreen } from './src/screens/auth/registration/RegistrationScreen'; // 04. Registration
+import { OtpScreen } from './src/screens/auth/otp/OtpScreen'; // 05. OTP Verification
+import { RegistrationStatusScreen } from './src/screens/auth/registration/RegistrationStatusScreen'; // 11. Registration & Account Status (Screen 6)
+import { WelcomeToNeclScreen } from './src/screens/common/onboarding/WelcomeToNeclScreen';
+import { ProfileScreen } from './src/screens/common/profile/ProfileScreen'; // 12. Profile
+import { EditProfileScreen } from './src/screens/common/profile/EditProfileScreen'; // 13. Edit Profile
+import { NotificationsScreen } from './src/screens/common/notifications/NotificationsScreen'; // 14. Notifications (Screen 25)
+import { NotificationDetailsScreen } from './src/screens/common/notifications/NotificationDetailsScreen'; // 15. Notification Details
+import { SettingsScreen } from './src/screens/common/settings/SettingsScreen'; // 16. Settings
+import { HelpSupportScreen } from './src/screens/common/settings/HelpSupportScreen'; // 17. Help & Support (Screen 26)
 
 // Role Specific Onboarding Screens
-import { VendorOnboardingScreen } from './src/screens/VendorOnboardingScreen';
-import { DriverOnboardingScreen } from './src/screens/DriverOnboardingScreen';
+import { DriverOnboardingScreen } from './src/screens/driver/registration/DriverOnboardingScreen';
 
 // Client Module Screens (1 through 24)
-import { ClientProfileSetupScreen } from './src/screens/ClientProfileSetupScreen'; // Screen 1
-import { ClientBusinessDetailsScreen } from './src/screens/ClientBusinessDetailsScreen'; // Screen 2
-import { ClientDocumentUploadScreen } from './src/screens/ClientDocumentUploadScreen'; // Screen 3
-import { ClientRegistrationReviewScreen } from './src/screens/ClientRegistrationReviewScreen'; // Screen 4
-import { ClientRegistrationConfirmationScreen } from './src/screens/ClientRegistrationConfirmationScreen'; // Screen 5
-import { ClientDashboardScreen } from './src/screens/ClientDashboardScreen'; // Screen 7
-import { CreateTransportRequirementScreen } from './src/screens/CreateTransportRequirementScreen'; // Screen 8
-import { CargoDetailsScreen } from './src/screens/CargoDetailsScreen'; // Screen 9
-import { PickupDeliveryDetailsScreen } from './src/screens/PickupDeliveryDetailsScreen'; // Screen 10
-import { RequirementReviewScreen } from './src/screens/RequirementReviewScreen'; // Screen 11
-import { RequirementConfirmationScreen } from './src/screens/RequirementConfirmationScreen'; // Screen 12
-import { MyRequirementsScreen } from './src/screens/MyRequirementsScreen'; // Screen 13
-import { RequirementDetailsScreen } from './src/screens/RequirementDetailsScreen'; // Screen 14
-import { QuotationsListScreen } from './src/screens/QuotationsListScreen'; // Screen 15
-import { QuotationComparisonScreen } from './src/screens/QuotationComparisonScreen'; // Screen 16
-import { QuotationDetailsScreen } from './src/screens/QuotationDetailsScreen'; // Screen 17
-import { BookingConfirmationScreen } from './src/screens/BookingConfirmationScreen'; // Screen 18
-import { MyBookingsScreen } from './src/screens/MyBookingsScreen'; // Screen 19
-import { MyShipmentsScreen } from './src/screens/MyShipmentsScreen'; // Dedicated Shipments Screen
-import { BookingDetailsScreen } from './src/screens/BookingDetailsScreen'; // Screen 20
-import { ShipmentTrackingScreen } from './src/screens/ShipmentTrackingScreen'; // Screen 21
-import { ShipmentDocumentsScreen } from './src/screens/ShipmentDocumentsScreen'; // Screen 22
-import { ProofOfDeliveryScreen } from './src/screens/ProofOfDeliveryScreen'; // Screen 23
-import { SavedAddressesScreen } from './src/screens/SavedAddressesScreen'; // Screen 24
+import { ClientProfileSetupScreen } from './src/screens/client/onboarding/ClientProfileSetupScreen'; // Screen 1
+import { ClientBusinessDetailsScreen } from './src/screens/client/onboarding/ClientBusinessDetailsScreen'; // Screen 2
+import { ClientDocumentUploadScreen } from './src/screens/client/onboarding/ClientDocumentUploadScreen'; // Screen 3
+import { ClientRegistrationReviewScreen } from './src/screens/client/onboarding/ClientRegistrationReviewScreen'; // Screen 4
+import { ClientRegistrationConfirmationScreen } from './src/screens/client/onboarding/ClientRegistrationConfirmationScreen'; // Screen 5
+import { ClientDashboardScreen } from './src/screens/client/dashboard/ClientDashboardScreen'; // Screen 7
+import { CreateTransportRequirementScreen } from './src/screens/client/requirements/CreateTransportRequirementScreen'; // Screen 8
+import { CargoDetailsScreen } from './src/screens/client/requirements/CargoDetailsScreen'; // Screen 9
+import { PickupDeliveryDetailsScreen } from './src/screens/client/requirements/PickupDeliveryDetailsScreen'; // Screen 10
+import { RequirementReviewScreen } from './src/screens/client/requirements/RequirementReviewScreen'; // Screen 11
+import { RequirementConfirmationScreen } from './src/screens/client/requirements/RequirementConfirmationScreen'; // Screen 12
+import { MyRequirementsScreen } from './src/screens/client/requirements/MyRequirementsScreen'; // Screen 13
+import { RequirementDetailsScreen } from './src/screens/client/requirements/RequirementDetailsScreen'; // Screen 14
+import { QuotationsListScreen } from './src/screens/client/quotations/QuotationsListScreen'; // Screen 15
+import { QuotationComparisonScreen } from './src/screens/client/quotations/QuotationComparisonScreen'; // Screen 16
+import { QuotationDetailsScreen } from './src/screens/client/quotations/QuotationDetailsScreen'; // Screen 17
+import { BookingConfirmationScreen } from './src/screens/client/bookings/BookingConfirmationScreen'; // Screen 18
+import { MyBookingsScreen } from './src/screens/client/bookings/MyBookingsScreen'; // Screen 19
+import { MyShipmentsScreen } from './src/screens/client/shipments/MyShipmentsScreen'; // Dedicated Shipments Screen
+import { BookingDetailsScreen } from './src/screens/client/bookings/BookingDetailsScreen'; // Screen 20
+import { ShipmentTrackingScreen } from './src/screens/client/shipments/ShipmentTrackingScreen'; // Screen 21
+import { ShipmentDocumentsScreen } from './src/screens/client/shipments/ShipmentDocumentsScreen'; // Screen 22
+import { ProofOfDeliveryScreen } from './src/screens/client/shipments/ProofOfDeliveryScreen'; // Screen 23
+import { SavedAddressesScreen } from './src/screens/common/profile/SavedAddressesScreen'; // Screen 24
 import { ClientBottomNavBar, ClientNavTab } from './src/components/ClientBottomNavBar';
 
 // Phase 3: Vendor Registration & Verification Screens (1-11)
-import { VendorRegistrationScreen } from './src/screens/VendorRegistrationScreen'; // Screen 1
-import { VendorBusinessInfoScreen } from './src/screens/VendorBusinessInfoScreen'; // Screen 2
-import { VendorAddressContactScreen } from './src/screens/VendorAddressContactScreen'; // Screen 3
-import { VendorOperatingLocationsScreen } from './src/screens/VendorOperatingLocationsScreen'; // Screen 4
-import { VendorFleetInfoScreen } from './src/screens/VendorFleetInfoScreen'; // Screen 5
-import { VendorTransportServicesScreen } from './src/screens/VendorTransportServicesScreen'; // Screen 6
-import { VendorDocumentUploadScreen } from './src/screens/VendorDocumentUploadScreen'; // Screen 7
-import { VendorApplicationReviewScreen } from './src/screens/VendorApplicationReviewScreen'; // Screen 8
-import { VendorSubmissionConfirmationScreen } from './src/screens/VendorSubmissionConfirmationScreen'; // Screen 9
-import { VendorVerificationStatusScreen } from './src/screens/VendorVerificationStatusScreen'; // Screen 10
-import { VendorDocumentCorrectionScreen } from './src/screens/VendorDocumentCorrectionScreen'; // Screen 11
+import { VendorRegistrationScreen } from './src/screens/vendor/registration/VendorRegistrationScreen'; // Screen 1
+import { VendorBusinessInfoScreen } from './src/screens/vendor/registration/VendorBusinessInfoScreen'; // Screen 2
+import { VendorAddressContactScreen } from './src/screens/vendor/registration/VendorAddressContactScreen'; // Screen 3
+import { VendorOperatingLocationsScreen } from './src/screens/vendor/registration/VendorOperatingLocationsScreen'; // Screen 4
+import { VendorFleetInfoScreen } from './src/screens/vendor/registration/VendorFleetInfoScreen'; // Screen 5
+import { VendorTransportServicesScreen } from './src/screens/vendor/registration/VendorTransportServicesScreen'; // Screen 6
+import { VendorDocumentUploadScreen } from './src/screens/vendor/registration/VendorDocumentUploadScreen'; // Screen 7
+import { VendorApplicationReviewScreen } from './src/screens/vendor/registration/VendorApplicationReviewScreen'; // Screen 8
+import { VendorSubmissionConfirmationScreen } from './src/screens/vendor/registration/VendorSubmissionConfirmationScreen'; // Screen 9
+import { VendorVerificationStatusScreen } from './src/screens/vendor/registration/VendorVerificationStatusScreen'; // Screen 10
+import { VendorDocumentCorrectionScreen } from './src/screens/vendor/registration/VendorDocumentCorrectionScreen'; // Screen 11
 
 // Phase 3: Vendor Operations Screens (12-28)
-import { VendorDashboardScreen } from './src/screens/VendorDashboardScreen'; // Screen 12
-import { VendorRequirementsScreen } from './src/screens/VendorRequirementsScreen'; // Screen 13
-import { VendorRequirementDetailsScreen } from './src/screens/VendorRequirementDetailsScreen'; // Screen 14
-import { VendorSubmitQuotationScreen } from './src/screens/VendorSubmitQuotationScreen'; // Screen 15
-import { VendorQuotationConfirmationScreen } from './src/screens/VendorQuotationConfirmationScreen'; // Screen 16
-import { VendorQuotationsListScreen } from './src/screens/VendorQuotationsListScreen'; // Screen 17
-import { VendorQuotationDetailsScreen } from './src/screens/VendorQuotationDetailsScreen'; // Screen 18
-import { VendorAwardedBookingsScreen } from './src/screens/VendorAwardedBookingsScreen'; // Screen 19
-import { VendorBookingDetailsScreen } from './src/screens/VendorBookingDetailsScreen'; // Screen 20
-import { VendorFleetManagementScreen } from './src/screens/VendorFleetManagementScreen'; // Screen 21
-import { VendorDriverManagementScreen } from './src/screens/VendorDriverManagementScreen'; // Screen 22
-import { VendorAssignVehicleScreen } from './src/screens/VendorAssignVehicleScreen'; // Screen 23
-import { VendorAssignDriverScreen } from './src/screens/VendorAssignDriverScreen'; // Screen 24
-import { VendorAssignmentConfirmationScreen } from './src/screens/VendorAssignmentConfirmationScreen'; // Screen 25
-import { VendorTripManagementScreen } from './src/screens/VendorTripManagementScreen'; // Screen 26
-import { VendorTripDetailsScreen } from './src/screens/VendorTripDetailsScreen'; // Screen 27
-import { VendorTripDocumentsScreen } from './src/screens/VendorTripDocumentsScreen'; // Screen 28
+import { VendorDashboardScreen } from './src/screens/vendor/dashboard/VendorDashboardScreen'; // Screen 12
+import { VendorRequirementsScreen } from './src/screens/vendor/rfqs/VendorRequirementsScreen'; // Screen 13
+import { VendorRequirementDetailsScreen } from './src/screens/vendor/rfqs/VendorRequirementDetailsScreen'; // Screen 14
+import { VendorSubmitQuotationScreen } from './src/screens/vendor/rfqs/VendorSubmitQuotationScreen'; // Screen 15
+import { VendorQuotationConfirmationScreen } from './src/screens/vendor/rfqs/VendorQuotationConfirmationScreen'; // Screen 16
+import { VendorQuotationsListScreen } from './src/screens/vendor/rfqs/VendorQuotationsListScreen'; // Screen 17
+import { VendorQuotationDetailsScreen } from './src/screens/vendor/rfqs/VendorQuotationDetailsScreen'; // Screen 18
+import { VendorAwardedBookingsScreen } from './src/screens/vendor/bookings/VendorAwardedBookingsScreen'; // Screen 19
+import { VendorBookingDetailsScreen } from './src/screens/vendor/bookings/VendorBookingDetailsScreen'; // Screen 20
+import { VendorFleetManagementScreen } from './src/screens/vendor/fleet/VendorFleetManagementScreen'; // Screen 21
+import { VendorDriverManagementScreen } from './src/screens/vendor/fleet/VendorDriverManagementScreen'; // Screen 22
+import { VendorAssignVehicleScreen } from './src/screens/vendor/bookings/VendorAssignVehicleScreen'; // Screen 23
+import { VendorAssignDriverScreen } from './src/screens/vendor/bookings/VendorAssignDriverScreen'; // Screen 24
+import { VendorAssignmentConfirmationScreen } from './src/screens/vendor/bookings/VendorAssignmentConfirmationScreen'; // Screen 25
+import { VendorTripManagementScreen } from './src/screens/vendor/trips/VendorTripManagementScreen'; // Screen 26
+import { VendorTripDetailsScreen } from './src/screens/vendor/trips/VendorTripDetailsScreen'; // Screen 27
+import { VendorTripDocumentsScreen } from './src/screens/vendor/trips/VendorTripDocumentsScreen'; // Screen 28
 
 // Phase 4: Driver Registration & Verification Screens (1-9)
-import { DriverRegistrationScreen } from './src/screens/DriverRegistrationScreen'; // Screen 1
-import { DriverPersonalInfoScreen } from './src/screens/DriverPersonalInfoScreen'; // Screen 2
-import { DriverLicenceDetailsScreen } from './src/screens/DriverLicenceDetailsScreen'; // Screen 3
-import { DriverVehicleAssociationScreen } from './src/screens/DriverVehicleAssociationScreen'; // Screen 4
-import { DriverDocumentUploadScreen } from './src/screens/DriverDocumentUploadScreen'; // Screen 5
-import { DriverApplicationReviewScreen } from './src/screens/DriverApplicationReviewScreen'; // Screen 6
-import { DriverSubmissionConfirmationScreen } from './src/screens/DriverSubmissionConfirmationScreen'; // Screen 7
-import { DriverVerificationStatusScreen } from './src/screens/DriverVerificationStatusScreen'; // Screen 8
-import { DriverDocumentCorrectionScreen } from './src/screens/DriverDocumentCorrectionScreen'; // Screen 9
+import { DriverRegistrationScreen } from './src/screens/driver/registration/DriverRegistrationScreen'; // Screen 1
+import { DriverPersonalInfoScreen } from './src/screens/driver/registration/DriverPersonalInfoScreen'; // Screen 2
+import { DriverLicenceDetailsScreen } from './src/screens/driver/registration/DriverLicenceDetailsScreen'; // Screen 3
+import { DriverVehicleAssociationScreen } from './src/screens/driver/registration/DriverVehicleAssociationScreen'; // Screen 4
+import { DriverDocumentUploadScreen } from './src/screens/driver/registration/DriverDocumentUploadScreen'; // Screen 5
+import { DriverApplicationReviewScreen } from './src/screens/driver/registration/DriverApplicationReviewScreen'; // Screen 6
+import { DriverSubmissionConfirmationScreen } from './src/screens/driver/registration/DriverSubmissionConfirmationScreen'; // Screen 7
+import { DriverVerificationStatusScreen } from './src/screens/driver/registration/DriverVerificationStatusScreen'; // Screen 8
+import { DriverDocumentCorrectionScreen } from './src/screens/driver/registration/DriverDocumentCorrectionScreen'; // Screen 9
 
 // Phase 4: Driver Operations Screens (10-20)
-import { DriverDashboardScreen } from './src/screens/DriverDashboardScreen'; // Screen 10
-import { DriverAssignedTripsScreen } from './src/screens/DriverAssignedTripsScreen'; // Screen 11
-import { DriverTripDetailsScreen } from './src/screens/DriverTripDetailsScreen'; // Screen 12
-import { DriverPickupConfirmationScreen } from './src/screens/DriverPickupConfirmationScreen'; // Screen 13
-import { DriverTripProgressScreen } from './src/screens/DriverTripProgressScreen'; // Screen 14
-import { DriverDeliveryConfirmationScreen } from './src/screens/DriverDeliveryConfirmationScreen'; // Screen 16
-import { DriverPodUploadScreen } from './src/screens/DriverPodUploadScreen'; // Screen 17
-import { DriverTripCompletionScreen } from './src/screens/DriverTripCompletionScreen'; // Screen 18
-import { DriverTripHistoryScreen } from './src/screens/DriverTripHistoryScreen'; // Screen 19
-import { DriverDocumentsScreen } from './src/screens/DriverDocumentsScreen'; // Screen 20
+import { DriverDashboardScreen } from './src/screens/driver/dashboard/DriverDashboardScreen'; // Screen 10
+import { DriverAssignedTripsScreen } from './src/screens/driver/trips/DriverAssignedTripsScreen'; // Screen 11
+import { DriverTripDetailsScreen } from './src/screens/driver/trips/DriverTripDetailsScreen'; // Screen 12
+import { DriverPickupConfirmationScreen } from './src/screens/driver/trips/DriverPickupConfirmationScreen'; // Screen 13
+import { DriverTripProgressScreen } from './src/screens/driver/trips/DriverTripProgressScreen'; // Screen 14
+import { DriverDeliveryConfirmationScreen } from './src/screens/driver/trips/DriverDeliveryConfirmationScreen'; // Screen 16
+import { DriverPodUploadScreen } from './src/screens/driver/trips/DriverPodUploadScreen'; // Screen 17
+import { DriverTripCompletionScreen } from './src/screens/driver/trips/DriverTripCompletionScreen'; // Screen 18
+import { DriverTripHistoryScreen } from './src/screens/driver/trips/DriverTripHistoryScreen'; // Screen 19
+import { DriverDocumentsScreen } from './src/screens/driver/documents/DriverDocumentsScreen'; // Screen 20
 
 export const createFreshRequirementDraft = (): TransportRequirementDraft => ({
   draftId: undefined,
@@ -150,6 +153,16 @@ export const createFreshRequirementDraft = (): TransportRequirementDraft => ({
   dropContactPhone: '',
 });
 
+const VENDOR_STEP_SCREEN_MAP: Record<number, ScreenId> = {
+  1: 'VENDOR_REGISTRATION',
+  2: 'VENDOR_BUSINESS_INFO',
+  3: 'VENDOR_ADDRESS_CONTACT',
+  4: 'VENDOR_OPERATING_LOCATIONS',
+  5: 'VENDOR_FLEET_INFO',
+  6: 'VENDOR_TRANSPORT_SERVICES',
+  7: 'VENDOR_DOC_UPLOAD',
+};
+
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<ScreenId>('SPLASH');
   const [mobileNumber, setMobileNumber] = useState<string>('');
@@ -160,6 +173,31 @@ export default function App() {
   const [session, setSession] = useState<AuthSessionData | null>(null);
   const [selectedNotification, setSelectedNotification] = useState<AppNotificationItem | null>(null);
   const [otpPurpose, setOtpPurpose] = useState<'LOGIN' | 'REGISTRATION'>('LOGIN');
+  const [welcomeData, setWelcomeData] = useState<{
+    companyName?: string;
+    accountCode?: string;
+    userName?: string;
+  }>({});
+  const [isResumingRegistration, setIsResumingRegistration] = useState<boolean>(false);
+
+  // In-App Welcome / Welcome Back Notification Banner State
+  const [welcomeToast, setWelcomeToast] = useState<{
+    visible: boolean;
+    title: string;
+    subtitle: string;
+    isFirstTime: boolean;
+    item?: AppNotificationItem;
+  } | null>(null);
+
+  // Auto-dismiss welcome toast after 6 seconds
+  useEffect(() => {
+    if (welcomeToast?.visible) {
+      const timer = setTimeout(() => {
+        setWelcomeToast((prev) => (prev ? { ...prev, visible: false } : null));
+      }, 6000);
+      return () => clearTimeout(timer);
+    }
+  }, [welcomeToast?.visible]);
 
   // Client Registration State
   const [profileData, setProfileData] = useState<ClientProfileFormData | undefined>(undefined);
@@ -167,14 +205,42 @@ export default function App() {
   const [clientDocuments, setClientDocuments] = useState<ClientDocumentItem[]>([]);
   const [registeredClientId, setRegisteredClientId] = useState<string>('');
 
+  // Pending Verified Registration Submission State (Form -> Review -> Send OTP -> Verify -> Submit)
+  const [pendingRegistration, setPendingRegistration] = useState<{
+    role: MobileRole;
+    targetPhone: string;
+    clientSubmissionData?: any;
+    vendorFormData?: any;
+    driverSubmissionData?: any;
+  } | null>(null);
+
   // Transport Requirement Flow State
   const [requirementDraft, setRequirementDraft] = useState<TransportRequirementDraft>(
     createFreshRequirementDraft()
   );
   const [activeRequirementId, setActiveRequirementId] = useState<string>('');
 
-  const handleStartNewRequirement = () => {
-    setRequirementDraft(createFreshRequirementDraft());
+  const handleStartNewRequirement = async () => {
+    const effectiveClientId = session?.userId || registeredClientId;
+    try {
+      const existingDraft = await clientService.getTransportRequirementDraft(effectiveClientId);
+      if (
+        existingDraft &&
+        (existingDraft.vehicleTypeRequired ||
+          existingDraft.materialType ||
+          existingDraft.pickupAddress ||
+          (existingDraft.vehicleGroups && existingDraft.vehicleGroups.length > 0))
+      ) {
+        setRequirementDraft((prev) => ({
+          ...createFreshRequirementDraft(),
+          ...existingDraft,
+        }));
+      } else {
+        setRequirementDraft(createFreshRequirementDraft());
+      }
+    } catch {
+      setRequirementDraft(createFreshRequirementDraft());
+    }
     setCurrentScreen('CREATE_REQUIREMENT');
   };
 
@@ -205,6 +271,100 @@ export default function App() {
 
   const effectiveVendorId = (session as any)?.vendorId || session?.userId || registeredVendorId;
 
+  // Vendor Update / Missing Steps Flow State
+  const [vendorUpdateFlow, setVendorUpdateFlow] = useState<{
+    active: boolean;
+    onlyIncompleteSteps: boolean;
+    incompleteStepIndices: number[];
+  }>({
+    active: false,
+    onlyIncompleteSteps: false,
+    incompleteStepIndices: [],
+  });
+
+  const startVendorUpdateWorkflow = async (targetVendorId?: string, targetPhone?: string) => {
+    const vId = targetVendorId || effectiveVendorId;
+    const phone = targetPhone || mobileNumber || session?.mobile;
+    setIsResumingRegistration(true);
+    await vendorService.loadAuthenticatedVendorRegistration(vId, phone);
+    const validation = await vendorService.getVendorRegistrationStepValidation(vId, phone);
+
+    if (validation.incompleteSteps.length > 0) {
+      const incompleteIndices = validation.incompleteSteps.map((s) => s.stepIndex);
+      setVendorUpdateFlow({
+        active: true,
+        onlyIncompleteSteps: true,
+        incompleteStepIndices: incompleteIndices,
+      });
+      setCurrentScreen(validation.firstIncompleteStep?.screenId || 'VENDOR_APPLICATION_REVIEW');
+    } else {
+      setVendorUpdateFlow({
+        active: true,
+        onlyIncompleteSteps: false,
+        incompleteStepIndices: [],
+      });
+      setCurrentScreen('VENDOR_APPLICATION_REVIEW');
+    }
+  };
+
+  const handleVendorStepNext = async (stepIndex: number, data?: any) => {
+    if (data) {
+      if (stepIndex === 7) {
+        const step7Data = Array.isArray(data) ? { documents: data } : data;
+        await vendorService.saveActiveRegistrationStep(7, step7Data, mobileNumber);
+      } else {
+        await vendorService.saveActiveRegistrationStep(stepIndex, data, mobileNumber);
+      }
+    }
+
+    if (vendorUpdateFlow.active && vendorUpdateFlow.onlyIncompleteSteps) {
+      const remainingIncomplete = vendorUpdateFlow.incompleteStepIndices.filter(
+        (idx) => idx > stepIndex
+      );
+      if (remainingIncomplete.length > 0) {
+        const nextStepIdx = remainingIncomplete[0];
+        setCurrentScreen(VENDOR_STEP_SCREEN_MAP[nextStepIdx]);
+        return;
+      }
+      setCurrentScreen('VENDOR_APPLICATION_REVIEW');
+      return;
+    }
+
+    const nextStepIdx = stepIndex + 1;
+    if (nextStepIdx <= 7) {
+      setCurrentScreen(VENDOR_STEP_SCREEN_MAP[nextStepIdx]);
+    } else {
+      setCurrentScreen('VENDOR_APPLICATION_REVIEW');
+    }
+  };
+
+  const handleVendorStepBack = (stepIndex: number) => {
+    if (vendorUpdateFlow.active && vendorUpdateFlow.onlyIncompleteSteps) {
+      const prevIncomplete = vendorUpdateFlow.incompleteStepIndices.filter(
+        (idx) => idx < stepIndex
+      );
+      if (prevIncomplete.length > 0) {
+        const prevStepIdx = prevIncomplete[prevIncomplete.length - 1];
+        setCurrentScreen(VENDOR_STEP_SCREEN_MAP[prevStepIdx]);
+        return;
+      }
+      setCurrentScreen('VENDOR_VERIFICATION_STATUS');
+      return;
+    }
+
+    if (stepIndex === 1) {
+      if (vendorUpdateFlow.active) {
+        setCurrentScreen('VENDOR_VERIFICATION_STATUS');
+      } else {
+        vendorService.clearDraftForm();
+        setCurrentScreen('LOGIN');
+      }
+    } else {
+      const prevStepIdx = stepIndex - 1;
+      setCurrentScreen(VENDOR_STEP_SCREEN_MAP[prevStepIdx]);
+    }
+  };
+
   // Driver Registration & Operations Flow State
   const [registeredDriverId, setRegisteredDriverId] = useState<string>('');
   const [driverApplicationNumber, setDriverApplicationNumber] = useState<string>('');
@@ -219,23 +379,85 @@ export default function App() {
         setSession(existing);
         setMobileNumber(existing.mobile);
         setSelectedRole(existing.role);
+        // Automatically trigger OS notification pop-up, check Welcome status ("once add that"), and prefetch
+        mobileNotificationService.initializeLoginNotifications({
+          userId: existing.userId,
+          role: existing.role,
+          mobile: existing.mobile,
+          fullName: existing.fullName,
+        }).then((res) => {
+          if (res.welcome && res.welcome.wasAdded) {
+            setWelcomeToast({
+              visible: true,
+              title: res.welcome.title,
+              subtitle: res.welcome.body,
+              isFirstTime: res.welcome.isFirstTime,
+              item: res.welcome.item,
+            });
+          }
+        }).catch((e) => console.warn('Failed to initialize notifications on launch:', e));
       }
     })();
   }, []);
 
+  // Listen for live FCM foreground push notifications
+  useEffect(() => {
+    const unsubscribe = mobileNotificationService.setupForegroundHandler((remoteMessage) => {
+      console.log('[App] Foreground FCM push received:', remoteMessage);
+      const title = remoteMessage?.notification?.title || remoteMessage?.data?.title || 'THE TRUCKX';
+      const body = remoteMessage?.notification?.body || remoteMessage?.data?.body || 'New dispatch update received';
+      setWelcomeToast({
+        visible: true,
+        title,
+        subtitle: body,
+        isFirstTime: false,
+      });
+    });
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
+  }, []);
+
+  const verifiedClientPhoneRef = useRef<string | null>(null);
+
   // Guard Client Dashboard: Unapproved or incompletely registered clients must NOT bypass onboarding or access dashboard
   useEffect(() => {
     if (currentScreen === 'CLIENT_DASHBOARD' && selectedRole === 'CLIENT') {
+      const checkPhone = (mobileNumber || session?.mobile || '').replace(/[^0-9]/g, '').slice(-10);
+      if (checkPhone && verifiedClientPhoneRef.current === checkPhone) {
+        return;
+      }
       (async () => {
-        const checkPhone = mobileNumber || session?.mobile;
         if (!checkPhone) {
+          if (session?.role === 'CLIENT' && session.userId) {
+            return;
+          }
           setCurrentScreen('LOGIN');
           return;
         }
         const statusRes = await clientService.getClientAccountStatus(checkPhone);
         if (statusRes.status !== 'APPROVED' && (statusRes as any).status !== 'ACTIVE') {
           setRegisteredClientId(statusRes.companyId || statusRes.clientCode || '');
-          setCurrentScreen('REGISTRATION_STATUS');
+          if (statusRes.profileCompletionStatus === 'INCOMPLETE' || statusRes.status === 'INACTIVE' || statusRes.status === 'ONBOARDING_INCOMPLETE') {
+            setIsResumingRegistration(true);
+            const resumed = await clientService.loadClientRegistrationData(checkPhone);
+            if (resumed) {
+              if (resumed.profileData) setProfileData(resumed.profileData as any);
+              if (resumed.businessDetails) setBusinessDetails(resumed.businessDetails);
+              if (resumed.documents) setClientDocuments(resumed.documents);
+            }
+            if (!businessDetails?.companyName && !profileData?.companyName) {
+              setCurrentScreen('CLIENT_BUSINESS_DETAILS');
+            } else if (clientDocuments.length === 0) {
+              setCurrentScreen('CLIENT_DOC_UPLOAD');
+            } else {
+              setCurrentScreen('CLIENT_REG_REVIEW');
+            }
+          } else {
+            setCurrentScreen('REGISTRATION_STATUS');
+          }
+        } else {
+          verifiedClientPhoneRef.current = checkPhone;
         }
       })();
     }
@@ -246,15 +468,20 @@ export default function App() {
     if (currentScreen === 'VENDOR_DASHBOARD' && selectedRole === 'VENDOR') {
       (async () => {
         const vId = effectiveVendorId;
-        if (vId) {
-          const statusRes = await vendorService.getVendorVerificationStatus(vId);
+        const phone = mobileNumber || session?.mobile;
+        if (vId || phone) {
+          const statusRes = await vendorService.getVendorVerificationStatus(vId, phone);
           if (statusRes.status !== 'APPROVED') {
-            setCurrentScreen('VENDOR_VERIFICATION_STATUS');
+            if (statusRes.status === 'INACTIVE') {
+              await startVendorUpdateWorkflow(vId, phone);
+            } else {
+              setCurrentScreen('VENDOR_VERIFICATION_STATUS');
+            }
           }
         }
       })();
     }
-  }, [currentScreen, selectedRole, effectiveVendorId]);
+  }, [currentScreen, selectedRole, effectiveVendorId, mobileNumber, session]);
 
   // Guard Driver Dashboard: Unapproved drivers must NOT access dashboard
   useEffect(() => {
@@ -264,7 +491,13 @@ export default function App() {
         const phone = mobileNumber || session?.mobile;
         const profile = await driverService.getDriverProfile(dId, phone);
         if (profile && profile.status !== 'APPROVED') {
-          setCurrentScreen('DRIVER_VERIFICATION_STATUS');
+          if (profile.status === 'INACTIVE') {
+            setIsResumingRegistration(true);
+            await driverService.loadAuthenticatedDriverRegistration(dId, phone);
+            setCurrentScreen('DRIVER_REGISTRATION');
+          } else {
+            setCurrentScreen('DRIVER_VERIFICATION_STATUS');
+          }
         }
       })();
     }
@@ -283,11 +516,65 @@ export default function App() {
   };
 
   // 01. Splash Callbacks
-  const handleSessionFoundFromSplash = (existing: AuthSessionData) => {
+  const handleSessionFoundFromSplash = async (existing: AuthSessionData) => {
     setSession(existing);
     setMobileNumber(existing.mobile);
     setSelectedRole(existing.role);
-    routeRoleDestination(existing.role);
+
+    // Trigger notification permission and Welcome/Welcome Back notification
+    mobileNotificationService.initializeLoginNotifications({
+      userId: existing.userId,
+      role: existing.role,
+      mobile: existing.mobile,
+      fullName: existing.fullName,
+    }).then((res) => {
+      if (res.welcome && res.welcome.wasAdded) {
+        setWelcomeToast({
+          visible: true,
+          title: res.welcome.title,
+          subtitle: res.welcome.body,
+          isFirstTime: res.welcome.isFirstTime,
+          item: res.welcome.item,
+        });
+      }
+    }).catch((e) => console.warn('Failed to initialize notifications from splash session:', e));
+
+    try {
+      const completion = await authService.checkRegistrationCompletion(existing.role, existing.mobile, existing);
+      if (completion.accountStatus === 'APPROVED' || completion.accountStatus === 'ACTIVE') {
+        setIsResumingRegistration(false);
+        routeRoleDestination(existing.role);
+      } else if (!completion.isComplete) {
+        setIsResumingRegistration(true);
+        if (existing.role === 'CLIENT') {
+          const resumed = completion.resumedData || (await clientService.loadClientRegistrationData(existing.mobile));
+          if (resumed) {
+            if (resumed.profileData) setProfileData(resumed.profileData as any);
+            if (resumed.businessDetails) setBusinessDetails(resumed.businessDetails);
+            if (resumed.documents) setClientDocuments(resumed.documents);
+          }
+        } else if (existing.role === 'VENDOR') {
+          const vId = (existing as any).vendorId || existing.userId;
+          await vendorService.loadAuthenticatedVendorRegistration(vId, existing.mobile);
+        } else if (existing.role === 'DRIVER') {
+          const dId = (existing as any).driverId || existing.userId;
+          await driverService.loadAuthenticatedDriverRegistration(dId, existing.mobile);
+        }
+        setCurrentScreen(completion.nextScreen);
+      } else {
+        // Complete but pending approval / under review
+        setIsResumingRegistration(false);
+        if (existing.role === 'CLIENT') {
+          setCurrentScreen('REGISTRATION_STATUS');
+        } else if (existing.role === 'VENDOR') {
+          setCurrentScreen('VENDOR_VERIFICATION_STATUS');
+        } else {
+          setCurrentScreen('DRIVER_VERIFICATION_STATUS');
+        }
+      }
+    } catch {
+      routeRoleDestination(existing.role);
+    }
   };
 
   // 03. Login Callbacks
@@ -298,13 +585,42 @@ export default function App() {
   ) => {
     setMobileNumber(phone);
     setOtpPurpose(purpose);
-    setTestOtpCode(testCode || process.env.EXPO_PUBLIC_MOCK_OTP_CODE || '123456');
+    setTestOtpCode(testCode || process.env.EXPO_PUBLIC_MOCK_OTP_CODE || '12345');
     setCurrentScreen('OTP');
   };
 
-  const handleNavigateToRoleRegistration = (role: MobileRole, phone?: string) => {
+  const handleNavigateToRoleRegistration = async (role: MobileRole, phone?: string) => {
     setSelectedRole(role);
-    if (phone) setMobileNumber(phone);
+    if (phone) {
+      const clean = phone.replace(/\D/g, '').slice(-10);
+      setMobileNumber(clean);
+      if (clean.length === 10) {
+        try {
+          const roleCheck = await authService.checkExistingRoleInDatabase(clean, role);
+          if (roleCheck.hasExistingDifferentRole) {
+            Alert.alert(
+              'Registration Restricted',
+              `This mobile number is already registered under the ${roleCheck.previousRoleLabel} role. You cannot register under another role using the same mobile number.`
+            );
+            return;
+          }
+        } catch {}
+      }
+    }
+    setIsResumingRegistration(false);
+
+    // Preserve and restore any existing registration draft for this role
+    if (role === 'CLIENT') {
+      try {
+        const clientDraft = await clientService.getRegistrationDraft();
+        if (clientDraft) {
+          if (clientDraft.profileData) setProfileData(clientDraft.profileData);
+          if (clientDraft.businessDetails) setBusinessDetails(clientDraft.businessDetails);
+          if (clientDraft.documents) setClientDocuments(clientDraft.documents);
+        }
+      } catch {}
+    }
+
     if (role === 'CLIENT') {
       setCurrentScreen('REGISTRATION');
     } else if (role === 'VENDOR') {
@@ -314,14 +630,53 @@ export default function App() {
     }
   };
 
-  const handleDirectLoginSuccess = (newSession: AuthSessionData) => {
+  const handleDirectLoginSuccess = async (newSession: AuthSessionData) => {
     setSession(newSession);
     setSelectedRole(newSession.role);
     setMobileNumber(newSession.mobile);
-    routeRoleDestination(newSession.role);
+
+    // Trigger notification permission and Welcome/Welcome Back notification
+    mobileNotificationService.initializeLoginNotifications({
+      userId: newSession.userId,
+      role: newSession.role,
+      mobile: newSession.mobile,
+      fullName: newSession.fullName,
+    }).then((res) => {
+      if (res.welcome && res.welcome.wasAdded) {
+        setWelcomeToast({
+          visible: true,
+          title: res.welcome.title,
+          subtitle: res.welcome.body,
+          isFirstTime: res.welcome.isFirstTime,
+          item: res.welcome.item,
+        });
+      }
+    }).catch((e) => console.warn('Failed to initialize notifications on direct login:', e));
+
+    try {
+      const completion = await authService.checkRegistrationCompletion(newSession.role, newSession.mobile, newSession);
+      if (completion.accountStatus === 'APPROVED' || completion.accountStatus === 'ACTIVE') {
+        setIsResumingRegistration(false);
+        routeRoleDestination(newSession.role);
+      } else if (!completion.isComplete) {
+        setIsResumingRegistration(true);
+        setCurrentScreen(completion.nextScreen);
+      } else {
+        setIsResumingRegistration(false);
+        if (newSession.role === 'CLIENT') {
+          setCurrentScreen('REGISTRATION_STATUS');
+        } else if (newSession.role === 'VENDOR') {
+          setCurrentScreen('VENDOR_VERIFICATION_STATUS');
+        } else {
+          setCurrentScreen('DRIVER_VERIFICATION_STATUS');
+        }
+      }
+    } catch {
+      routeRoleDestination(newSession.role);
+    }
   };
 
-  // 04. Registration Callbacks
+  // 04. Registration Callbacks (Proceeds to Form completion without initial OTP)
   const handleRegisterSuccess = (
     phone: string,
     role: MobileRole,
@@ -330,7 +685,7 @@ export default function App() {
   ) => {
     setMobileNumber(phone);
     setSelectedRole(role);
-    setOtpPurpose('REGISTRATION');
+    setIsResumingRegistration(false);
     if (draft && role === 'CLIENT') {
       setProfileData((prev) => ({
         fullName: draft.fullName,
@@ -343,79 +698,270 @@ export default function App() {
         gstNumber: prev?.gstNumber || '',
         businessType: prev?.businessType || '',
       }));
+      // Move directly to Step 2: Business Details!
+      setCurrentScreen('CLIENT_BUSINESS_DETAILS');
+      return;
+    } else if (role === 'VENDOR') {
+      setCurrentScreen('VENDOR_REGISTRATION');
+      return;
+    } else if (role === 'DRIVER') {
+      setCurrentScreen('DRIVER_REGISTRATION');
+      return;
     }
-    setTestOtpCode(testCode || process.env.EXPO_PUBLIC_MOCK_OTP_CODE || '123456');
-    setCurrentScreen('OTP');
   };
 
   // 05. OTP Callbacks
-  const handleOtpVerifiedExistingUser = async (role: MobileRole, profile: any) => {
+  const handleOtpVerifiedExistingUser = async (role: MobileRole, profile: any, accountStatus?: string) => {
     setSelectedRole(role);
-    if (role === 'CLIENT') {
-      const statusRes = await clientService.getClientAccountStatus(mobileNumber);
-      if (statusRes.status === 'APPROVED' || (statusRes as any).status === 'ACTIVE') {
-        const existing = await authService.checkExistingSession();
-        if (existing) setSession(existing);
-        setCurrentScreen('CLIENT_DASHBOARD');
-      } else if (
-        statusRes.status === 'PENDING_APPROVAL' ||
-        statusRes.status === 'REJECTED' ||
-        statusRes.status === 'CORRECTIONS_REQUESTED'
-      ) {
-        setRegisteredClientId(statusRes.companyId || statusRes.clientCode || '');
-        setCurrentScreen('REGISTRATION_STATUS');
-      } else if (statusRes.status === 'ONBOARDING_INCOMPLETE' || statusRes.status === 'NEW_USER') {
-        // Incomplete registration: redirect to incomplete step
-        if (!businessDetails?.companyName && !profileData?.companyName) {
-          setCurrentScreen('CLIENT_BUSINESS_DETAILS');
-        } else if (clientDocuments.length === 0) {
-          setCurrentScreen('CLIENT_DOC_UPLOAD');
-        } else {
-          setCurrentScreen('CLIENT_REG_REVIEW');
-        }
-      } else {
-        setCurrentScreen('REGISTRATION_STATUS');
+    const cleanPhone = (mobileNumber || profile?.mobile || session?.mobile || '').replace(/[^0-9]/g, '').slice(-10);
+    if (cleanPhone) setMobileNumber(cleanPhone);
+
+    const completion = await authService.checkRegistrationCompletion(role, cleanPhone || mobileNumber, profile);
+
+    const isApproved =
+      completion.accountStatus === 'APPROVED' ||
+      completion.accountStatus === 'ACTIVE' ||
+      accountStatus === 'APPROVED' ||
+      accountStatus === 'ACTIVE';
+
+    if (isApproved && completion.isComplete) {
+      setIsResumingRegistration(false);
+      let activeSession = await authService.checkExistingSession();
+      if (!activeSession) {
+        const resolvedId =
+          profile?.clientId ||
+          profile?.vendorId ||
+          profile?.driverId ||
+          profile?.id ||
+          registeredClientId ||
+          `${role.toLowerCase()}-${cleanPhone}`;
+        activeSession = {
+          userId: resolvedId,
+          mobile: cleanPhone || mobileNumber,
+          role,
+          fullName: profile?.name || profile?.fullName || `${role} User`,
+          companyName: profile?.company || profile?.companyName || (role === 'CLIENT' ? 'Client Enterprise' : 'Transport Firm'),
+          token: 'auth-session-approved-' + Date.now(),
+          createdAt: new Date().toISOString(),
+          accountStatus: 'APPROVED',
+          isRegistrationComplete: true,
+        };
+        await authService.saveSession(activeSession);
       }
+      setSession(activeSession);
+      // Automatically trigger OS notification pop-up, Welcome / Welcome Back alert ("once add that"), & pre-fetch
+      mobileNotificationService.initializeLoginNotifications({
+        userId: activeSession.userId,
+        role: activeSession.role,
+        mobile: activeSession.mobile,
+        fullName: activeSession.fullName,
+      }).then((res) => {
+        if (res.welcome && res.welcome.wasAdded) {
+          setWelcomeToast({
+            visible: true,
+            title: res.welcome.title,
+            subtitle: res.welcome.body,
+            isFirstTime: res.welcome.isFirstTime,
+            item: res.welcome.item,
+          });
+        }
+      }).catch((e) => console.warn('Failed to initialize notifications on login:', e));
+
+      if (role === 'CLIENT' && (profile?.companyId || profile?.clientId)) {
+        setRegisteredClientId(profile?.companyId || profile?.clientId);
+      }
+      if (role === 'VENDOR' && (profile?.vendorId || profile?.id)) {
+        setRegisteredVendorId(profile?.vendorId || profile?.id);
+      }
+      if (role === 'DRIVER' && (profile?.driverId || profile?.id)) {
+        setRegisteredDriverId(profile?.driverId || profile?.id);
+      }
+      routeRoleDestination(role);
+      return;
+    }
+
+    // Incomplete registration flow: resume missing steps with preloaded saved draft
+    if (!completion.isComplete) {
+      setIsResumingRegistration(true);
+
+      if (role === 'CLIENT') {
+        const resumed = completion.resumedData || (await clientService.loadClientRegistrationData(cleanPhone || mobileNumber));
+        if (resumed) {
+          if (resumed.profileData) setProfileData(resumed.profileData as any);
+          if (resumed.businessDetails) setBusinessDetails(resumed.businessDetails);
+          if (resumed.documents) setClientDocuments(resumed.documents);
+        }
+        setCurrentScreen(completion.nextScreen || 'CLIENT_BUSINESS_DETAILS');
+        return;
+      }
+
+      if (role === 'VENDOR') {
+        const vId = profile?.vendorId || profile?.id || effectiveVendorId;
+        await startVendorUpdateWorkflow(vId, cleanPhone || mobileNumber);
+        return;
+      }
+
+      if (role === 'DRIVER') {
+        const dId = profile?.driverId || profile?.id || effectiveDriverId;
+        await driverService.loadAuthenticatedDriverRegistration(dId, cleanPhone || mobileNumber);
+        setCurrentScreen('DRIVER_REGISTRATION');
+        return;
+      }
+    }
+
+    // Registration complete, but pending admin approval / verification
+    setIsResumingRegistration(false);
+    if (role === 'CLIENT') {
+      const resolvedClientId =
+        completion.resumedData?.companyId ||
+        profile?.clientId ||
+        profile?.id ||
+        registeredClientId ||
+        `cli-${cleanPhone}`;
+      setRegisteredClientId(resolvedClientId);
+      setCurrentScreen('REGISTRATION_STATUS');
       return;
     }
 
     if (role === 'VENDOR') {
       const vId = profile?.vendorId || profile?.id || effectiveVendorId;
-      if (vId) {
-        const statusRes = await vendorService.getVendorVerificationStatus(vId);
-        if (statusRes.status === 'APPROVED') {
-          const existing = await authService.checkExistingSession();
-          if (existing) setSession(existing);
-          setCurrentScreen('VENDOR_DASHBOARD');
-        } else {
-          setCurrentScreen('VENDOR_VERIFICATION_STATUS');
-        }
-        return;
-      }
+      if (vId) setRegisteredVendorId(vId);
+      setCurrentScreen('VENDOR_VERIFICATION_STATUS');
+      return;
     }
 
     if (role === 'DRIVER') {
       const dId = profile?.driverId || profile?.id || effectiveDriverId;
-      const phone = mobileNumber || profile?.mobile;
-      const dProfile = await driverService.getDriverProfile(dId, phone);
-      if (dProfile && dProfile.status === 'APPROVED') {
-        const existing = await authService.checkExistingSession();
-        if (existing) setSession(existing);
-        setCurrentScreen('DRIVER_DASHBOARD');
-      } else {
-        setCurrentScreen('DRIVER_VERIFICATION_STATUS');
-      }
+      if (dId) setRegisteredDriverId(dId);
+      setCurrentScreen('DRIVER_VERIFICATION_STATUS');
       return;
     }
-
-    const existing = await authService.checkExistingSession();
-    if (existing) setSession(existing);
-    routeRoleDestination(role);
   };
 
-  const handleOtpVerifiedNewUser = () => {
+  const handleOtpVerifiedNewUser = async () => {
+    setIsResumingRegistration(false);
+    const cleanPhone = (mobileNumber || '').replace(/[^0-9]/g, '').slice(-10);
+
+    // If an application was submitted through the Review -> OTP verification flow:
+    if (pendingRegistration) {
+      if (pendingRegistration.role === 'CLIENT' && pendingRegistration.clientSubmissionData) {
+        try {
+          const result = await clientService.submitCompleteRegistration(pendingRegistration.clientSubmissionData);
+          const resolvedId = result.clientCode || result.companyId || `CLI-${Date.now()}`;
+          setRegisteredClientId(resolvedId);
+
+          const newSession: AuthSessionData = {
+            userId: resolvedId,
+            mobile: cleanPhone,
+            role: 'CLIENT',
+            fullName: pendingRegistration.clientSubmissionData.fullName,
+            companyName: pendingRegistration.clientSubmissionData.companyName,
+            token: 'auth-session-client-' + Date.now(),
+            createdAt: new Date().toISOString(),
+            accountStatus: 'PENDING_APPROVAL',
+            isRegistrationComplete: true,
+          };
+          await authService.saveSession(newSession);
+          setSession(newSession);
+
+          // Automatically trigger OS notification pop-up & pre-fetch all notifications
+          mobileNotificationService.initializeLoginNotifications({
+            userId: newSession.userId,
+            role: newSession.role,
+          }).catch((e) => console.warn('Failed to initialize notifications on registration:', e));
+
+          setWelcomeData({
+            companyName: pendingRegistration.clientSubmissionData.companyName,
+            accountCode: resolvedId,
+            userName: pendingRegistration.clientSubmissionData.fullName,
+          });
+          await clientService.clearRegistrationDraft();
+          setPendingRegistration(null);
+          setCurrentScreen('WELCOME_TO_NECL');
+          return;
+        } catch (err: any) {
+          Alert.alert('Registration Submission Error', err.message || 'Failed to submit client application.');
+          setCurrentScreen('CLIENT_REG_REVIEW');
+          return;
+        }
+      } else if (pendingRegistration.role === 'VENDOR' && pendingRegistration.vendorFormData) {
+        try {
+          const result = await vendorService.submitVendorRegistration(pendingRegistration.vendorFormData, pendingRegistration.targetPhone);
+          const vId = result.vendorId || result.applicationNumber || `VND-${Date.now()}`;
+          setRegisteredVendorId(vId);
+          setVendorApplicationNumber(result.applicationNumber || vId);
+
+          const newSession: AuthSessionData = {
+            userId: vId,
+            mobile: cleanPhone,
+            role: 'VENDOR',
+            fullName: pendingRegistration.vendorFormData.contactPerson || pendingRegistration.vendorFormData.companyName,
+            companyName: pendingRegistration.vendorFormData.companyName,
+            token: 'auth-session-vendor-' + Date.now(),
+            createdAt: new Date().toISOString(),
+            accountStatus: 'PENDING_APPROVAL',
+            isRegistrationComplete: true,
+          };
+          await authService.saveSession(newSession);
+          setSession(newSession);
+
+          setWelcomeData({
+            companyName: pendingRegistration.vendorFormData.companyName,
+            accountCode: result.applicationNumber || vId,
+            userName: pendingRegistration.vendorFormData.contactPerson,
+          });
+          await vendorService.clearDraftForm();
+          setPendingRegistration(null);
+          setCurrentScreen('WELCOME_TO_NECL');
+          return;
+        } catch (err: any) {
+          Alert.alert('Registration Submission Error', err.message || 'Failed to submit vendor application.');
+          setCurrentScreen('VENDOR_APPLICATION_REVIEW');
+          return;
+        }
+      } else if (pendingRegistration.role === 'DRIVER' && pendingRegistration.driverSubmissionData) {
+        try {
+          const result = await driverService.submitDriverRegistration(pendingRegistration.driverSubmissionData, pendingRegistration.targetPhone);
+          const dId = result.driverId || result.applicationNumber || `DRV-${Date.now()}`;
+          setRegisteredDriverId(dId);
+          setDriverApplicationNumber(result.applicationNumber || dId);
+
+          const newSession: AuthSessionData = {
+            userId: dId,
+            mobile: cleanPhone,
+            role: 'DRIVER',
+            fullName: pendingRegistration.driverSubmissionData.fullName,
+            companyName: pendingRegistration.driverSubmissionData.selectedVendorName,
+            token: 'auth-session-driver-' + Date.now(),
+            createdAt: new Date().toISOString(),
+            accountStatus: 'PENDING_APPROVAL',
+            isRegistrationComplete: true,
+          };
+          await authService.saveSession(newSession);
+          setSession(newSession);
+
+          setWelcomeData({
+            companyName: pendingRegistration.driverSubmissionData.selectedVendorName,
+            accountCode: result.applicationNumber || dId,
+            userName: pendingRegistration.driverSubmissionData.fullName,
+          });
+          await driverService.clearDraftForm();
+          try {
+            await AsyncStorage.removeItem('@necl_driver_draft_uris');
+          } catch {}
+          setPendingRegistration(null);
+          setCurrentScreen('WELCOME_TO_NECL');
+          return;
+        } catch (err: any) {
+          Alert.alert('Registration Submission Error', err.message || 'Failed to submit driver application.');
+          setCurrentScreen('DRIVER_REGISTRATION');
+          return;
+        }
+      }
+    }
+
+    // Default fallback
     if (selectedRole === 'CLIENT') {
-      // Step 2 of Client Registration: Continue directly to Business Details screen
       setCurrentScreen('CLIENT_BUSINESS_DETAILS');
     } else if (selectedRole === 'VENDOR') {
       setCurrentScreen('VENDOR_REGISTRATION');
@@ -427,7 +973,7 @@ export default function App() {
   const handleShowTermsNotice = () => {
     Alert.alert(
       'Terms & Privacy Policy',
-      'North Eastern Carriers Logistics (NECL)\n\n' +
+      'TRUCKS Logistics Platform\n\n' +
         '• Commercial Carriage: All cargo movements strictly adhere to Carriage by Road Act 2007 guidelines.\n' +
         '• Digital POD: Consignees confirm digital delivery sign-off and verification within 24 hours.\n' +
         '• Telematics & Security: Real-time GPS tracking is active solely during active trips for safety and ETA accuracy.\n' +
@@ -441,6 +987,7 @@ export default function App() {
     await authService.clearSession();
     setSession(null);
     setSelectedNotification(null);
+    setIsResumingRegistration(false);
     setCurrentScreen('LOGIN');
   };
 
@@ -453,6 +1000,71 @@ export default function App() {
         backgroundColor={isLightStatusBar ? '#0A1931' : '#FFFFFF'}
         translucent={false}
       />
+
+      {/* Floating Welcome / Welcome Back Notification Banner */}
+      {welcomeToast?.visible && (
+        <View style={styles.welcomeToastWrapper}>
+          <TouchableOpacity
+            style={styles.welcomeToastCard}
+            activeOpacity={0.9}
+            onPress={() => {
+              setWelcomeToast((prev) => (prev ? { ...prev, visible: false } : null));
+              if (welcomeToast.item) {
+                setSelectedNotification(welcomeToast.item);
+                setCurrentScreen('NOTIFICATION_DETAILS');
+              } else {
+                setCurrentScreen('NOTIFICATIONS');
+              }
+            }}
+          >
+            <View style={styles.welcomeToastIconBox}>
+              <Bell size={18} color="#FFFFFF" />
+            </View>
+            <View style={styles.welcomeToastTextContainer}>
+              <View style={styles.welcomeToastBadgeRow}>
+                <Text style={styles.welcomeToastBadge}>
+                  {welcomeToast.isFirstTime ? 'NEW MEMBER' : 'OPERATIONS ACTIVE'}
+                </Text>
+                <Text style={styles.welcomeToastTime}>Just now</Text>
+              </View>
+              <Text style={styles.welcomeToastTitle} numberOfLines={1}>
+                {welcomeToast.title}
+              </Text>
+              <Text style={styles.welcomeToastSubtitle} numberOfLines={2}>
+                {welcomeToast.subtitle}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.welcomeToastCloseBtn}
+              onPress={() => setWelcomeToast((prev) => (prev ? { ...prev, visible: false } : null))}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <X size={16} color="#94A3B8" />
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {isResumingRegistration &&
+        (currentScreen.startsWith('CLIENT_') ||
+          currentScreen.startsWith('VENDOR_') ||
+          currentScreen.startsWith('DRIVER_') ||
+          currentScreen === 'REGISTRATION') &&
+        !currentScreen.includes('DASHBOARD') &&
+        !currentScreen.includes('STATUS') &&
+        !currentScreen.includes('CONFIRM') && (
+          <View style={styles.resumingBanner}>
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Clock size={16} color="#D97706" />
+              <Text style={styles.resumingBannerText}>
+                Complete Your Registration: Resume remaining required registration steps and submit for TRUCKS verification.
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => setIsResumingRegistration(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <X size={16} color="#92400E" />
+            </TouchableOpacity>
+          </View>
+        )}
 
       {/* Screen 01: SPLASH SCREEN */}
       {currentScreen === 'SPLASH' && (
@@ -503,7 +1115,19 @@ export default function App() {
           mobileNumber={mobileNumber}
           testCode={testOtpCode}
           purpose={otpPurpose}
-          onBack={() => setCurrentScreen('LOGIN')}
+          onBack={() => {
+            if (otpPurpose === 'REGISTRATION') {
+              if (selectedRole === 'CLIENT') {
+                setCurrentScreen('CLIENT_REG_REVIEW');
+              } else if (selectedRole === 'VENDOR') {
+                setCurrentScreen('VENDOR_APPLICATION_REVIEW');
+              } else {
+                setCurrentScreen('DRIVER_REGISTRATION');
+              }
+            } else {
+              setCurrentScreen('LOGIN');
+            }
+          }}
           onVerifiedNewUser={handleOtpVerifiedNewUser}
           onVerifiedExistingUser={handleOtpVerifiedExistingUser}
         />
@@ -516,26 +1140,74 @@ export default function App() {
           userId={session?.userId || registeredClientId || mobileNumber}
           onApprovedContinue={async () => {
             const checkPhone = mobileNumber || session?.mobile;
+            let targetComp = businessDetails?.companyName || profileData?.companyName || 'Enterprise Partner';
+            let targetCode = registeredClientId || 'CLI-APPROVED';
+            let targetName = profileData?.fullName || 'Client Representative';
+
             if (checkPhone) {
-              const statusRes = await clientService.getClientAccountStatus(checkPhone);
-              if (!session) {
-                const newSession: AuthSessionData = {
-                  userId: statusRes.companyId || registeredClientId || 'client-user',
-                  mobile: checkPhone,
-                  role: 'CLIENT',
-                  fullName: statusRes.fullName || profileData?.fullName || 'Client Representative',
-                  token: 'auth-session-approved-' + Date.now(),
-                  createdAt: new Date().toISOString(),
-                };
-                setSession(newSession);
-                await authService.saveSession(newSession);
-              }
+              const statusRes = await clientService.getClientAccountStatus(checkPhone, true);
+              if (statusRes.companyName) targetComp = statusRes.companyName;
+              if (statusRes.clientCode || statusRes.companyId) targetCode = statusRes.clientCode || statusRes.companyId || 'CLI-APPROVED';
+              if (statusRes.fullName) targetName = statusRes.fullName;
+
+              const newSession: AuthSessionData = {
+                userId: statusRes.companyId || registeredClientId || 'client-user',
+                mobile: checkPhone,
+                role: 'CLIENT',
+                fullName: targetName,
+                companyName: targetComp,
+                token: 'auth-session-approved-' + Date.now(),
+                createdAt: new Date().toISOString(),
+                accountStatus: 'APPROVED',
+                isRegistrationComplete: true,
+              };
+              setSession(newSession);
+              await authService.saveSession(newSession);
+              verifiedClientPhoneRef.current = checkPhone.replace(/[^0-9]/g, '').slice(-10);
             }
-            setCurrentScreen('CLIENT_DASHBOARD');
+
+            if (selectedRole === 'CLIENT') {
+              setCurrentScreen('CLIENT_DASHBOARD');
+            } else if (selectedRole === 'VENDOR') {
+              setCurrentScreen('VENDOR_DASHBOARD');
+            } else {
+              setCurrentScreen('DRIVER_DASHBOARD');
+            }
           }}
           onFixCorrections={() => setCurrentScreen('CLIENT_DOC_UPLOAD')}
           onOpenSupport={() => setCurrentScreen('HELP_SUPPORT')}
           onBack={() => (session ? setCurrentScreen('PROFILE') : setCurrentScreen('LOGIN'))}
+        />
+      )}
+
+      {/* Screen: WELCOME TO NECL SUCCESS SCREEN */}
+      {currentScreen === 'WELCOME_TO_NECL' && (
+        <WelcomeToNeclScreen
+          role={selectedRole}
+          companyName={welcomeData.companyName}
+          accountCode={welcomeData.accountCode}
+          userName={welcomeData.userName}
+          onContinueToDashboard={() => {
+            const isApproved = session?.accountStatus === 'APPROVED' || session?.accountStatus === 'ACTIVE';
+            if (isApproved) {
+              if (selectedRole === 'CLIENT') {
+                setCurrentScreen('CLIENT_DASHBOARD');
+              } else if (selectedRole === 'VENDOR') {
+                setCurrentScreen('VENDOR_DASHBOARD');
+              } else if (selectedRole === 'DRIVER') {
+                setCurrentScreen('DRIVER_DASHBOARD');
+              }
+            } else {
+              // Maintain approval workflow: unapproved users remain on verification status screens
+              if (selectedRole === 'CLIENT') {
+                setCurrentScreen('REGISTRATION_STATUS');
+              } else if (selectedRole === 'VENDOR') {
+                setCurrentScreen('VENDOR_VERIFICATION_STATUS');
+              } else if (selectedRole === 'DRIVER') {
+                setCurrentScreen('DRIVER_VERIFICATION_STATUS');
+              }
+            }
+          }}
         />
       )}
 
@@ -670,10 +1342,16 @@ export default function App() {
       {currentScreen === 'CLIENT_PROFILE' && (
         <ClientProfileSetupScreen
           initialMobile={mobileNumber}
-          initialData={profileData}
-          onBack={() => setCurrentScreen('LOGIN')}
-          onSuccess={(data) => {
+          initialData={profileData || undefined}
+          onBack={() => {
+            setProfileData(undefined);
+            setBusinessDetails(undefined);
+            setClientDocuments([]);
+            setCurrentScreen('LOGIN');
+          }}
+          onSuccess={async (data) => {
             setProfileData(data);
+            await clientService.saveActiveRegistrationStep(1, { profileData: data, mobile: mobileNumber });
             setCurrentScreen('CLIENT_BUSINESS_DETAILS');
           }}
         />
@@ -683,10 +1361,11 @@ export default function App() {
       {currentScreen === 'CLIENT_BUSINESS_DETAILS' && (
         <ClientBusinessDetailsScreen
           initialCompanyName={profileData?.companyName}
-          initialDetails={businessDetails}
-          onBack={() => setCurrentScreen('REGISTRATION')}
-          onContinue={(details) => {
+          initialDetails={businessDetails || undefined}
+          onBack={() => setCurrentScreen('CLIENT_PROFILE')}
+          onContinue={async (details) => {
             setBusinessDetails(details);
+            await clientService.saveActiveRegistrationStep(2, { profileData, businessDetails: details, mobile: mobileNumber });
             setCurrentScreen('CLIENT_DOC_UPLOAD');
           }}
         />
@@ -699,8 +1378,9 @@ export default function App() {
           companyName={businessDetails?.companyName}
           initialDocuments={clientDocuments}
           onBack={() => setCurrentScreen('CLIENT_BUSINESS_DETAILS')}
-          onContinue={(docs) => {
+          onContinue={async (docs) => {
             setClientDocuments(docs);
+            await clientService.saveActiveRegistrationStep(3, { profileData, businessDetails, documents: docs, mobile: mobileNumber });
             setCurrentScreen('CLIENT_REG_REVIEW');
           }}
         />
@@ -738,9 +1418,24 @@ export default function App() {
           onEditContact={() => setCurrentScreen('CLIENT_PROFILE')}
           onEditBusiness={() => setCurrentScreen('CLIENT_BUSINESS_DETAILS')}
           onEditDocuments={() => setCurrentScreen('CLIENT_DOC_UPLOAD')}
+          onProceedToOtp={(data) => {
+            setPendingRegistration({
+              role: 'CLIENT',
+              targetPhone: data.targetPhone,
+              clientSubmissionData: data.submissionData,
+            });
+            setMobileNumber(data.targetPhone);
+            setSelectedRole('CLIENT');
+            setOtpPurpose('REGISTRATION');
+            setTestOtpCode(data.testCode || '12345');
+            setCurrentScreen('OTP');
+          }}
           onSubmitSuccess={(assignedId) => {
             setRegisteredClientId(assignedId);
-            // Intentionally not saving full session here: registration is PENDING_APPROVAL
+            setBusinessDetails((prev) => ({
+              ...prev!,
+              submittedAt: new Date().toISOString(),
+            }));
             setCurrentScreen('CLIENT_REG_CONFIRM');
           }}
         />
@@ -750,8 +1445,44 @@ export default function App() {
       {currentScreen === 'CLIENT_REG_CONFIRM' && (
         <ClientRegistrationConfirmationScreen
           clientId={registeredClientId}
+          mobileNumber={mobileNumber || session?.mobile}
           businessDetails={businessDetails}
           onTrackStatus={() => setCurrentScreen('REGISTRATION_STATUS')}
+          onFixCorrections={() => setCurrentScreen('CLIENT_DOC_UPLOAD')}
+          onGoToDashboard={async () => {
+            const checkPhone = mobileNumber || session?.mobile;
+            let targetComp = businessDetails?.companyName || profileData?.companyName || 'Enterprise Partner';
+            let targetCode = registeredClientId || 'CLI-APPROVED';
+            let targetName = profileData?.fullName || 'Client Representative';
+
+            if (checkPhone) {
+              const statusRes = await clientService.getClientAccountStatus(checkPhone, true);
+              if (statusRes.status === 'APPROVED' || (statusRes as any).status === 'ACTIVE') {
+                if (statusRes.companyName) targetComp = statusRes.companyName;
+                if (statusRes.clientCode || statusRes.companyId) targetCode = statusRes.clientCode || statusRes.companyId || 'CLI-APPROVED';
+                if (statusRes.fullName) targetName = statusRes.fullName;
+
+                const newSession: AuthSessionData = {
+                  userId: statusRes.companyId || registeredClientId || 'client-user',
+                  mobile: checkPhone,
+                  role: 'CLIENT',
+                  fullName: targetName,
+                  companyName: targetComp,
+                  token: 'auth-session-approved-' + Date.now(),
+                  createdAt: new Date().toISOString(),
+                  accountStatus: 'APPROVED',
+                  isRegistrationComplete: true,
+                };
+                setSession(newSession);
+                await authService.saveSession(newSession);
+                verifiedClientPhoneRef.current = checkPhone.replace(/[^0-9]/g, '').slice(-10);
+
+                setCurrentScreen('CLIENT_DASHBOARD');
+                return;
+              }
+            }
+            setCurrentScreen('CLIENT_DASHBOARD');
+          }}
           onContactSupport={() => setCurrentScreen('HELP_SUPPORT')}
           onBackToLogin={() => setCurrentScreen('LOGIN')}
         />
@@ -781,6 +1512,7 @@ export default function App() {
       {currentScreen === 'CREATE_REQUIREMENT' && (
         <CreateTransportRequirementScreen
           initialDraft={requirementDraft}
+          clientId={session?.userId || registeredClientId}
           onBack={() => setCurrentScreen('CLIENT_DASHBOARD')}
           onNext={(draftUpdate) => {
             setRequirementDraft((prev) => ({ ...prev, ...draftUpdate }));
@@ -793,6 +1525,7 @@ export default function App() {
       {currentScreen === 'CARGO_DETAILS' && (
         <CargoDetailsScreen
           initialDraft={requirementDraft}
+          clientId={session?.userId || registeredClientId}
           onBack={() => setCurrentScreen('CREATE_REQUIREMENT')}
           onNext={(draftUpdate) => {
             setRequirementDraft((prev) => ({ ...prev, ...draftUpdate }));
@@ -1018,19 +1751,21 @@ export default function App() {
             setActiveTrackingId(shipmentId);
             setCurrentScreen('PROOF_OF_DELIVERY');
           }}
-          onBookShipment={() => setCurrentScreen('CREATE_REQUIREMENT')}
+          onBookShipment={handleStartNewRequirement}
           onNavigateToBookingDetails={(bookingId) => {
             setActiveBookingId(bookingId);
             setCurrentScreen('BOOKING_DETAILS');
           }}
+          onOpenProfile={() => setCurrentScreen('PROFILE')}
+          onNavigateToNotifications={() => setCurrentScreen('NOTIFICATIONS')}
         />
       )}
 
-      {/* Screen 19: My Bookings */}
+      {/* Screen 19: My Bookings (Migrated into Unified Shipments) */}
       {currentScreen === 'MY_BOOKINGS' && (
         <MyBookingsScreen
           clientId={session?.userId || registeredClientId}
-          onBack={() => setCurrentScreen('CLIENT_DASHBOARD')}
+          onBack={() => setCurrentScreen('MY_SHIPMENTS')}
           onSelectBooking={(bokId) => {
             setActiveBookingId(bokId);
             setCurrentScreen('BOOKING_DETAILS');
@@ -1039,7 +1774,7 @@ export default function App() {
             setActiveTrackingId(id);
             setCurrentScreen('SHIPMENT_TRACKING');
           }}
-          onBookShipment={() => setCurrentScreen('CREATE_REQUIREMENT')}
+          onBookShipment={handleStartNewRequirement}
         />
       )}
 
@@ -1047,7 +1782,7 @@ export default function App() {
       {currentScreen === 'BOOKING_DETAILS' && (
         <BookingDetailsScreen
           bookingId={activeBookingId}
-          onBack={() => setCurrentScreen('MY_BOOKINGS')}
+          onBack={() => setCurrentScreen('MY_SHIPMENTS')}
           onTrackShipment={(id) => {
             setActiveTrackingId(id);
             setCurrentScreen('SHIPMENT_TRACKING');
@@ -1064,6 +1799,7 @@ export default function App() {
             setActiveRequirementId(reqId);
             setCurrentScreen('REQUIREMENT_DETAILS');
           }}
+          onContactSupport={() => setCurrentScreen('HELP_SUPPORT')}
         />
       )}
 
@@ -1136,78 +1872,144 @@ export default function App() {
       {currentScreen === 'VENDOR_REGISTRATION' && (
         <VendorRegistrationScreen
           initialMobile={mobileNumber}
-          onBack={() => setCurrentScreen('LOGIN')}
-          onNext={(data) => {
-            vendorService.saveDraftForm(data);
-            setCurrentScreen('VENDOR_BUSINESS_INFO');
+          onBack={() => handleVendorStepBack(1)}
+          onNext={(data) => handleVendorStepNext(1, data)}
+          onAlreadyRegistered={async () => {
+            await vendorService.clearDraftForm();
+            setCurrentScreen('LOGIN');
           }}
-          onAlreadyRegistered={() => setCurrentScreen('LOGIN')}
+          isUpdateMode={vendorUpdateFlow.active}
+          onlyIncompleteSteps={vendorUpdateFlow.onlyIncompleteSteps}
+          incompleteStepsCount={vendorUpdateFlow.incompleteStepIndices.length}
+          currentIncompleteStepNumber={
+            vendorUpdateFlow.incompleteStepIndices.indexOf(1) + 1 || 1
+          }
+          onToggleViewAllSteps={() =>
+            setVendorUpdateFlow((prev) => ({
+              ...prev,
+              onlyIncompleteSteps: !prev.onlyIncompleteSteps,
+            }))
+          }
         />
       )}
 
       {/* Screen 2: Business Information */}
       {currentScreen === 'VENDOR_BUSINESS_INFO' && (
         <VendorBusinessInfoScreen
-          onBack={() => setCurrentScreen('VENDOR_REGISTRATION')}
-          onNext={(data) => {
-            vendorService.saveDraftForm(data);
-            setCurrentScreen('VENDOR_ADDRESS_CONTACT');
-          }}
+          onBack={() => handleVendorStepBack(2)}
+          onNext={(data) => handleVendorStepNext(2, data)}
+          isUpdateMode={vendorUpdateFlow.active}
+          onlyIncompleteSteps={vendorUpdateFlow.onlyIncompleteSteps}
+          incompleteStepsCount={vendorUpdateFlow.incompleteStepIndices.length}
+          currentIncompleteStepNumber={
+            vendorUpdateFlow.incompleteStepIndices.indexOf(2) + 1 || 1
+          }
+          onToggleViewAllSteps={() =>
+            setVendorUpdateFlow((prev) => ({
+              ...prev,
+              onlyIncompleteSteps: !prev.onlyIncompleteSteps,
+            }))
+          }
         />
       )}
 
       {/* Screen 3: Business Address and Contact Information */}
       {currentScreen === 'VENDOR_ADDRESS_CONTACT' && (
         <VendorAddressContactScreen
-          onBack={() => setCurrentScreen('VENDOR_BUSINESS_INFO')}
-          onNext={(data) => {
-            vendorService.saveDraftForm(data);
-            setCurrentScreen('VENDOR_OPERATING_LOCATIONS');
-          }}
+          onBack={() => handleVendorStepBack(3)}
+          onNext={(data) => handleVendorStepNext(3, data)}
+          isUpdateMode={vendorUpdateFlow.active}
+          onlyIncompleteSteps={vendorUpdateFlow.onlyIncompleteSteps}
+          incompleteStepsCount={vendorUpdateFlow.incompleteStepIndices.length}
+          currentIncompleteStepNumber={
+            vendorUpdateFlow.incompleteStepIndices.indexOf(3) + 1 || 1
+          }
+          onToggleViewAllSteps={() =>
+            setVendorUpdateFlow((prev) => ({
+              ...prev,
+              onlyIncompleteSteps: !prev.onlyIncompleteSteps,
+            }))
+          }
         />
       )}
 
       {/* Screen 4: Operating Locations */}
       {currentScreen === 'VENDOR_OPERATING_LOCATIONS' && (
         <VendorOperatingLocationsScreen
-          onBack={() => setCurrentScreen('VENDOR_ADDRESS_CONTACT')}
-          onNext={(data) => {
-            vendorService.saveDraftForm(data);
-            setCurrentScreen('VENDOR_FLEET_INFO');
-          }}
+          onBack={() => handleVendorStepBack(4)}
+          onNext={(data) => handleVendorStepNext(4, data)}
+          isUpdateMode={vendorUpdateFlow.active}
+          onlyIncompleteSteps={vendorUpdateFlow.onlyIncompleteSteps}
+          incompleteStepsCount={vendorUpdateFlow.incompleteStepIndices.length}
+          currentIncompleteStepNumber={
+            vendorUpdateFlow.incompleteStepIndices.indexOf(4) + 1 || 1
+          }
+          onToggleViewAllSteps={() =>
+            setVendorUpdateFlow((prev) => ({
+              ...prev,
+              onlyIncompleteSteps: !prev.onlyIncompleteSteps,
+            }))
+          }
         />
       )}
 
       {/* Screen 5: Fleet Information */}
       {currentScreen === 'VENDOR_FLEET_INFO' && (
         <VendorFleetInfoScreen
-          onBack={() => setCurrentScreen('VENDOR_OPERATING_LOCATIONS')}
-          onNext={(data) => {
-            vendorService.saveDraftForm(data);
-            setCurrentScreen('VENDOR_TRANSPORT_SERVICES');
-          }}
+          onBack={() => handleVendorStepBack(5)}
+          onNext={(data) => handleVendorStepNext(5, data)}
+          isUpdateMode={vendorUpdateFlow.active}
+          onlyIncompleteSteps={vendorUpdateFlow.onlyIncompleteSteps}
+          incompleteStepsCount={vendorUpdateFlow.incompleteStepIndices.length}
+          currentIncompleteStepNumber={
+            vendorUpdateFlow.incompleteStepIndices.indexOf(5) + 1 || 1
+          }
+          onToggleViewAllSteps={() =>
+            setVendorUpdateFlow((prev) => ({
+              ...prev,
+              onlyIncompleteSteps: !prev.onlyIncompleteSteps,
+            }))
+          }
         />
       )}
 
       {/* Screen 6: Transport Services */}
       {currentScreen === 'VENDOR_TRANSPORT_SERVICES' && (
         <VendorTransportServicesScreen
-          onBack={() => setCurrentScreen('VENDOR_FLEET_INFO')}
-          onNext={(data) => {
-            vendorService.saveDraftForm(data);
-            setCurrentScreen('VENDOR_DOC_UPLOAD');
-          }}
+          onBack={() => handleVendorStepBack(6)}
+          onNext={(data) => handleVendorStepNext(6, data)}
+          isUpdateMode={vendorUpdateFlow.active}
+          onlyIncompleteSteps={vendorUpdateFlow.onlyIncompleteSteps}
+          incompleteStepsCount={vendorUpdateFlow.incompleteStepIndices.length}
+          currentIncompleteStepNumber={
+            vendorUpdateFlow.incompleteStepIndices.indexOf(6) + 1 || 1
+          }
+          onToggleViewAllSteps={() =>
+            setVendorUpdateFlow((prev) => ({
+              ...prev,
+              onlyIncompleteSteps: !prev.onlyIncompleteSteps,
+            }))
+          }
         />
       )}
 
       {/* Screen 7: Vendor Document Upload */}
       {currentScreen === 'VENDOR_DOC_UPLOAD' && (
         <VendorDocumentUploadScreen
-          onBack={() => setCurrentScreen('VENDOR_TRANSPORT_SERVICES')}
-          onNext={(docs) => {
-            vendorService.saveDraftForm({ documents: docs });
-            setCurrentScreen('VENDOR_APPLICATION_REVIEW');
-          }}
+          onBack={() => handleVendorStepBack(7)}
+          onNext={(docs) => handleVendorStepNext(7, docs)}
+          isUpdateMode={vendorUpdateFlow.active}
+          onlyIncompleteSteps={vendorUpdateFlow.onlyIncompleteSteps}
+          incompleteStepsCount={vendorUpdateFlow.incompleteStepIndices.length}
+          currentIncompleteStepNumber={
+            vendorUpdateFlow.incompleteStepIndices.indexOf(7) + 1 || 1
+          }
+          onToggleViewAllSteps={() =>
+            setVendorUpdateFlow((prev) => ({
+              ...prev,
+              onlyIncompleteSteps: !prev.onlyIncompleteSteps,
+            }))
+          }
         />
       )}
 
@@ -1215,20 +2017,39 @@ export default function App() {
       {currentScreen === 'VENDOR_APPLICATION_REVIEW' && (
         <VendorApplicationReviewScreen
           initialMobile={mobileNumber}
-          onBack={() => setCurrentScreen('VENDOR_DOC_UPLOAD')}
+          onBack={() => {
+            if (vendorUpdateFlow.active) {
+              setCurrentScreen('VENDOR_VERIFICATION_STATUS');
+            } else {
+              setCurrentScreen('VENDOR_DOC_UPLOAD');
+            }
+          }}
           onEditSection={(stepIdx) => {
-            const stepMap: Record<number, ScreenId> = {
-              1: 'VENDOR_REGISTRATION',
-              2: 'VENDOR_BUSINESS_INFO',
-              3: 'VENDOR_ADDRESS_CONTACT',
-              4: 'VENDOR_OPERATING_LOCATIONS',
-              5: 'VENDOR_FLEET_INFO',
-              6: 'VENDOR_TRANSPORT_SERVICES',
-              7: 'VENDOR_DOC_UPLOAD',
-            };
-            setCurrentScreen(stepMap[stepIdx] || 'VENDOR_REGISTRATION');
+            setVendorUpdateFlow((prev) => ({
+              ...prev,
+              active: true,
+              onlyIncompleteSteps: false,
+            }));
+            setCurrentScreen(VENDOR_STEP_SCREEN_MAP[stepIdx] || 'VENDOR_REGISTRATION');
+          }}
+          onProceedToOtp={(data: { targetPhone: string; testCode?: string; formData: any }) => {
+            setPendingRegistration({
+              role: 'VENDOR',
+              targetPhone: data.targetPhone,
+              vendorFormData: data.formData,
+            });
+            setMobileNumber(data.targetPhone);
+            setSelectedRole('VENDOR');
+            setOtpPurpose('REGISTRATION');
+            setTestOtpCode(data.testCode || '12345');
+            setCurrentScreen('OTP');
           }}
           onSubmitSuccess={(result) => {
+            setVendorUpdateFlow({
+              active: false,
+              onlyIncompleteSteps: false,
+              incompleteStepIndices: [],
+            });
             setRegisteredVendorId(result.vendorId);
             setVendorApplicationNumber(result.applicationNumber);
             setCurrentScreen('VENDOR_SUBMISSION_CONFIRM');
@@ -1239,10 +2060,37 @@ export default function App() {
       {/* Screen 9: Submission Confirmation */}
       {currentScreen === 'VENDOR_SUBMISSION_CONFIRM' && (
         <VendorSubmissionConfirmationScreen
+          vendorId={effectiveVendorId}
           applicationNumber={vendorApplicationNumber}
           vendorName="Transport Enterprise"
           onTrackStatus={() => setCurrentScreen('VENDOR_VERIFICATION_STATUS')}
-          onGoToDashboard={() => setCurrentScreen('VENDOR_DASHBOARD')}
+          onGoToDashboard={async () => {
+            const vId = effectiveVendorId || vendorApplicationNumber;
+            if (vId) {
+              const statusRes = await vendorService.getVendorVerificationStatus(vId);
+              if (statusRes.status === 'APPROVED') {
+                const targetComp = statusRes.vendorName || 'Transport Enterprise';
+                const newSession: AuthSessionData = {
+                  userId: vId,
+                  mobile: mobileNumber || session?.mobile || '',
+                  role: 'VENDOR',
+                  fullName: targetComp,
+                  companyName: targetComp,
+                  token: 'auth-session-approved-' + Date.now(),
+                  createdAt: new Date().toISOString(),
+                };
+                setSession(newSession);
+                await authService.saveSession(newSession);
+                setWelcomeData({
+                  companyName: targetComp,
+                  accountCode: statusRes.vendorCode || vId,
+                });
+                setCurrentScreen('WELCOME_TO_NECL');
+                return;
+              }
+            }
+            setCurrentScreen('VENDOR_VERIFICATION_STATUS');
+          }}
           onBackToLogin={() => setCurrentScreen('LOGIN')}
         />
       )}
@@ -1252,9 +2100,81 @@ export default function App() {
         <VendorVerificationStatusScreen
           vendorId={effectiveVendorId}
           vendorName="Transport Enterprise"
-          onBack={() => setCurrentScreen('VENDOR_DASHBOARD')}
-          onEnterDashboard={() => setCurrentScreen('VENDOR_DASHBOARD')}
+          onBack={() => setCurrentScreen('LOGIN')}
+          onEnterDashboard={async () => {
+            const vId = effectiveVendorId;
+            if (!vId) {
+              Alert.alert(
+                'Verification Pending',
+                'Your application is currently under compliance review. Access to the operational dashboard will be unlocked once approved by TRUCKS Admin.'
+              );
+              return;
+            }
+            const statusRes = await vendorService.getVendorVerificationStatus(vId);
+            if (statusRes.status !== 'APPROVED') {
+              Alert.alert(
+                'Verification Pending',
+                'Your application is currently under compliance review. Access to the operational dashboard will be unlocked once approved by TRUCKS Admin.'
+              );
+              return;
+            }
+            const targetComp = statusRes.vendorName || 'Transport Enterprise';
+            const newSession: AuthSessionData = {
+              userId: vId,
+              mobile: mobileNumber || session?.mobile || '',
+              role: 'VENDOR',
+              fullName: targetComp,
+              companyName: targetComp,
+              token: 'auth-session-approved-' + Date.now(),
+              createdAt: new Date().toISOString(),
+            };
+            setSession(newSession);
+            await authService.saveSession(newSession);
+            setWelcomeData({
+              companyName: targetComp,
+              accountCode: statusRes.vendorCode || vId,
+            });
+            setCurrentScreen('WELCOME_TO_NECL');
+          }}
+          onApprovedContinue={async () => {
+            const vId = effectiveVendorId;
+            if (!vId) {
+              Alert.alert(
+                'Verification Pending',
+                'Your application is currently under compliance review. Access to the operational dashboard will be unlocked once approved by TRUCKS Admin.'
+              );
+              return;
+            }
+            const statusRes = await vendorService.getVendorVerificationStatus(vId);
+            if (statusRes.status !== 'APPROVED') {
+              Alert.alert(
+                'Verification Pending',
+                'Your application is currently under compliance review. Access to the operational dashboard will be unlocked once approved by TRUCKS Admin.'
+              );
+              return;
+            }
+            const targetComp = statusRes.vendorName || 'Transport Enterprise';
+            const newSession: AuthSessionData = {
+              userId: vId,
+              mobile: mobileNumber || session?.mobile || '',
+              role: 'VENDOR',
+              fullName: targetComp,
+              companyName: targetComp,
+              token: 'auth-session-approved-' + Date.now(),
+              createdAt: new Date().toISOString(),
+            };
+            setSession(newSession);
+            await authService.saveSession(newSession);
+            setWelcomeData({
+              companyName: targetComp,
+              accountCode: statusRes.vendorCode || vId,
+            });
+            setCurrentScreen('WELCOME_TO_NECL');
+          }}
           onCorrectDocuments={() => setCurrentScreen('VENDOR_DOC_CORRECTION')}
+          onCompleteRegistration={async () => {
+            await startVendorUpdateWorkflow();
+          }}
           onOpenSupport={() => setCurrentScreen('HELP_SUPPORT')}
         />
       )}
@@ -1290,6 +2210,13 @@ export default function App() {
           onViewVerificationStatus={() => setCurrentScreen('VENDOR_VERIFICATION_STATUS')}
           onOpenNotifications={() => setCurrentScreen('NOTIFICATIONS')}
           onOpenProfile={() => setCurrentScreen('PROFILE')}
+          onAssignFleet={() => setCurrentScreen('VENDOR_AWARDED_BOOKINGS')}
+          onSelectNavTab={(tab) => {
+            if (tab === 'HOME') setCurrentScreen('VENDOR_DASHBOARD');
+            else if (tab === 'LOADS') setCurrentScreen('VENDOR_REQUIREMENTS');
+            else if (tab === 'TRIPS') setCurrentScreen('VENDOR_TRIP_MANAGEMENT');
+            else if (tab === 'FLEET') setCurrentScreen('VENDOR_FLEET_MANAGEMENT');
+          }}
         />
       )}
 
@@ -1298,9 +2225,16 @@ export default function App() {
         <VendorRequirementsScreen
           vendorId={effectiveVendorId}
           onBack={() => setCurrentScreen('VENDOR_DASHBOARD')}
+          onContinueRegistration={() => setCurrentScreen('VENDOR_VERIFICATION_STATUS')}
           onSelectRequirement={(reqId) => {
             setActiveRequirementId(reqId);
             setCurrentScreen('VENDOR_REQUIREMENT_DETAILS');
+          }}
+          onSelectNavTab={(tab) => {
+            if (tab === 'HOME') setCurrentScreen('VENDOR_DASHBOARD');
+            else if (tab === 'LOADS') setCurrentScreen('VENDOR_REQUIREMENTS');
+            else if (tab === 'TRIPS') setCurrentScreen('VENDOR_TRIP_MANAGEMENT');
+            else if (tab === 'FLEET') setCurrentScreen('VENDOR_FLEET_MANAGEMENT');
           }}
         />
       )}
@@ -1309,6 +2243,7 @@ export default function App() {
       {currentScreen === 'VENDOR_REQUIREMENT_DETAILS' && (
         <VendorRequirementDetailsScreen
           requirementId={activeRequirementId}
+          vendorId={effectiveVendorId}
           onBack={() => setCurrentScreen('VENDOR_REQUIREMENTS')}
           onSubmitQuotation={(req) => {
             setSelectedVendorRequirement(req);
@@ -1404,6 +2339,12 @@ export default function App() {
         <VendorFleetManagementScreen
           vendorId={effectiveVendorId}
           onBack={() => setCurrentScreen('VENDOR_DASHBOARD')}
+          onSelectNavTab={(tab) => {
+            if (tab === 'HOME') setCurrentScreen('VENDOR_DASHBOARD');
+            else if (tab === 'LOADS') setCurrentScreen('VENDOR_REQUIREMENTS');
+            else if (tab === 'TRIPS') setCurrentScreen('VENDOR_TRIP_MANAGEMENT');
+            else if (tab === 'FLEET') setCurrentScreen('VENDOR_FLEET_MANAGEMENT');
+          }}
         />
       )}
 
@@ -1412,6 +2353,12 @@ export default function App() {
         <VendorDriverManagementScreen
           vendorId={effectiveVendorId}
           onBack={() => setCurrentScreen('VENDOR_DASHBOARD')}
+          onSelectNavTab={(tab) => {
+            if (tab === 'HOME') setCurrentScreen('VENDOR_DASHBOARD');
+            else if (tab === 'LOADS') setCurrentScreen('VENDOR_REQUIREMENTS');
+            else if (tab === 'TRIPS') setCurrentScreen('VENDOR_TRIP_MANAGEMENT');
+            else if (tab === 'FLEET') setCurrentScreen('VENDOR_FLEET_MANAGEMENT');
+          }}
         />
       )}
 
@@ -1493,65 +2440,53 @@ export default function App() {
       {/* DRIVER REGISTRATION & VERIFICATION (Screens 1 to 9) */}
       {/* ========================================================================= */}
 
-      {/* Screen 1: Driver Registration */}
+      {/* Single-Screen Driver Registration */}
       {currentScreen === 'DRIVER_REGISTRATION' && (
         <DriverRegistrationScreen
           initialMobile={mobileNumber}
-          onBack={() => setCurrentScreen('LOGIN')}
-          onStartRegistration={() => setCurrentScreen('DRIVER_PERSONAL_INFO')}
-          onCheckStatus={() => setCurrentScreen('DRIVER_VERIFICATION_STATUS')}
-        />
-      )}
-
-      {/* Screen 2: Personal Information */}
-      {currentScreen === 'DRIVER_PERSONAL_INFO' && (
-        <DriverPersonalInfoScreen
-          initialMobile={mobileNumber}
-          onBack={() => setCurrentScreen('DRIVER_REGISTRATION')}
-          onNext={() => setCurrentScreen('DRIVER_LICENCE_DETAILS')}
-        />
-      )}
-
-      {/* Screen 3: Driving Licence Details */}
-      {currentScreen === 'DRIVER_LICENCE_DETAILS' && (
-        <DriverLicenceDetailsScreen
-          onBack={() => setCurrentScreen('DRIVER_PERSONAL_INFO')}
-          onNext={() => setCurrentScreen('DRIVER_VEHICLE_ASSOCIATION')}
-        />
-      )}
-
-      {/* Screen 4: Vehicle Association */}
-      {currentScreen === 'DRIVER_VEHICLE_ASSOCIATION' && (
-        <DriverVehicleAssociationScreen
-          onBack={() => setCurrentScreen('DRIVER_LICENCE_DETAILS')}
-          onNext={() => setCurrentScreen('DRIVER_DOC_UPLOAD')}
-        />
-      )}
-
-      {/* Screen 5: Driver Document Upload */}
-      {currentScreen === 'DRIVER_DOC_UPLOAD' && (
-        <DriverDocumentUploadScreen
-          onBack={() => setCurrentScreen('DRIVER_VEHICLE_ASSOCIATION')}
-          onNext={() => setCurrentScreen('DRIVER_APPLICATION_REVIEW')}
-        />
-      )}
-
-      {/* Screen 6: Application Review */}
-      {currentScreen === 'DRIVER_APPLICATION_REVIEW' && (
-        <DriverApplicationReviewScreen
-          initialMobile={mobileNumber}
-          onBack={() => setCurrentScreen('DRIVER_DOC_UPLOAD')}
+          onBack={async () => {
+            await driverService.clearDraftForm();
+            setCurrentScreen('LOGIN');
+          }}
+          onProceedToOtp={(data) => {
+            setPendingRegistration({
+              role: 'DRIVER',
+              targetPhone: data.targetPhone,
+              driverSubmissionData: data.submissionData,
+            });
+            setMobileNumber(data.targetPhone);
+            setSelectedRole('DRIVER');
+            setOtpPurpose('REGISTRATION');
+            setTestOtpCode(data.testCode || '12345');
+            setCurrentScreen('OTP');
+          }}
           onSubmitSuccess={(data) => {
             setRegisteredDriverId(data.driverId);
             setDriverApplicationNumber(data.applicationNumber);
             setCurrentScreen('DRIVER_SUBMISSION_CONFIRM');
           }}
-          onEditSection={(step) => {
-            if (step === 1) setCurrentScreen('DRIVER_PERSONAL_INFO');
-            else if (step === 2) setCurrentScreen('DRIVER_LICENCE_DETAILS');
-            else if (step === 3) setCurrentScreen('DRIVER_VEHICLE_ASSOCIATION');
-            else setCurrentScreen('DRIVER_DOC_UPLOAD');
+          onCheckStatus={() => setCurrentScreen('DRIVER_VERIFICATION_STATUS')}
+        />
+      )}
+
+      {/* Legacy Multi-step Screens redirect to Single-Screen Driver Registration */}
+      {(currentScreen === 'DRIVER_PERSONAL_INFO' ||
+        currentScreen === 'DRIVER_LICENCE_DETAILS' ||
+        currentScreen === 'DRIVER_VEHICLE_ASSOCIATION' ||
+        currentScreen === 'DRIVER_DOC_UPLOAD' ||
+        currentScreen === 'DRIVER_APPLICATION_REVIEW') && (
+        <DriverRegistrationScreen
+          initialMobile={mobileNumber}
+          onBack={async () => {
+            await driverService.clearDraftForm();
+            setCurrentScreen('LOGIN');
           }}
+          onSubmitSuccess={(data) => {
+            setRegisteredDriverId(data.driverId);
+            setDriverApplicationNumber(data.applicationNumber);
+            setCurrentScreen('DRIVER_SUBMISSION_CONFIRM');
+          }}
+          onCheckStatus={() => setCurrentScreen('DRIVER_VERIFICATION_STATUS')}
         />
       )}
 
@@ -1561,6 +2496,35 @@ export default function App() {
           applicationNumber={driverApplicationNumber}
           onCheckStatus={() => setCurrentScreen('DRIVER_VERIFICATION_STATUS')}
           onGoHome={() => setCurrentScreen('DRIVER_DASHBOARD')}
+          onGoToDashboard={async () => {
+            const dId = effectiveDriverId;
+            const phone = mobileNumber || session?.mobile;
+            let driverName = 'Commercial Driver';
+            if (dId || phone) {
+              const dProfile = await driverService.getDriverProfile(dId, phone);
+              if (dProfile && dProfile.status === 'APPROVED') {
+                driverName = dProfile.fullName || dProfile.name || 'Commercial Driver';
+                const newSession: AuthSessionData = {
+                  userId: dId || 'driver-user',
+                  mobile: phone || '',
+                  role: 'DRIVER',
+                  fullName: driverName,
+                  token: 'auth-session-approved-' + Date.now(),
+                  createdAt: new Date().toISOString(),
+                };
+                setSession(newSession);
+                await authService.saveSession(newSession);
+                setWelcomeData({
+                  companyName: driverName,
+                  userName: driverName,
+                  accountCode: dProfile.licenceNumber || dId || 'DRV-APPROVED',
+                });
+                setCurrentScreen('WELCOME_TO_NECL');
+                return;
+              }
+            }
+            setCurrentScreen('DRIVER_DASHBOARD');
+          }}
           onBackToLogin={() => setCurrentScreen('LOGIN')}
         />
       )}
@@ -1570,9 +2534,42 @@ export default function App() {
         <DriverVerificationStatusScreen
           initialMobile={mobileNumber}
           driverId={effectiveDriverId}
-          onBack={() => setCurrentScreen('DRIVER_DASHBOARD')}
-          onGoToDashboard={() => setCurrentScreen('DRIVER_DASHBOARD')}
+          onBack={() => setCurrentScreen('LOGIN')}
+          onGoToDashboard={async () => {
+            const dId = effectiveDriverId;
+            const phone = mobileNumber || session?.mobile;
+            let driverName = 'Commercial Driver';
+            if (dId || phone) {
+              const dProfile = await driverService.getDriverProfile(dId, phone);
+              if (dProfile && dProfile.status === 'APPROVED') {
+                driverName = dProfile.fullName || dProfile.name || 'Commercial Driver';
+                const newSession: AuthSessionData = {
+                  userId: dId || 'driver-user',
+                  mobile: phone || '',
+                  role: 'DRIVER',
+                  fullName: driverName,
+                  token: 'auth-session-approved-' + Date.now(),
+                  createdAt: new Date().toISOString(),
+                };
+                setSession(newSession);
+                await authService.saveSession(newSession);
+                setWelcomeData({
+                  companyName: driverName,
+                  userName: driverName,
+                  accountCode: dProfile.licenceNumber || dId || 'DRV-APPROVED',
+                });
+                setCurrentScreen('WELCOME_TO_NECL');
+                return;
+              }
+            }
+            setCurrentScreen('DRIVER_DASHBOARD');
+          }}
           onGoToCorrection={() => setCurrentScreen('DRIVER_DOC_CORRECTION')}
+          onCompleteRegistration={async () => {
+            setIsResumingRegistration(true);
+            await driverService.loadAuthenticatedDriverRegistration(effectiveDriverId, mobileNumber);
+            setCurrentScreen('DRIVER_REGISTRATION');
+          }}
           onContactSupport={() => setCurrentScreen('HELP_SUPPORT')}
         />
       )}
@@ -1748,10 +2745,14 @@ export default function App() {
 
       {/* Fallback Legacy Vendor & Driver Onboarding */}
       {currentScreen === 'VENDOR_ONBOARDING' && (
-        <VendorOnboardingScreen
+        <VendorRegistrationScreen
           initialMobile={mobileNumber}
           onBack={() => setCurrentScreen('LOGIN')}
-          onCompleted={() => setCurrentScreen('REGISTRATION_STATUS')}
+          onNext={(data) => {
+            vendorService.saveDraftForm(data);
+            setCurrentScreen('VENDOR_BUSINESS_INFO');
+          }}
+          onAlreadyRegistered={() => setCurrentScreen('LOGIN')}
         />
       )}
 
@@ -1763,7 +2764,7 @@ export default function App() {
         />
       )}
 
-      {/* ── Five-Button Client Bottom Navigation Bar (Home | Shipment | My Requirements | Bookings | Profile) ── */}
+      {/* ── Four-Button Client Bottom Navigation Bar (Home | Shipments | My Requirements | Profile) ── */}
       {selectedRole === 'CLIENT' &&
         (currentScreen === 'CLIENT_DASHBOARD' ||
           currentScreen === 'MY_SHIPMENTS' ||
@@ -1772,19 +2773,18 @@ export default function App() {
           currentScreen === 'PROFILE') && (
           <ClientBottomNavBar
             activeTab={
-              currentScreen === 'MY_SHIPMENTS'
-                ? 'SHIPMENT'
+              currentScreen === 'MY_SHIPMENTS' || currentScreen === 'MY_BOOKINGS'
+                ? 'SHIPMENTS'
                 : currentScreen === 'MY_REQUIREMENTS'
                 ? 'REQUIREMENTS'
-                : currentScreen === 'MY_BOOKINGS'
-                ? 'BOOKINGS'
                 : currentScreen === 'PROFILE'
                 ? 'PROFILE'
                 : 'HOME'
             }
-            onSelectTab={(tab: ClientNavTab) => {
+            onSelectTab={(tab: ClientNavTab | string) => {
               if (tab === 'HOME') setCurrentScreen('CLIENT_DASHBOARD');
               else if (tab === 'SHIPMENT') setCurrentScreen('MY_SHIPMENTS');
+              else if (tab === 'SHIPMENTS') setCurrentScreen('MY_SHIPMENTS');
               else if (tab === 'REQUIREMENTS') setCurrentScreen('MY_REQUIREMENTS');
               else if (tab === 'BOOKINGS') setCurrentScreen('MY_BOOKINGS');
               else if (tab === 'PROFILE') setCurrentScreen('PROFILE');
@@ -1799,5 +2799,93 @@ const styles = StyleSheet.create({
   rootContainer: {
     flex: 1,
     backgroundColor: '#FFFFFF',
+  },
+  resumingBanner: {
+    backgroundColor: '#FEF3C7',
+    borderBottomWidth: 1,
+    borderBottomColor: '#FDE68A',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    zIndex: 99,
+  },
+  resumingBannerText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#92400E',
+    flex: 1,
+    lineHeight: 16,
+  },
+  welcomeToastWrapper: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 52 : 28,
+    left: 14,
+    right: 14,
+    zIndex: 9999,
+    elevation: 10,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+  },
+  welcomeToastCard: {
+    backgroundColor: '#0F172A',
+    borderRadius: 14,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FA5700',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  welcomeToastIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#FA5700',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  welcomeToastTextContainer: {
+    flex: 1,
+    marginRight: 8,
+  },
+  welcomeToastBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
+  welcomeToastBadge: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#FA5700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  welcomeToastTime: {
+    fontSize: 10,
+    color: '#64748B',
+  },
+  welcomeToastTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  welcomeToastSubtitle: {
+    fontSize: 12,
+    color: '#CBD5E1',
+    lineHeight: 16,
+  },
+  welcomeToastCloseBtn: {
+    padding: 6,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
 });

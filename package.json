@@ -1,0 +1,24 @@
+{
+  "name": "necl-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "B2B Lorry Transport Brokerage & Operations Management Platform - Northern Eastern Carriers Logistics",
+  "scripts": {
+    "dev:admin": "npm --prefix apps/admin run dev",
+    "dev:mobile": "npm --prefix apps/mobile run start",
+    "dev:server": "npm --prefix server run dev",
+    "build:admin": "npm --prefix apps/admin run build",
+    "build:server": "npm --prefix server run build",
+    "build": "npm --prefix server run build && npm --prefix apps/admin run build",
+    "test:admin": "npm --prefix apps/admin test",
+    "test:mobile:types": "node apps/mobile/node_modules/typescript/bin/tsc --noEmit -p apps/mobile/tsconfig.json",
+    "test:server": "npm --prefix server run build",
+    "script:e2e": "node scripts/validation/verify-master-e2e-workflow.js",
+    "script:audit": "node scripts/validation/test-complete-workflow-audit.js",
+    "script:icons": "npx tsx scripts/development/generate-app-icons.ts"
+  },
+  "devDependencies": {
+    "@supabase/supabase-js": "^2.118.0",
+    "@types/node": "^26.6.5"
+  }
+}

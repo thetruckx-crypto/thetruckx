@@ -202,7 +202,7 @@ describe('QuotationsModule', () => {
         'utf-8'
       );
       
-      expect(moduleCode).toContain("in('status', ['ASSIGNED', 'RFQ_SENT'])");
+      expect(moduleCode).toMatch(/in\('status',\s*\[.*?'ASSIGNED'.*?'RFQ_SENT'.*?\]\)/s);
     });
 
     it('should fetch and join client companies data', () => {

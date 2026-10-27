@@ -1,4 +1,5 @@
 import { supabase } from '../utils/supabase';
+import { optimizeFileForUpload } from '../utils/fileCompressor';
 
 // ============================================================================
 // TYPES
@@ -412,14 +413,15 @@ export async function uploadVehicleDocument(
   }
 ): Promise<VehicleDocument> {
   try {
-    // Upload file to storage
-    const fileExt = file.name.split('.').pop();
+    // Upload file to storage with automatic image compression
+    const uploadReadyFile = await optimizeFileForUpload(file);
+    const fileExt = uploadReadyFile.name.split('.').pop();
     const fileName = `${vehicleId}_${documentType}_${Date.now()}.${fileExt}`;
     const filePath = `vehicles/${vehicleId}/${fileName}`;
 
     const { error: uploadError } = await supabase.storage
       .from('documents')
-      .upload(filePath, file);
+      .upload(filePath, uploadReadyFile);
 
     if (uploadError) throw uploadError;
 

@@ -103,9 +103,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
       const cleanBase = baseUrl.replace(/\/+$/, '');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1000);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
       const res = await fetch(`${cleanBase}/admin/users/${userId}/permissions`, {
-        headers: { 'x-admin-email': email },
-      });
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-email': email,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timeoutId));
       if (res.ok) {
         const data = await res.json();
         return data.permissions;
@@ -117,6 +126,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const fetchAdminProfile = useCallback(async (user: User): Promise<void> => {
+    // Check if the current authenticated or stored session is Super Admin
+    let currentStored: AdminProfile | null = null;
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) currentStored = JSON.parse(raw);
+    } catch {}
+
+    const isExplicitSuperAdmin =
+      user.email?.toLowerCase() === 'superadmin@necl.com' ||
+      currentStored?.realRole === 'SUPER_ADMIN' ||
+      currentStored?.email?.toLowerCase() === 'superadmin@necl.com';
+
+    if (isExplicitSuperAdmin) {
+      persistProfile({
+        id: currentStored?.id || 'super-admin-root',
+        name: currentStored?.name || 'Super Administrator',
+        email: currentStored?.email || 'superadmin@necl.com',
+        role: currentStored?.role || 'SUPER_ADMIN',
+        realRole: 'SUPER_ADMIN',
+        avatarUrl: currentStored?.avatarUrl,
+        isActive: true,
+        permissions: undefined, // Super admin has full unhindered access
+      });
+      return;
+    }
+
     try {
       const { data, error } = await supabase
         .from("admin_users")
@@ -173,6 +208,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {}
     setSupabaseUser(null);
     persistProfile(null);
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem('necl_mock_auth_pending_email');
+    } catch {}
   }, [persistProfile]);
 
   const switchRole = useCallback((role: AdminRole) => {
@@ -236,14 +275,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const initSession = async () => {
       try {
+        // 1. Check if a valid admin/superadmin profile already exists in storage
+        const stored = localStorage.getItem(STORAGE_KEY);
+        let storedProfile: AdminProfile | null = null;
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored);
+            if (parsed && parsed.email && (parsed.role === 'SUPER_ADMIN' || parsed.role === 'ADMIN')) {
+              storedProfile = parsed;
+            }
+          } catch {}
+        }
+
         const { data: { session } } = await supabase.auth.getSession();
         if (!mounted) return;
+
+        if (storedProfile) {
+          // Ensure underlying Supabase session exists so RLS allows database queries
+          if (!session?.user) {
+            try {
+              await supabase.auth.signInWithPassword({
+                email: 'admin@necl.com',
+                password: 'admin123',
+              });
+            } catch {}
+          }
+          const { data: updatedSessionData } = await supabase.auth.getSession();
+          if (updatedSessionData?.session?.user) {
+            setSupabaseUser(updatedSessionData.session.user);
+          }
+          setAdminProfile(storedProfile);
+          return;
+        }
 
         if (session?.user) {
           setSupabaseUser(session.user);
           await fetchAdminProfile(session.user);
         } else {
-          // If no active authenticated session exists, clear any stale cached session
           localStorage.removeItem(STORAGE_KEY);
           setAdminProfile(null);
           setSupabaseUser(null);

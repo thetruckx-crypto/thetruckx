@@ -1,0 +1,81 @@
+# NECL Project - .gitignore
+
+# Environment files & Secrets (NEVER commit secrets)
+.env
+.env.local
+.env.*.local
+*.env
+!.env.example
+!*.env.example
+*service-account*.json
+!*service-account*.example.json
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+.nuxt/
+.output/
+.expo/
+*.zip
+archive/build-artifacts/
+android/.gradle/
+android/app/build/
+.gradle/
+*.apk
+*.aab
+test-bundle.js
+test-assets/
+dist-test/
+*.bundle
+*.jsbundle
+
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Database & Supabase local development
+database/.branches
+database/.temp
+supabase/.branches
+supabase/.temp
+
+# Prisma
+prisma/*.db
+
+# Coverage
+coverage/
+.meta-panel-trigger
+meta.bat

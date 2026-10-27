@@ -1,26 +1,24 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
-import { supabase } from '../supabase';
-import { MobileRole, ClientProfileFormData } from '../types';
+import { supabase, ensureMobileSession } from '../supabase';
+import { MobileRole, ClientProfileFormData, ScreenId } from '../types';
 
-const SESSION_STORAGE_KEY = 'necl_mobile_session_v1';
-const USER_REGISTRY_KEY = '@necl_user_registry_v3';
-const ROLE_DEACTIVATION_REQUESTS_KEY = '@necl_role_deactivation_requests_v2';
+export const SESSION_STORAGE_KEY = 'necl_mobile_session_v2';
+export const USER_REGISTRY_KEY = '@necl_user_registry_v4';
+export const ROLE_DEACTIVATION_REQUESTS_KEY = '@necl_role_deactivation_requests_v3';
 
-function getBackendApiUrl(): string {
+export function getBackendApiUrl(): string {
   const envUrl = process.env.EXPO_PUBLIC_API_URL;
   const hostUri = Constants.expoConfig?.hostUri || (Constants as any).manifest?.debuggerHost || '';
   const hostIp = hostUri ? hostUri.split(':')[0] : '';
 
-  if (envUrl) {
+  if (envUrl && !envUrl.includes('192.168.0.114')) {
     if (Platform.OS === 'android') {
       if (hostIp && hostIp !== 'localhost' && hostIp !== '127.0.0.1') {
         return envUrl.replace(/localhost|127\.0\.0\.1|10\.0\.2\.2/, hostIp);
       }
-      if (envUrl.includes('localhost') || envUrl.includes('10.0.2.2')) {
-        return envUrl.replace(/localhost|10\.0\.2\.2/, '192.168.0.114');
-      }
+      return envUrl;
     }
     return envUrl;
   }
@@ -31,6 +29,20 @@ function getBackendApiUrl(): string {
   return Platform.OS === 'android' ? 'http://10.0.2.2:5000/api' : 'http://localhost:5000/api';
 }
 
+const roleCheckCache = new Map<string, { result: MobileRegistrationCheckResult; timestamp: number }>();
+const ROLE_CHECK_TTL = 30 * 1000; // 30 seconds
+
+export function invalidateRoleCheckCache(mobile?: string) {
+  if (mobile) {
+    const cleanPhone = mobile.replace(/[^0-9]/g, '').slice(-10);
+    for (const key of roleCheckCache.keys()) {
+      if (key.includes(cleanPhone)) roleCheckCache.delete(key);
+    }
+  } else {
+    roleCheckCache.clear();
+  }
+}
+
 async function callBackendApi<T = any>(
   endpoint: string,
   method: string = 'GET',
@@ -38,7 +50,8 @@ async function callBackendApi<T = any>(
 ): Promise<T | null> {
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 3500);
+    // Fast 800ms timeout so offline/local-only apps never stall navigation
+    const timer = setTimeout(() => controller.abort(), 800);
     const res = await fetch(`${getBackendApiUrl()}${endpoint}`, {
       method,
       headers: {
@@ -72,6 +85,9 @@ export interface AuthSessionData {
   companyName?: string;
   token: string;
   createdAt: string;
+  accountStatus?: string;
+  isRegistrationComplete?: boolean;
+  profileCompletionStatus?: 'COMPLETE' | 'INCOMPLETE';
 }
 
 export interface RegisteredUserRecord {
@@ -115,9 +131,14 @@ export interface MobileRegistrationCheckResult {
     | 'REJECTED'
     | 'CORRECTIONS_REQUESTED'
     | 'PENDING_APPROVAL'
+    | 'INACTIVE'
     | 'DEACTIVATED'
     | 'NOT_REGISTERED'
     | string;
+  isRegistrationComplete?: boolean;
+  profileCompletionStatus?: 'COMPLETE' | 'INCOMPLETE';
+  missingFields?: string[];
+  nextStep?: string;
   userProfile?: any;
   message?: string;
 }
@@ -198,7 +219,6 @@ export const authService = {
 
       if (apiRes && typeof apiRes.isRegistered === 'boolean') {
         const registry = await this.getLocalRegistry();
-        const existingInRegistry = registry.find((u) => u.mobile === cleanPhone);
 
         // Sync local registry if verified by backend
         if (apiRes.isRegistered && apiRes.registeredRole) {
@@ -221,6 +241,10 @@ export const authService = {
           isRegisteredOtherRole: apiRes.isRegisteredOtherRole,
           otherRole: apiRes.otherRole,
           status: apiRes.status,
+          isRegistrationComplete: apiRes.isRegistrationComplete,
+          profileCompletionStatus: apiRes.profileCompletionStatus,
+          missingFields: apiRes.missingFields,
+          nextStep: apiRes.nextStep,
           userProfile: apiRes.userProfile,
           message: apiRes.message,
         };
@@ -229,13 +253,68 @@ export const authService = {
       console.warn('Backend registration check notice, using direct queries:', apiErr?.message);
     }
 
-    // 2. Fallback: Check local registry
-    const registry = await this.getLocalRegistry();
-    const existingInRegistry = registry.find((u) => u.mobile === cleanPhone);
+    // 2. Ensure mobile session for direct database queries
+    await ensureMobileSession().catch(() => {});
 
-    // 3. Fallback: Query Supabase across all three role tables in parallel
-    const activeRoles: Array<{ role: MobileRole; profile: any; status: string }> = [];
+    // 3. Fallback: Query Supabase across role tables and RPC in parallel
+    const activeRoles: Array<{
+      role: MobileRole;
+      profile: any;
+      status: string;
+      isComplete?: boolean;
+      missingFields?: string[];
+      nextStep?: string;
+    }> = [];
 
+    // Priority 3a: Check SECURITY DEFINER RPC check_client_account_status
+    try {
+      const { data: rpcClient, error: rpcErr } = await supabase.rpc('check_client_account_status', {
+        p_mobile: cleanPhone,
+      });
+
+      if (!rpcErr && rpcClient && rpcClient.status && rpcClient.status !== 'NEW_USER' && rpcClient.status !== 'NOT_FOUND') {
+        if (rpcClient.status === 'ROLE_CONFLICT') {
+          activeRoles.push({
+            role: rpcClient.previous_role || 'VENDOR',
+            status: 'ACTIVE',
+            isComplete: true,
+            missingFields: [],
+            profile: {
+              name: `${rpcClient.previous_role || 'Other'} User`,
+              mobile: cleanPhone,
+            },
+          });
+        } else {
+          const rawStatus = rpcClient.status;
+          const normalizedStatus = rawStatus === 'APPROVED' || rawStatus === 'ACTIVE' ? 'APPROVED' : rawStatus;
+          activeRoles.push({
+            role: 'CLIENT',
+            profile: {
+              name: rpcClient.full_name,
+              fullName: rpcClient.full_name,
+              email: rpcClient.email,
+              company: rpcClient.company_name || 'Client Enterprise',
+              companyName: rpcClient.company_name || 'Client Enterprise',
+              clientId: rpcClient.company_id,
+              companyId: rpcClient.company_id,
+              clientCode: rpcClient.client_code,
+              status: normalizedStatus,
+              rejectionReason: rpcClient.rejection_reason,
+              correctionNotes: rpcClient.correction_notes,
+              mobile: cleanPhone,
+            },
+            status: normalizedStatus,
+            isComplete: normalizedStatus === 'APPROVED' || normalizedStatus === 'PENDING_APPROVAL',
+            missingFields: [],
+            nextStep: normalizedStatus === 'APPROVED' ? undefined : 'CLIENT_BUSINESS_DETAILS',
+          });
+        }
+      }
+    } catch (rpcE) {
+      console.warn('RPC check_client_account_status notice:', rpcE);
+    }
+
+    // Priority 3b: Direct database table checks
     try {
       const [clientRes, vendorRes, driverRes] = await Promise.all([
         supabase
@@ -257,49 +336,143 @@ export const authService = {
 
       if (clientRes.data && clientRes.data.status !== 'DEACTIVATED') {
         const comp = clientRes.data.client_companies;
-        const compStatus = comp?.status || clientRes.data.status || 'PENDING_APPROVAL';
-        activeRoles.push({
-          role: 'CLIENT',
-          profile: {
-            name: clientRes.data.full_name,
-            email: clientRes.data.email,
-            company: comp?.company_name || 'Client Enterprise',
-            clientId: comp?.id || clientRes.data.client_company_id || clientRes.data.id,
-            clientCode: comp?.client_code,
+        const rawCompStatus = comp?.status || clientRes.data.status || 'PENDING_APPROVAL';
+        const compStatus = rawCompStatus === 'APPROVED' || rawCompStatus === 'ACTIVE'
+          ? 'APPROVED'
+          : rawCompStatus === 'INACTIVE'
+          ? 'INACTIVE'
+          : rawCompStatus;
+        const clientMissing: string[] = [];
+        if (!comp?.company_name) clientMissing.push('Company Name');
+        if (!comp?.pan && !comp?.gstin) clientMissing.push('PAN / GSTIN');
+        if (!comp?.registered_address) clientMissing.push('Registered Address');
+        const isClientApproved = compStatus === 'APPROVED';
+        const isClientComplete = isClientApproved || (clientMissing.length === 0 && compStatus !== 'INACTIVE');
+
+        if (!activeRoles.some((r) => r.role === 'CLIENT')) {
+          activeRoles.push({
+            role: 'CLIENT',
+            profile: {
+              name: clientRes.data.full_name,
+              fullName: clientRes.data.full_name,
+              email: clientRes.data.email,
+              company: comp?.company_name || 'Client Enterprise',
+              companyName: comp?.company_name || 'Client Enterprise',
+              clientId: comp?.id || clientRes.data.client_company_id || clientRes.data.id,
+              companyId: comp?.id || clientRes.data.client_company_id || clientRes.data.id,
+              clientCode: comp?.client_code,
+              status: compStatus,
+              rejectionReason: comp?.rejection_reason,
+              correctionNotes: comp?.correction_notes,
+              mobile: cleanPhone,
+            },
             status: compStatus,
-            rejectionReason: comp?.rejection_reason,
-            correctionNotes: comp?.correction_notes,
-          },
-          status: compStatus,
-        });
+            isComplete: isClientComplete,
+            missingFields: clientMissing,
+            nextStep: clientMissing.length > 0 ? 'CLIENT_BUSINESS_DETAILS' : 'CLIENT_DOC_UPLOAD',
+          });
+        }
       }
 
       if (vendorRes.data && vendorRes.data.status !== 'DEACTIVATED') {
-        activeRoles.push({
-          role: 'VENDOR',
-          profile: {
-            name: vendorRes.data.full_name || vendorRes.data.vendor_companies?.vendor_name,
-            email: vendorRes.data.email,
-            company: vendorRes.data.vendor_companies?.vendor_name,
-            vendorId: vendorRes.data.vendor_id || vendorRes.data.id,
-          },
-          status: vendorRes.data.vendor_companies?.status || 'ACTIVE',
-        });
+        const comp = vendorRes.data.vendor_companies;
+        const compStatus = comp?.status || 'PENDING';
+        const vendorMissing: string[] = [];
+        if (!comp?.vendor_name || comp.vendor_name === 'Active Registration') vendorMissing.push('Transporter Name');
+        if (!comp?.pan || comp.pan === 'NOT_PROVIDED' || comp.pan.length !== 10) vendorMissing.push('PAN');
+        if (!comp?.address) vendorMissing.push('Address');
+        const isVendorApproved = compStatus === 'APPROVED';
+        const isVendorComplete = isVendorApproved || (vendorMissing.length === 0 && compStatus !== 'INACTIVE');
+
+        if (!activeRoles.some((r) => r.role === 'VENDOR')) {
+          activeRoles.push({
+            role: 'VENDOR',
+            profile: {
+              name: vendorRes.data.full_name || comp?.vendor_name,
+              email: vendorRes.data.email,
+              company: comp?.vendor_name,
+              vendorId: comp?.id || vendorRes.data.vendor_id || vendorRes.data.id,
+            },
+            status: compStatus,
+            isComplete: isVendorComplete,
+            missingFields: vendorMissing,
+            nextStep: vendorMissing.includes('Transporter Name') || vendorMissing.includes('PAN')
+              ? 'VENDOR_BUSINESS_INFO'
+              : vendorMissing.includes('Address')
+              ? 'VENDOR_ADDRESS_CONTACT'
+              : 'VENDOR_FLEET_INFO',
+          });
+        }
+      } else if (!activeRoles.some((r) => r.role === 'VENDOR')) {
+        // Direct vendor_companies check if vendor_users record was not linked yet
+        const { data: directComp } = await supabase
+          .from('vendor_companies')
+          .select('*')
+          .or(`phone.eq.${cleanPhone},phone.eq.+91${cleanPhone}`)
+          .maybeSingle();
+        if (directComp && directComp.status !== 'DEACTIVATED') {
+          const compStatus = directComp.status || 'PENDING';
+          const vendorMissing: string[] = [];
+          if (!directComp.vendor_name || directComp.vendor_name === 'Active Registration') vendorMissing.push('Transporter Name');
+          if (!directComp.pan || directComp.pan === 'NOT_PROVIDED' || directComp.pan.length !== 10) vendorMissing.push('PAN');
+          if (!directComp.address) vendorMissing.push('Address');
+          const isVendorApproved = compStatus === 'APPROVED';
+          const isVendorComplete = isVendorApproved || (vendorMissing.length === 0 && compStatus !== 'INACTIVE');
+
+          activeRoles.push({
+            role: 'VENDOR',
+            profile: {
+              name: directComp.vendor_name,
+              company: directComp.vendor_name,
+              vendorId: directComp.id,
+            },
+            status: compStatus,
+            isComplete: isVendorComplete,
+            missingFields: vendorMissing,
+            nextStep: 'VENDOR_BUSINESS_INFO',
+          });
+        }
       }
 
       if (driverRes.data && driverRes.data.status !== 'DEACTIVATED') {
-        activeRoles.push({
-          role: 'DRIVER',
-          profile: {
-            id: driverRes.data.id,
-            name: driverRes.data.full_name || driverRes.data.name,
-            licenceNumber: driverRes.data.licence_number,
-          },
-          status: driverRes.data.status || 'ACTIVE',
-        });
+        const d = driverRes.data;
+        const driverStatus = d.status || 'PENDING';
+        const driverMissing: string[] = [];
+        if (!d.full_name || d.full_name === 'Registration in progress') driverMissing.push('Full Name');
+        if (!d.licence_number || d.licence_number.startsWith(`DL-${cleanPhone}`) || d.licence_number.includes('Pending')) {
+          driverMissing.push('Driving Licence');
+        }
+        if (!d.primary_vendor_id) driverMissing.push('Transporter Association');
+        const isDriverApproved = driverStatus === 'APPROVED';
+        const isDriverComplete = isDriverApproved || (driverMissing.length === 0 && driverStatus !== 'INACTIVE');
+
+        if (!activeRoles.some((r) => r.role === 'DRIVER')) {
+          activeRoles.push({
+            role: 'DRIVER',
+            profile: {
+              id: d.id,
+              name: d.full_name || d.name,
+              licenceNumber: d.licence_number,
+            },
+            status: driverStatus,
+            isComplete: isDriverComplete,
+            missingFields: driverMissing,
+            nextStep: 'DRIVER_REGISTRATION',
+          });
+        }
       }
     } catch (e) {
       console.warn('Supabase cross-role check notice:', e);
+    }
+
+    // 4. Prune stale local registry if DB returned nothing
+    if (activeRoles.length === 0) {
+      const registry = await this.getLocalRegistry();
+      const existingInRegistry = registry.find((u) => u.mobile === cleanPhone);
+      if (existingInRegistry) {
+        const filtered = registry.filter((u) => u.mobile !== cleanPhone);
+        await this.saveLocalRegistry(filtered);
+      }
     }
 
     if (activeRoles.length === 0) {
@@ -307,9 +480,31 @@ export const authService = {
         isRegistered: false,
         isRegisteredOtherRole: false,
         status: 'NOT_REGISTERED',
+        isRegistrationComplete: false,
+        profileCompletionStatus: 'INCOMPLETE',
+        missingFields: [],
         userProfile: null,
         message: 'You are not registered yet. Please register before logging in.',
       };
+    }
+
+    // Sync client local registry if approved
+    const matchedClientRole = activeRoles.find((r) => r.role === 'CLIENT');
+    if (matchedClientRole && (matchedClientRole.status === 'APPROVED' || matchedClientRole.status === 'ACTIVE')) {
+      try {
+        const registry = await this.getLocalRegistry();
+        const filtered = registry.filter((u) => u.mobile !== cleanPhone);
+        filtered.unshift({
+          mobile: cleanPhone,
+          role: 'CLIENT',
+          fullName: matchedClientRole.profile?.fullName || matchedClientRole.profile?.name || 'Registered Client',
+          email: matchedClientRole.profile?.email,
+          companyName: matchedClientRole.profile?.companyName || matchedClientRole.profile?.company,
+          status: 'APPROVED',
+          registeredAt: new Date().toISOString(),
+        });
+        await this.saveLocalRegistry(filtered);
+      } catch {}
     }
 
     if (requestedRole) {
@@ -321,6 +516,10 @@ export const authService = {
           isRegisteredOtherRole: false,
           otherRole: undefined,
           status: matched.status,
+          isRegistrationComplete: matched.isComplete ?? true,
+          profileCompletionStatus: (matched.isComplete ?? true) ? 'COMPLETE' : 'INCOMPLETE',
+          missingFields: matched.missingFields ?? [],
+          nextStep: matched.nextStep,
           userProfile: matched.profile,
           message: `Registered as ${matched.role}`,
         };
@@ -332,6 +531,10 @@ export const authService = {
           isRegisteredOtherRole: true,
           otherRole: other.role,
           status: other.status,
+          isRegistrationComplete: other.isComplete ?? true,
+          profileCompletionStatus: (other.isComplete ?? true) ? 'COMPLETE' : 'INCOMPLETE',
+          missingFields: other.missingFields ?? [],
+          nextStep: other.nextStep,
           userProfile: other.profile,
           message: `This mobile number is registered under the ${other.role} role. Please select the correct role or complete the appropriate registration process.`,
         };
@@ -345,6 +548,10 @@ export const authService = {
       isRegisteredOtherRole: false,
       otherRole: undefined,
       status: first.status,
+      isRegistrationComplete: first.isComplete ?? true,
+      profileCompletionStatus: (first.isComplete ?? true) ? 'COMPLETE' : 'INCOMPLETE',
+      missingFields: first.missingFields ?? [],
+      nextStep: first.nextStep,
       userProfile: first.profile,
       message: `Registered as ${first.role}`,
     };
@@ -486,7 +693,7 @@ export const authService = {
     const check = await this.checkMobileRegistration(cleanPhone, data.role);
     if (check.isRegisteredOtherRole && check.status !== 'DEACTIVATED') {
       throw new Error(
-        `WRONG_ROLE_REGISTERED: This mobile number is already registered under the ${check.otherRole} role.\n\nTo register as a ${data.role}, an NECL Administrator must verify and deactivate/delete your previous ${check.otherRole} account first.`
+        `WRONG_ROLE_REGISTERED: This mobile number is already registered under the ${check.otherRole} role.\n\nTo register as a ${data.role}, an TRUCKS Administrator must verify and deactivate/delete your previous ${check.otherRole} account first.`
       );
     }
     if (check.isRegistered && check.status !== 'DEACTIVATED') {
@@ -501,7 +708,7 @@ export const authService = {
         ? `${trimmedName} Enterprise`
         : data.role === 'VENDOR'
         ? `${trimmedName} Logistics`
-        : 'NECL Logistics Fleet';
+        : 'TRUCKS Logistics Fleet';
 
     // 1. Immediately persist to database (Supabase)
     try {
@@ -616,7 +823,347 @@ export const authService = {
     };
   },
 
+  // ─── 0.7 Ensure Initial Draft Registration in Database & Registry ──────────
+  async ensureInitialRegistrationDraft(
+    role: MobileRole,
+    mobile: string,
+    initialData?: { fullName?: string; email?: string; companyName?: string }
+  ): Promise<{ success: boolean; userId: string }> {
+    const cleanPhone = mobile.replace(/[^0-9]/g, '').slice(-10);
+    if (cleanPhone.length !== 10) {
+      return { success: false, userId: '' };
+    }
+
+    try {
+      await ensureMobileSession().catch(() => {});
+
+      if (role === 'CLIENT') {
+        const { data: existingUser } = await supabase
+          .from('client_users')
+          .select('id, client_company_id, status')
+          .or(`mobile.eq.${cleanPhone},mobile.eq.+91${cleanPhone}`)
+          .maybeSingle();
+
+        if (!existingUser) {
+          const compName = initialData?.companyName || 'Active Registration (Pending Details)';
+          const { data: comp } = await supabase
+            .from('client_companies')
+            .insert([
+              {
+                company_name: compName,
+                status: 'INACTIVE',
+                registered_address: 'Operational Logistics Hub',
+                city: 'Guwahati',
+                pincode: '781001',
+              },
+            ])
+            .select()
+            .maybeSingle();
+
+          const compId = comp?.id || `comp-${cleanPhone}`;
+          await supabase.from('client_users').insert([
+            {
+              client_company_id: compId,
+              full_name: initialData?.fullName || 'Active Registration',
+              mobile: cleanPhone,
+              email: initialData?.email || `${cleanPhone}@neclclient.in`,
+              status: 'INACTIVE',
+            },
+          ]);
+        }
+      } else if (role === 'VENDOR') {
+        const { data: existingUser } = await supabase
+          .from('vendor_users')
+          .select('id, vendor_id')
+          .or(`mobile.eq.${cleanPhone},mobile.eq.+91${cleanPhone}`)
+          .maybeSingle();
+
+        if (!existingUser) {
+          const compName = initialData?.companyName || 'Active Registration (Pending Details)';
+          const { data: vComp } = await supabase
+            .from('vendor_companies')
+            .insert([
+              {
+                vendor_name: compName,
+                phone: cleanPhone,
+                status: 'INACTIVE',
+                is_verified: false,
+                is_profile_completed: false,
+                address: 'Regional Freight Corridor Hub',
+              },
+            ])
+            .select()
+            .maybeSingle();
+
+          const vId = vComp?.id || `ven-${cleanPhone}`;
+          await supabase.from('vendor_users').insert([
+            {
+              vendor_id: vId,
+              full_name: initialData?.fullName || 'Active Registration',
+              mobile: cleanPhone,
+              email: initialData?.email || `${cleanPhone}@neclvendor.in`,
+              status: 'INACTIVE',
+            },
+          ]);
+        }
+      } else if (role === 'DRIVER') {
+        const { data: existingDriver } = await supabase
+          .from('drivers')
+          .select('id, status')
+          .or(`mobile.eq.${cleanPhone},phone.eq.${cleanPhone}`)
+          .maybeSingle();
+
+        if (!existingDriver) {
+          await supabase.from('drivers').insert([
+            {
+              full_name: initialData?.fullName || 'Registration in progress',
+              mobile: cleanPhone,
+              licence_number: `DL-${cleanPhone.slice(-4)}-PENDING`,
+              licence_expiry_date: '2028-12-31',
+              status: 'INACTIVE',
+            },
+          ]);
+        }
+      }
+
+      // Record in local registry
+      const registry = await this.getLocalRegistry();
+      const existingIdx = registry.findIndex((u) => u.mobile === cleanPhone);
+      const draftRecord: RegisteredUserRecord = {
+        mobile: cleanPhone,
+        role,
+        fullName: initialData?.fullName || 'Active Registration',
+        email: initialData?.email,
+        companyName: initialData?.companyName || (role === 'CLIENT' ? 'Client Enterprise' : role === 'VENDOR' ? 'Transport Firm' : 'Commercial Driver'),
+        status: 'INACTIVE',
+        registeredAt: new Date().toISOString(),
+      };
+
+      if (existingIdx >= 0) {
+        registry[existingIdx] = { ...registry[existingIdx], ...draftRecord };
+      } else {
+        registry.unshift(draftRecord);
+      }
+      await this.saveLocalRegistry(registry);
+      invalidateRoleCheckCache(cleanPhone);
+
+      return { success: true, userId: `${role.toLowerCase()}-${cleanPhone}` };
+    } catch (e) {
+      console.warn('ensureInitialRegistrationDraft notice:', e);
+      return { success: false, userId: '' };
+    }
+  },
+
+  // ─── 0.8 Check Comprehensive Registration Completion Status ───────────────
+  async checkRegistrationCompletion(
+    role: MobileRole,
+    mobile: string,
+    userProfile?: any
+  ): Promise<{
+    isComplete: boolean;
+    accountStatus: string;
+    profileCompletionStatus: 'COMPLETE' | 'INCOMPLETE';
+    missingFields: string[];
+    nextScreen: ScreenId;
+    resumedData?: any;
+    message?: string;
+  }> {
+    const cleanPhone = mobile.replace(/[^0-9]/g, '').slice(-10);
+
+    // Call backend API if available for atomic evaluation
+    try {
+      const apiRes = await callBackendApi<any>(`/auth/registration-status?mobile=${cleanPhone}&role=${role}`);
+      if (apiRes && apiRes.success) {
+        let fallbackScreen: ScreenId = role === 'CLIENT' ? 'CLIENT_DASHBOARD' : role === 'VENDOR' ? 'VENDOR_DASHBOARD' : 'DRIVER_DASHBOARD';
+        if (!apiRes.isRegistrationComplete) {
+          fallbackScreen = (apiRes.nextStep as ScreenId) || (role === 'CLIENT' ? 'CLIENT_BUSINESS_DETAILS' : role === 'VENDOR' ? 'VENDOR_REGISTRATION' : 'DRIVER_REGISTRATION');
+        } else if (apiRes.accountStatus !== 'APPROVED' && apiRes.accountStatus !== 'ACTIVE') {
+          fallbackScreen = role === 'CLIENT' ? 'REGISTRATION_STATUS' : role === 'VENDOR' ? 'VENDOR_VERIFICATION_STATUS' : 'DRIVER_VERIFICATION_STATUS';
+        }
+
+        return {
+          isComplete: apiRes.isRegistrationComplete ?? true,
+          accountStatus: apiRes.accountStatus || 'ACTIVE',
+          profileCompletionStatus: apiRes.profileCompletionStatus || (apiRes.isRegistrationComplete ? 'COMPLETE' : 'INCOMPLETE'),
+          missingFields: apiRes.missingFields || [],
+          nextScreen: fallbackScreen,
+          resumedData: apiRes.userProfile,
+          message: apiRes.message,
+        };
+      }
+    } catch {}
+
+    if (role === 'CLIENT') {
+      const { clientService } = require('./clientService');
+      const statusRes = await clientService.getClientAccountStatus(cleanPhone, true);
+      const isApproved = statusRes.status === 'APPROVED' || (statusRes as any).status === 'ACTIVE';
+
+      if (isApproved) {
+        return {
+          isComplete: true,
+          accountStatus: 'APPROVED',
+          profileCompletionStatus: 'COMPLETE',
+          missingFields: [],
+          nextScreen: 'CLIENT_DASHBOARD',
+        };
+      }
+
+      const resumed = await clientService.loadClientRegistrationData(cleanPhone);
+      const missing: string[] = statusRes.incompleteFields || [];
+      const isComplete = (!statusRes.incompleteFields || statusRes.incompleteFields.length === 0) && statusRes.status !== 'INACTIVE';
+
+      if (isComplete) {
+        return {
+          isComplete: true,
+          accountStatus: statusRes.status || 'PENDING_APPROVAL',
+          profileCompletionStatus: 'COMPLETE',
+          missingFields: [],
+          nextScreen: 'REGISTRATION_STATUS',
+          resumedData: resumed,
+        };
+      }
+
+      // Determine next registration step to resume
+      let nextScreen: ScreenId = 'CLIENT_PROFILE';
+      if (!resumed?.profileData?.fullName) {
+        nextScreen = 'CLIENT_PROFILE';
+      } else if (!resumed?.businessDetails?.companyName || !resumed?.businessDetails?.pan || !resumed?.businessDetails?.pincode) {
+        nextScreen = 'CLIENT_BUSINESS_DETAILS';
+      } else if (!resumed?.documents || resumed.documents.length === 0) {
+        nextScreen = 'CLIENT_DOC_UPLOAD';
+      } else {
+        nextScreen = 'CLIENT_REG_REVIEW';
+      }
+
+      return {
+        isComplete: false,
+        accountStatus: statusRes.status || 'INACTIVE',
+        profileCompletionStatus: 'INCOMPLETE',
+        missingFields: missing.length > 0 ? missing : ['Business Details', 'KYC Documents'],
+        nextScreen,
+        resumedData: resumed,
+        message: 'Registration incomplete. Please resume and complete missing profile details.',
+      };
+    }
+
+    if (role === 'VENDOR') {
+      const { vendorService } = require('./vendorService');
+      const vId = userProfile?.vendorId || userProfile?.id;
+      const statusRes = await vendorService.getVendorVerificationStatus(vId, cleanPhone);
+
+      if (statusRes.status === 'APPROVED') {
+        return {
+          isComplete: true,
+          accountStatus: 'APPROVED',
+          profileCompletionStatus: 'COMPLETE',
+          missingFields: [],
+          nextScreen: 'VENDOR_DASHBOARD',
+        };
+      }
+
+      const resumed = await vendorService.loadAuthenticatedVendorRegistration(vId, cleanPhone);
+      const validation = vendorService.validateVendorRegistrationData(resumed, resumed?.documents);
+      
+      const missing: string[] = [];
+      for (const step of validation.incompleteSteps) {
+        missing.push(...step.missingFields);
+      }
+
+      const isComplete = validation.isAllComplete && statusRes.status !== 'INACTIVE';
+
+      if (isComplete) {
+        return {
+          isComplete: true,
+          accountStatus: statusRes.status || 'PENDING',
+          profileCompletionStatus: 'COMPLETE',
+          missingFields: [],
+          nextScreen: 'VENDOR_VERIFICATION_STATUS',
+          resumedData: resumed,
+        };
+      }
+
+      // Determine the first incomplete step to resume
+      const nextScreen: ScreenId = validation.firstIncompleteStep?.screenId || 'VENDOR_APPLICATION_REVIEW';
+
+      return {
+        isComplete: false,
+        accountStatus: statusRes.status || 'INACTIVE',
+        profileCompletionStatus: 'INCOMPLETE',
+        missingFields: missing.length > 0 ? missing : ['Vendor Profile Details'],
+        nextScreen,
+        resumedData: resumed,
+        message: 'Vendor registration incomplete. Please resume and complete required onboarding information.',
+      };
+    }
+
+    if (role === 'DRIVER') {
+      const { driverService } = require('./driverService');
+      const dId = userProfile?.driverId || userProfile?.id;
+      const profile = await driverService.getDriverProfile(dId, cleanPhone);
+
+      if (profile && profile.status === 'APPROVED') {
+        return {
+          isComplete: true,
+          accountStatus: 'APPROVED',
+          profileCompletionStatus: 'COMPLETE',
+          missingFields: [],
+          nextScreen: 'DRIVER_DASHBOARD',
+        };
+      }
+
+      const resumed = await driverService.loadAuthenticatedDriverRegistration(dId, cleanPhone);
+      const missing: string[] = [];
+      if (!resumed?.fullName || resumed?.fullName === 'Registration in progress') {
+        missing.push('Full Name');
+      }
+      if (!resumed?.licenceNumber || resumed.licenceNumber.includes('PENDING') || resumed.licenceNumber.startsWith(`DL-${cleanPhone}`)) {
+        missing.push('Valid Driving Licence');
+      }
+      if (!resumed?.transporterId) {
+        missing.push('Transporter Association');
+      }
+      if (!resumed?.documents || resumed.documents.length === 0) {
+        missing.push('Licence / KYC Document');
+      }
+
+      const isComplete = missing.length === 0 && profile?.status !== 'INACTIVE';
+
+      if (isComplete) {
+        return {
+          isComplete: true,
+          accountStatus: profile?.status || 'PENDING',
+          profileCompletionStatus: 'COMPLETE',
+          missingFields: [],
+          nextScreen: 'DRIVER_VERIFICATION_STATUS',
+          resumedData: resumed,
+        };
+      }
+
+      return {
+        isComplete: false,
+        accountStatus: profile?.status || 'INACTIVE',
+        profileCompletionStatus: 'INCOMPLETE',
+        missingFields: missing,
+        nextScreen: 'DRIVER_REGISTRATION',
+        resumedData: resumed,
+        message: 'Driver registration incomplete. Please resume and complete driving licence and documents.',
+      };
+    }
+
+    return {
+      isComplete: true,
+      accountStatus: 'ACTIVE',
+      profileCompletionStatus: 'COMPLETE',
+      missingFields: [],
+      nextScreen: 'LOGIN',
+    };
+  },
+
   // ─── 1. Check Existing Active Session ──────────────────────────────────────
+  async getCurrentSession(): Promise<AuthSessionData | null> {
+    return this.checkExistingSession();
+  },
+
   async checkExistingSession(): Promise<AuthSessionData | null> {
     try {
       const stored = await AsyncStorage.getItem(SESSION_STORAGE_KEY);
@@ -628,17 +1175,14 @@ export const authService = {
       const cleanPhone = parsed.mobile.replace(/[^0-9]/g, '').slice(-10);
       const reg = await this.checkMobileRegistration(cleanPhone, parsed.role);
       if (!reg.isRegistered || reg.status === 'DEACTIVATED') {
-        // Stale or deleted user session -> wipe local session
+        // Stale or deleted user session -> wipe local session and cached data
         await this.clearSession();
+        await this.resetAllLocalData();
         return null;
       }
 
-      // Strict enforcement: CLIENT accounts MUST have APPROVED status to have active operational session
+      // Update session attributes without wiping pending/inactive sessions
       if (parsed.role === 'CLIENT') {
-        if (reg.status !== 'APPROVED' && reg.status !== 'ACTIVE') {
-          await this.clearSession();
-          return null;
-        }
         if (reg.userProfile?.clientId) {
           parsed.userId = reg.userProfile.clientId;
         }
@@ -646,6 +1190,8 @@ export const authService = {
           parsed.companyName = reg.userProfile.company;
         }
       }
+      parsed.accountStatus = reg.status;
+      parsed.isRegistrationComplete = reg.isRegistrationComplete;
 
       return parsed;
     } catch {
@@ -656,14 +1202,7 @@ export const authService = {
   // ─── 1.1 Complete Local Storage Reset ──────────────────────────────────────
   async resetAllLocalData(): Promise<void> {
     try {
-      await AsyncStorage.multiRemove([
-        SESSION_STORAGE_KEY,
-        USER_REGISTRY_KEY,
-        ROLE_DEACTIVATION_REQUESTS_KEY,
-        '@necl_vendor_registration_draft',
-        '@necl_driver_registration_draft',
-        '@necl_client_saved_addresses',
-      ]);
+      await AsyncStorage.clear();
     } catch (e) {
       console.warn('Failed to reset local data:', e);
     }
@@ -826,7 +1365,7 @@ export const authService = {
           success: true,
           message: apiRes.message || `OTP sent successfully to +91 ${cleanPhone}`,
           expiresInSeconds: apiRes.expiresInSeconds || 300,
-          testCode: apiRes.testCode || '123456',
+          testCode: apiRes.testCode || '12345',
         };
       }
     } catch (apiErr: any) {
@@ -843,14 +1382,15 @@ export const authService = {
     }
 
     // 3. Fallback: Supabase direct OTP log
-    const mockCode = process.env.EXPO_PUBLIC_MOCK_OTP_CODE || '123456';
+    const mockCode = process.env.EXPO_PUBLIC_MOCK_OTP_CODE || '12345';
     const isTestingMode = process.env.NODE_ENV !== 'production' || (typeof __DEV__ !== 'undefined' && __DEV__);
-    const generatedOtp = isTestingMode ? mockCode : Math.floor(100000 + Math.random() * 900000).toString();
+    const generatedOtp = isTestingMode ? mockCode : Math.floor(10000 + Math.random() * 90000).toString();
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
     try {
       const { error: insertErr } = await supabase.from('otp_verifications').insert([
         {
+          mobile: cleanPhone,
           phone_number: cleanPhone,
           country_code: '+91',
           otp_code: generatedOtp,
@@ -907,6 +1447,10 @@ export const authService = {
     userProfile?: any;
     token?: string;
     accountStatus?: string;
+    isRegistrationComplete?: boolean;
+    profileCompletionStatus?: 'COMPLETE' | 'INCOMPLETE';
+    missingFields?: string[];
+    nextStep?: string;
     roleConflict?: boolean;
     previousRole?: MobileRole;
     notRegistered?: boolean;
@@ -914,8 +1458,8 @@ export const authService = {
     const cleanPhone = phoneNumber.replace(/[^0-9]/g, '').slice(-10);
     const trimmedCode = enteredCode.trim();
 
-    if (trimmedCode.length !== 6) {
-      throw new Error('Please enter complete 6-digit verification code.');
+    if (trimmedCode.length !== 5 && trimmedCode.length !== 6) {
+      throw new Error('Please enter complete 5-digit verification code.');
     }
 
     // 1. Try Backend API verify-otp first
@@ -950,15 +1494,23 @@ export const authService = {
             isExistingUser: true,
             existingRole: requestedRole,
             accountStatus: apiRes.accountStatus || 'ACTIVE',
+            isRegistrationComplete: apiRes.isRegistrationComplete,
+            profileCompletionStatus: apiRes.profileCompletionStatus,
+            missingFields: apiRes.missingFields,
+            nextStep: apiRes.nextStep,
             userProfile: apiRes.userProfile,
             token: apiRes.token,
           };
         } else {
           return {
             success: true,
-            isExistingUser: false,
+            isExistingUser: apiRes.isExistingUser || false,
             existingRole: requestedRole,
-            accountStatus: 'NEW_USER',
+            accountStatus: apiRes.accountStatus || 'NEW_USER',
+            isRegistrationComplete: apiRes.isRegistrationComplete,
+            profileCompletionStatus: apiRes.profileCompletionStatus,
+            missingFields: apiRes.missingFields,
+            nextStep: apiRes.nextStep,
             userProfile: null,
           };
         }
@@ -987,7 +1539,7 @@ export const authService = {
       const { data: records, error } = await supabase
         .from('otp_verifications')
         .select('*')
-        .eq('phone_number', cleanPhone)
+        .or(`phone_number.eq.${cleanPhone},mobile.eq.${cleanPhone}`)
         .eq('is_verified', false)
         .gte('expires_at', new Date().toISOString())
         .order('created_at', { ascending: false })
@@ -1007,10 +1559,10 @@ export const authService = {
       console.warn('Supabase OTP check fallback notice:', dbErr);
     }
 
-    // Direct Mock OTP 123456 check for testing
-    const mockCode = process.env.EXPO_PUBLIC_MOCK_OTP_CODE || '123456';
+    // Direct Mock OTP 12345 check for testing
+    const mockCode = process.env.EXPO_PUBLIC_MOCK_OTP_CODE || '12345';
     const isTestingMode = process.env.NODE_ENV !== 'production' || (typeof __DEV__ !== 'undefined' && __DEV__);
-    if (!isCodeValid && isTestingMode && (trimmedCode === '123456' || trimmedCode === mockCode)) {
+    if (!isCodeValid && isTestingMode && (trimmedCode === '12345' || trimmedCode === mockCode)) {
       isCodeValid = true;
     }
 
@@ -1041,44 +1593,44 @@ export const authService = {
 
     if (regCheck.isRegistered && regCheck.status !== 'DEACTIVATED') {
       const resolvedUserId = existingRole === 'CLIENT'
-        ? (userProfile?.clientId || `cli-${cleanPhone}`)
+        ? (userProfile?.clientId || userProfile?.companyId || userProfile?.id || `cli-${cleanPhone}`)
         : existingRole === 'DRIVER'
         ? (userProfile?.id || `drv-${cleanPhone}`)
         : (userProfile?.vendorId || `ven-${cleanPhone}`);
 
-      const accountStatus = regCheck.status || 'ACTIVE';
+      const rawStatus = regCheck.status || 'INACTIVE';
+      const accountStatus = rawStatus === 'APPROVED' || rawStatus === 'ACTIVE' ? 'APPROVED' : rawStatus;
 
-      // For clients, ONLY create/save session if APPROVED or ACTIVE!
-      if (existingRole === 'CLIENT') {
-        if (accountStatus === 'APPROVED' || accountStatus === 'ACTIVE') {
-          await this.saveSession({
-            userId: resolvedUserId,
-            mobile: cleanPhone,
-            role: 'CLIENT',
-            fullName: userProfile?.name || 'Authorized Client',
-            companyName: userProfile?.company,
-            token: 'sess-client-' + Date.now(),
-            createdAt: new Date().toISOString(),
-          });
-        }
-      } else {
-        await this.saveSession({
-          userId: resolvedUserId,
-          mobile: cleanPhone,
-          role: existingRole!,
-          fullName: userProfile?.name || 'Authorized User',
-          companyName: userProfile?.company,
-          token: 'sess-' + Date.now(),
-          createdAt: new Date().toISOString(),
-        });
-      }
+      // Always save session for authenticated user regardless of whether approved, pending or inactive
+      await this.saveSession({
+        userId: resolvedUserId,
+        mobile: cleanPhone,
+        role: existingRole!,
+        fullName: userProfile?.fullName || userProfile?.name || 'Authorized User',
+        companyName: userProfile?.companyName || userProfile?.company || (existingRole === 'CLIENT' ? 'Client Enterprise' : 'Transport Firm'),
+        token: 'sess-' + existingRole!.toLowerCase() + '-' + Date.now(),
+        createdAt: new Date().toISOString(),
+      });
 
       return {
         success: true,
         isExistingUser: true,
         existingRole,
         accountStatus,
-        userProfile,
+        isRegistrationComplete: regCheck.isRegistrationComplete,
+        profileCompletionStatus: regCheck.profileCompletionStatus,
+        missingFields: regCheck.missingFields,
+        nextStep: regCheck.nextStep,
+        userProfile: {
+          ...userProfile,
+          clientId: resolvedUserId,
+          companyId: resolvedUserId,
+          name: userProfile?.fullName || userProfile?.name || 'Authorized User',
+          fullName: userProfile?.fullName || userProfile?.name || 'Authorized User',
+          company: userProfile?.companyName || userProfile?.company || (existingRole === 'CLIENT' ? 'Client Enterprise' : 'Transport Firm'),
+          companyName: userProfile?.companyName || userProfile?.company || (existingRole === 'CLIENT' ? 'Client Enterprise' : 'Transport Firm'),
+          status: accountStatus,
+        },
       } as any;
     }
 
@@ -1305,18 +1857,83 @@ export const authService = {
     }
   },
 
-  // ─── 12. Fetch Real Notifications ─────────────────────────────────────────
-  async fetchRealNotifications(): Promise<any[]> {
+  // ─── 11.1 Custom User Notifications Persistence ──────────────────────────
+  async getUserCustomNotifications(userKey?: string): Promise<any[]> {
     try {
+      const cleanKey = (userKey || 'common').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const stored = await AsyncStorage.getItem(`@necl_user_custom_notifs_${cleanKey}`);
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  async appendUserCustomNotification(notification: any, userKey?: string): Promise<void> {
+    try {
+      const cleanKey = (userKey || 'common').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const list = await this.getUserCustomNotifications(cleanKey);
+      // Prevent duplicates by ID (ensures 'once add that' property)
+      const filtered = list.filter((n: any) => n.id !== notification.id);
+      filtered.unshift(notification);
+      // Keep up to 30 notifications
+      await AsyncStorage.setItem(
+        `@necl_user_custom_notifs_${cleanKey}`,
+        JSON.stringify(filtered.slice(0, 30))
+      );
+    } catch (e) {
+      console.warn('Failed to append custom notification:', e);
+    }
+  },
+
+  // ─── 12. Fetch Real Notifications ─────────────────────────────────────────
+  async fetchRealNotifications(clientId?: string): Promise<any[]> {
+    try {
+      // If no clientId passed, try getting current session user
+      let targetClientId = clientId;
+      if (!targetClientId) {
+        const session = await this.getCurrentSession();
+        targetClientId = session?.userId;
+      }
+
+      let targetCompanyId = targetClientId;
+      if (targetClientId && targetClientId.includes('-')) {
+        const { data: userRec } = await supabase
+          .from('client_users')
+          .select('client_id, client_company_id')
+          .eq('id', targetClientId)
+          .maybeSingle();
+        if (userRec?.client_id || userRec?.client_company_id) {
+          targetCompanyId = userRec.client_id || userRec.client_company_id;
+        }
+      }
+
+      let reqsQuery = supabase.from('requirements').select('*').order('created_at', { ascending: false }).limit(6);
+      let boksQuery = supabase.from('bookings').select('*').order('created_at', { ascending: false }).limit(6);
+
+      if (targetCompanyId) {
+        reqsQuery = reqsQuery.or(`client_id.eq.${targetCompanyId},client_id.eq.${targetClientId}`);
+        boksQuery = boksQuery.or(`client_id.eq.${targetCompanyId},client_id.eq.${targetClientId}`);
+      }
+
       const [
         { data: reqs },
         { data: boks },
-        { data: trips },
       ] = await Promise.all([
-        supabase.from('requirements').select('*').order('created_at', { ascending: false }).limit(6),
-        supabase.from('bookings').select('*').order('created_at', { ascending: false }).limit(6),
-        supabase.from('trips').select('*, vehicles(registration_number)').order('created_at', { ascending: false }).limit(6),
+        reqsQuery,
+        boksQuery,
       ]);
+
+      const bookingIds = (boks || []).map((b) => b.id);
+      let trips: any[] = [];
+      if (bookingIds.length > 0) {
+        const { data: tripsData } = await supabase
+          .from('trips')
+          .select('*, vehicles(registration_number)')
+          .in('booking_id', bookingIds)
+          .order('created_at', { ascending: false })
+          .limit(6);
+        trips = tripsData || [];
+      }
 
       const items: any[] = [];
 
@@ -1346,7 +1963,7 @@ export const authService = {
           isRead: !isPending,
           isImportant: isPending,
           refId: b.id,
-          content: `Consignment booking ${b.booking_number || b.id} has been registered into the NECL central brokerage system.`,
+          content: `Consignment booking ${b.booking_number || b.id} has been registered into the TRUCKS central brokerage system.`,
         });
       });
 
@@ -1360,11 +1977,17 @@ export const authService = {
           isRead: true,
           isImportant: false,
           refId: r.id,
-          content: `Freight requirement for ${r.material_type || 'Cargo'} between ${r.pickup_address} and ${r.destination_address} is logged in NECL dispatch.`,
+          content: `Freight requirement for ${r.material_type || 'Cargo'} between ${r.pickup_address} and ${r.destination_address} is logged in TRUCKS dispatch.`,
         });
       });
 
-      return items;
+      // Retrieve user-specific custom notifications (such as Welcome / Welcome Back alerts)
+      const currentSession = await this.getCurrentSession();
+      const userKey = targetClientId || currentSession?.mobile || currentSession?.userId || 'common';
+      const customItems = await this.getUserCustomNotifications(userKey);
+
+      // Prepend custom items at the top so user notices Welcome / alerts immediately
+      return [...customItems, ...items];
     } catch {
       return [];
     }
@@ -1414,7 +2037,7 @@ export const authService = {
     subject: string;
     message: string;
   }): Promise<{ success: boolean; ticketRef: string }> {
-    const refId = 'NECL-TKT-' + Math.floor(100000 + Math.random() * 900000);
+    const refId = 'TRK-TKT-' + Math.floor(100000 + Math.random() * 900000);
     try {
       await supabase.from('auth_audit_log').insert([
         {
@@ -1447,7 +2070,7 @@ export const authService = {
       });
       return !!res?.success;
     } catch (e) {
-      console.warn('Failed to register push token with NECL backend:', e);
+      console.warn('Failed to register push token with TRUCKS backend:', e);
       return false;
     }
   },

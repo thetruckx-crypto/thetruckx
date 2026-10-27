@@ -140,6 +140,28 @@ export const AdminUserManagement: React.FC = () => {
     fetchUsers();
   };
 
+  const handleDeleteAdminStaff = async (user: AdminUser) => {
+    if (!window.confirm(`Permanently delete admin account for ${user.name} (${user.email})?`)) return;
+    try {
+      const res = await apiFetch("/admin/delete-user", {
+        method: "POST",
+        body: JSON.stringify({
+          adminUserId: user.id,
+          role: "ADMIN",
+          reason: "Deleted by SuperAdmin from Admin Staff panel",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to delete admin user");
+      }
+      setUsers(prev => prev.filter(u => u.id !== user.id));
+      globalToast.success(`Admin user ${user.name} permanently deleted.`);
+    } catch (e: any) {
+      globalToast.error(e.message || "Failed to delete admin user");
+    }
+  };
+
   const handleApproveDeactivation = async (req: RoleDisputeRequest) => {
     try {
       await supabase
@@ -173,19 +195,35 @@ export const AdminUserManagement: React.FC = () => {
         .eq("id", req.id);
     } catch {}
 
-    const clean = req.mobile.replace(/\D/g, "").slice(-10);
     try {
-      if (req.current_role === "CLIENT") {
-        await supabase.from("client_users").delete().eq("mobile", clean);
-      } else if (req.current_role === "VENDOR") {
-        await supabase.from("vendor_users").delete().eq("mobile", clean);
-      } else if (req.current_role === "DRIVER") {
-        await supabase.from("drivers").delete().or(`mobile.eq.${clean},phone.eq.${clean}`);
+      const res = await apiFetch("/admin/delete-user", {
+        method: "POST",
+        body: JSON.stringify({
+          mobile: req.mobile,
+          role: req.current_role,
+          reason: `SuperAdmin Role Dispute Release: ${req.reason || 'User registered wrong role'}`,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to delete user via API");
       }
-    } catch {}
+    } catch (err: any) {
+      console.warn("delete-user API fallback:", err);
+      const clean = req.mobile.replace(/\D/g, "").slice(-10);
+      try {
+        if (req.current_role === "CLIENT") {
+          await supabase.from("client_users").delete().eq("mobile", clean);
+        } else if (req.current_role === "VENDOR") {
+          await supabase.from("vendor_users").delete().eq("mobile", clean);
+        } else if (req.current_role === "DRIVER") {
+          await supabase.from("drivers").delete().or(`mobile.eq.${clean},phone.eq.${clean}`);
+        }
+      } catch {}
+    }
 
     setDisputes(prev => prev.filter(d => d.id !== req.id));
-    setToast(`Incorrect account record for +91 ${req.mobile} deleted from database.`);
+    setToast(`Account +91 ${req.mobile} permanently deleted and released.`);
   };
 
   const handleManualRelease = async () => {
@@ -539,7 +577,7 @@ export const AdminUserManagement: React.FC = () => {
                       <td style={{ color: "#64748B", fontSize: "0.85rem" }}>
                         {new Date(user.created_at).toLocaleDateString()}
                       </td>
-                      <td style={{ textAlign: "center" }}>
+                      <td style={{ textAlign: "center", display: "flex", justifyContent: "center", gap: "8px" }}>
                         <button
                           onClick={() => toggleActive(user)}
                           style={{
@@ -552,6 +590,22 @@ export const AdminUserManagement: React.FC = () => {
                         >
                           {user.is_active ? "Deactivate" : "Activate"}
                         </button>
+                        {user.role !== "SUPER_ADMIN" && (
+                          <button
+                            onClick={() => handleDeleteAdminStaff(user)}
+                            style={{
+                              padding: "0.4rem 0.6rem",
+                              background: "#FEE2E2",
+                              color: "#DC2626",
+                              border: "none", borderRadius: "6px", cursor: "pointer",
+                              fontSize: "0.8rem", fontWeight: 600,
+                              display: "inline-flex", alignItems: "center", gap: "4px"
+                            }}
+                            title="Delete Admin User"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -633,7 +687,7 @@ export const AdminUserManagement: React.FC = () => {
             <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
               {[
                 { label: "Full Name *", key: "name", type: "text", ph: "John Doe" },
-                { label: "Email Address *", key: "email", type: "email", ph: "john@necl.in" },
+                { label: "Email Address *", key: "email", type: "email", ph: "john@trucks.in" },
                 { label: "Temporary Password *", key: "password", type: "password", ph: "••••••••" },
               ].map(({ label, key, type, ph }) => (
                 <div key={key}>

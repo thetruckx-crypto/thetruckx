@@ -1,0 +1,69 @@
+[
+  {
+    "mobile": "9864333333",
+    "role": "CLIENT",
+    "fullName": "Hemanta Kalita",
+    "email": "hemanta@namrup-fertilizers.in",
+    "companyName": "Namrup Chemical Supplies",
+    "status": "CORRECTIONS_REQUESTED",
+    "registeredAt": "2026-10-24T05:08:44.351Z"
+  },
+  {
+    "mobile": "9864222222",
+    "role": "CLIENT",
+    "fullName": "Pranjal Barua",
+    "email": "pranjal@kaziranga-organics.com",
+    "companyName": "Kaziranga Agro Industries Ltd",
+    "status": "APPROVED",
+    "registeredAt": "2026-10-24T05:08:41.866Z"
+  },
+  {
+    "mobile": "9864111111",
+    "role": "CLIENT",
+    "fullName": "Rajesh Agarwala",
+    "email": "rajesh@brahmaputratea.com",
+    "companyName": "Brahmaputra Tea Exporters Pvt Ltd",
+    "status": "APPROVED",
+    "registeredAt": "2026-10-24T05:08:37.390Z"
+  },
+  {
+    "mobile": "9000077777",
+    "role": "CLIENT",
+    "fullName": "Aarav Logistics",
+    "companyName": "Aarav Tea & Agro Enterprises",
+    "status": "APPROVED",
+    "registeredAt": "2026-10-24T05:06:25.887Z"
+  },
+  {
+    "mobile": "9444455555",
+    "role": "DRIVER",
+    "fullName": "Verified Heavy Driver",
+    "companyName": "Verified Heavy Driver Enterprise",
+    "status": "ACTIVE",
+    "registeredAt": "2026-10-24T05:06:19.713Z"
+  },
+  {
+    "mobile": "9333344444",
+    "role": "VENDOR",
+    "fullName": "Verified Vendor Carrier",
+    "companyName": "Verified Vendor Carrier Enterprise",
+    "status": "ACTIVE",
+    "registeredAt": "2026-10-24T05:06:17.820Z"
+  },
+  {
+    "mobile": "9222233333",
+    "role": "CLIENT",
+    "fullName": "Verified Client Shipper",
+    "companyName": "Verified Client Shipper Enterprise",
+    "status": "ACTIVE",
+    "registeredAt": "2026-10-24T05:06:16.064Z"
+  },
+  {
+    "mobile": "9111122222",
+    "role": "VENDOR",
+    "fullName": "Test Vendor Owner",
+    "companyName": "Test Vendor Transport",
+    "status": "ACTIVE",
+    "registeredAt": "2026-10-24T05:06:14.516Z"
+  }
+]

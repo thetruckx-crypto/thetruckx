@@ -30,11 +30,22 @@ import {
   ArrowDown,
   Check,
   Truck,
-  FileText
+  FileText,
+  Copy,
+  Smartphone,
+  Layers,
+  Trash2,
+  Bookmark,
+  Save,
 } from 'lucide-react';
-import { supabase } from '../../utils/supabase';
+import { supabase, ensureAdminSession } from '../../utils/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { formatDisplayId, generateDbNeclId } from '../../utils/idGenerator';
+import { pincodeService } from '../../services/pincodeService';
+import { EditVendorModal } from './EditVendorModal';
+import { apiFetch } from '../../utils/api';
+import { draftService, AdminRegistrationDraft } from '../../services/draftService';
+import { optimizeFileForUpload } from '../../utils/fileCompressor';
 
 export interface VendorCompany {
   id: string;
@@ -71,9 +82,9 @@ export interface VendorUser {
 }
 
 interface VendorDirectoryProps {
-  onNavigateToInvite: () => void;
+  onNavigateToInvite: (draftId?: string) => void;
   onNavigateToProfile: (id: string) => void;
-  initialTab?: 'all' | 'verified' | 'pending' | 'rejected' | 'inactive';
+  initialTab?: 'all' | 'verified' | 'pending' | 'rejected' | 'inactive' | 'drafts';
 }
 
 const DEFAULT_INDIAN_LOCATIONS = [
@@ -120,16 +131,86 @@ function formatVendorCode(id: string, createdAt?: string, vendorCode?: string | 
   return formatDisplayId('VD', id, createdAt);
 }
 
+function formatLocationLines(city?: string, state?: string, pincode?: string, address?: string) {
+  let line1 = '';
+  let line2 = '';
+
+  if (city && state) {
+    line1 = `${city},`;
+    line2 = pincode ? `${state} - ${pincode}` : state;
+  } else if (address) {
+    const parts = address.split(',').map((s) => s.trim()).filter(Boolean);
+    if (parts.length >= 2) {
+      line1 = parts[0] + ',';
+      line2 = parts.slice(1).join(', ');
+    } else {
+      line1 = address;
+      line2 = state ? (pincode ? `${state} - ${pincode}` : state) : '';
+    }
+  } else {
+    line1 = city ? `${city},` : 'Guwahati,';
+    line2 = state ? `${state} - ${pincode || '781014'}` : 'Assam - 781014';
+  }
+  return { line1, line2 };
+}
+
+function formatLastActivity(dateStr?: string) {
+  if (!dateStr) return { date: '—', time: '' };
+  try {
+    const d = new Date(dateStr);
+    const date = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    const time = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+    return { date, time };
+  } catch {
+    return { date: '—', time: '' };
+  }
+}
+
 export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
   onNavigateToInvite,
   onNavigateToProfile,
   initialTab = 'all',
 }) => {
-  const { hasPermission } = useAuth();
+  const { hasPermission, adminProfile } = useAuth();
   const canCreate = hasPermission('vendors', 'create');
   const canApprove = hasPermission('vendors', 'approve');
   const canReject = hasPermission('vendors', 'reject');
   const canExport = hasPermission('vendors', 'export');
+  const canDelete = hasPermission('vendors', 'delete') || adminProfile?.role === 'SUPER_ADMIN' || adminProfile?.role === 'ADMIN';
+
+  // Delete User state
+  const [deletingVendor, setDeletingVendor] = useState<VendorCompany | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteReason, setDeleteReason] = useState('');
+
+  const handleConfirmDeleteVendor = async () => {
+    if (!deletingVendor) return;
+    setDeleteLoading(true);
+    try {
+      const res = await apiFetch('/admin/delete-user', {
+        method: 'POST',
+        body: JSON.stringify({
+          companyId: deletingVendor.id,
+          mobile: deletingVendor.contact_phone,
+          role: 'VENDOR',
+          reason: deleteReason || 'Deleted by Administrator from Vendor Directory',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to delete vendor account');
+      }
+      setVendors((prev) => prev.filter((v) => v.id !== deletingVendor.id));
+      showToast(`Vendor "${deletingVendor.vendor_name}" and all associated data permanently deleted.`);
+      setDeletingVendor(null);
+      setDeleteReason('');
+    } catch (err: any) {
+      console.error('Delete vendor error:', err);
+      alert(`Error deleting vendor: ${err.message || 'Unknown error'}`);
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   // Core Data
   const [vendors, setVendors] = useState<VendorCompany[]>([]);
@@ -152,7 +233,7 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
   const [vendorTypeFilter, setVendorTypeFilter] = useState('all');
   const [locationFilter, setLocationFilter] = useState('all');
   const [serviceFilter, setServiceFilter] = useState('all');
-  const [activeTab, setActiveTab] = useState<'all' | 'verified' | 'pending' | 'rejected' | 'inactive'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'all' | 'verified' | 'pending' | 'rejected' | 'inactive' | 'drafts'>(initialTab);
 
   // Sorting
   const [sortField, setSortField] = useState<'vendor_name' | 'id' | 'location' | 'status' | 'created_at'>('created_at');
@@ -167,10 +248,52 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
 
   // Dropdown Menus & Modals
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
+  const [menuAnchor, setMenuAnchor] = useState<{
+    id: string;
+    top?: number;
+    bottom?: number;
+    right: number;
+    isDropup: boolean;
+  } | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showColumnSettings, setShowColumnSettings] = useState(false);
   const [showAddVendorModal, setShowAddVendorModal] = useState(false);
   const [showEditVendorModal, setShowEditVendorModal] = useState(false);
   const [editingVendor, setEditingVendor] = useState<VendorCompany | null>(null);
+
+  const handleToggleActionMenu = (vendor: VendorCompany, e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    if (menuAnchor?.id === vendor.id) {
+      setMenuAnchor(null);
+      setOpenActionMenuId(null);
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const menuHeight = 280;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const isDropup = spaceBelow < menuHeight + 20;
+
+    setOpenActionMenuId(vendor.id);
+    setMenuAnchor({
+      id: vendor.id,
+      top: isDropup ? undefined : rect.bottom + 6,
+      bottom: isDropup ? window.innerHeight - rect.top + 6 : undefined,
+      right: Math.max(16, window.innerWidth - rect.right),
+      isDropup,
+    });
+  };
+
+  const handleCopyVendorId = (e: React.MouseEvent, idText: string) => {
+    e.stopPropagation();
+    try {
+      navigator.clipboard.writeText(idText);
+      setCopiedId(idText);
+      showToast(`Copied Vendor ID: ${idText}`);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch {
+      showToast(`Vendor ID: ${idText}`);
+    }
+  };
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
     title: string;
@@ -186,6 +309,8 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
     vendorType: true,
     contactPerson: true,
     location: true,
+    gstin: true,
+    panNumber: true,
     services: true,
     verificationStatus: true,
     accountStatus: true,
@@ -199,6 +324,43 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
     setTimeout(() => setToastMessage(null), 3800);
   };
 
+  // Vendor Drafts State
+  const [drafts, setDrafts] = useState<AdminRegistrationDraft[]>([]);
+  const [draftsLoading, setDraftsLoading] = useState(false);
+  const [draftToDelete, setDraftToDelete] = useState<AdminRegistrationDraft | null>(null);
+  const [isDeletingDraft, setIsDeletingDraft] = useState(false);
+
+  const fetchDrafts = useCallback(async () => {
+    setDraftsLoading(true);
+    try {
+      const data = await draftService.getDrafts('VENDOR');
+      setDrafts(data);
+    } catch (err: any) {
+      console.warn('Failed to fetch vendor drafts:', err);
+    } finally {
+      setDraftsLoading(false);
+    }
+  }, []);
+
+  const handleDeleteDraft = async (draftId: string) => {
+    setIsDeletingDraft(true);
+    try {
+      await draftService.deleteDraft(draftId);
+      setDrafts((prev) => prev.filter((d) => d.id !== draftId));
+      showToast('Vendor draft deleted successfully.');
+      setDraftToDelete(null);
+    } catch (err: any) {
+      console.error('Delete vendor draft failed:', err);
+      showToast(err.message || 'Failed to delete vendor draft.');
+    } finally {
+      setIsDeletingDraft(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDrafts();
+  }, [fetchDrafts]);
+
   useEffect(() => {
     setActiveTab(initialTab);
   }, [initialTab]);
@@ -209,19 +371,36 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
       if (columnMenuRef.current && !columnMenuRef.current.contains(event.target as Node)) {
         setShowColumnSettings(false);
       }
-      if (openActionMenuId && !(event.target as HTMLElement).closest('.action-menu-container')) {
+      if (menuAnchor && !(event.target as HTMLElement).closest('.action-menu-container') && !(event.target as HTMLElement).closest('.vendor-action-menu-dropdown')) {
         setOpenActionMenuId(null);
+        setMenuAnchor(null);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [openActionMenuId]);
+  }, [menuAnchor]);
+
+  // Close floating action menu on window scroll or resize to prevent dislocation
+  useEffect(() => {
+    if (!menuAnchor) return;
+    const handleClose = () => {
+      setMenuAnchor(null);
+      setOpenActionMenuId(null);
+    };
+    window.addEventListener('resize', handleClose);
+    window.addEventListener('scroll', handleClose, true);
+    return () => {
+      window.removeEventListener('resize', handleClose);
+      window.removeEventListener('scroll', handleClose, true);
+    };
+  }, [menuAnchor]);
 
   // Fetch Vendors and Users from Supabase
   const loadVendors = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
+      await ensureAdminSession();
       const { data: compData, error: compErr } = await supabase
         .from('vendor_companies')
         .select('*')
@@ -260,8 +439,8 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
           contact_name: primaryUser?.full_name || 'Primary Contact',
           contact_email: primaryUser?.email || '',
           contact_phone: primaryUser?.mobile || '',
-          city: city || 'Guwahati',
-          state: state || 'Assam',
+          city: city || (address ? address.split(',')[0].trim() : '—'),
+          state: state || '—',
           vendor_type: c.vendor_type || 'Fleet Owner',
           services: c.services || ['FTL', 'Container'],
         };
@@ -270,9 +449,9 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
       setVendors(enriched);
       setVendorUsers(rawUsers);
 
-      // Exact database counts
+      // Exact database counts - separate verification status from account status
       const totalCount = enriched.length;
-      const verifiedCount = enriched.filter((v) => v.status === 'APPROVED' || v.status === 'ACTIVE').length;
+      const verifiedCount = enriched.filter((v) => v.status === 'APPROVED').length;
       const pendingCount = enriched.filter((v) => v.status === 'PENDING' || v.status === 'PENDING_APPROVAL').length;
       const inactiveCount = enriched.filter((v) => v.status === 'INACTIVE' || v.status === 'REJECTED' || v.status === 'SUSPENDED').length;
 
@@ -422,7 +601,7 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
 
   const totalPages = Math.ceil(sortedVendors.length / pageSize) || 1;
 
-  // Handle Sort Change
+  // Handle Sort Change (supports handleSort('vendor_name'), handleSort('id'), handleSort('location'), handleSort('status'), handleSort('created_at'))
   const handleSort = (field: 'vendor_name' | 'id' | 'location' | 'status' | 'created_at') => {
     if (sortField === field) {
       setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
@@ -485,34 +664,36 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
       'Vendor ID',
       'Company Legal Name',
       'Vendor Type',
-      'GSTIN',
-      'PAN',
       'Primary Contact',
       'Mobile',
       'Email',
       'City',
       'State',
       'Address',
+      'GSTIN',
+      'PAN',
       'Services',
       'Verification Status',
-      'Created At',
+      'Account Status',
+      'Last Activity',
     ];
 
     const rows = targetVendors.map((v) => [
       `"${formatVendorCode(v.id, v.created_at, v.vendor_code)}"`,
       `"${(v.vendor_name || '').replace(/"/g, '""')}"`,
       `"${v.vendor_type || 'Fleet Owner'}"`,
-      `"${v.gstin || ''}"`,
-      `"${v.pan || ''}"`,
       `"${(v.contact_name || '').replace(/"/g, '""')}"`,
       `"${v.contact_phone || ''}"`,
       `"${v.contact_email || ''}"`,
       `"${v.city || ''}"`,
       `"${v.state || ''}"`,
       `"${(v.address || '').replace(/"/g, '""')}"`,
+      `"${v.gstin || '—'}"`,
+      `"${v.pan || '—'}"`,
       `"${(v.services || []).join('; ')}"`,
       `"${v.status}"`,
-      `"${v.created_at}"`,
+      `"${v.status === 'INACTIVE' ? 'Inactive' : 'Active'}"`,
+      `"${v.updated_at || v.created_at || ''}"`,
     ]);
 
     const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
@@ -531,6 +712,7 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
   // Vendor Action: Verify / Approve
   const handleVerifyVendor = async (vendorId: string, vendorName: string) => {
     try {
+      await ensureAdminSession();
       const { error: updateErr } = await supabase
         .from('vendor_companies')
         .update({
@@ -559,6 +741,7 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
       confirmStyle: 'danger',
       onConfirm: async () => {
         try {
+          await ensureAdminSession();
           const { error: rejErr } = await supabase
             .from('vendor_companies')
             .update({
@@ -591,6 +774,7 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
       confirmStyle: newStatus === 'APPROVED' ? 'success' : 'danger',
       onConfirm: async () => {
         try {
+          await ensureAdminSession();
           const { error: toggleErr } = await supabase
             .from('vendor_companies')
             .update({
@@ -703,7 +887,18 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
           </p>
         </div>
 
-        <div className="client-header-actions">
+        <div className="client-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div className="header-partner-badge">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m11 17 2 2a1 1 0 0 0 1.4 0l4.3-4.3a1 1 0 0 0 0-1.4l-2-2" />
+              <path d="m9 14-2-2a1 1 0 0 1 0-1.4l4.3-4.3a1 1 0 0 1 1.4 0l2 2" />
+            </svg>
+            <div style={{ textAlign: 'left', lineHeight: '1.2' }}>
+              <div style={{ fontSize: '12px', fontWeight: 700, color: '#FFFFFF' }}>Reliable Partners</div>
+              <div style={{ fontSize: '11px', color: '#CBD5E1' }}>Stronger Deliveries</div>
+            </div>
+          </div>
+
           <button
             id="btn-add-vendor"
             className="btn-create-orange"
@@ -721,7 +916,7 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
         </div>
       </div>
 
-      {/* 2. Four Equal-Width Summary KPI Cards */}
+      {/* 2. Four Equal-Width Summary KPI Cards (Clean, No Percentages or Sparklines) */}
       <div className="client-kpi-bar">
         {/* Total Vendors */}
         <div
@@ -741,9 +936,12 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
               <span className="kpi-title">Total Vendors</span>
               <ChevronRight size={14} className="kpi-chevron" />
             </div>
-            <div className="kpi-value">
-              {loading ? <div className="kpi-bar-skeleton" /> : counts.total}
+            <div className="kpi-value-row">
+              <div className="kpi-value">
+                {loading ? <div className="kpi-bar-skeleton" /> : counts.total}
+              </div>
             </div>
+            <div className="kpi-sub-text">All registered vendors</div>
           </div>
         </div>
 
@@ -765,9 +963,12 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
               <span className="kpi-title">Verified Vendors</span>
               <ChevronRight size={14} className="kpi-chevron" />
             </div>
-            <div className="kpi-value">
-              {loading ? <div className="kpi-bar-skeleton" /> : counts.verified}
+            <div className="kpi-value-row">
+              <div className="kpi-value">
+                {loading ? <div className="kpi-bar-skeleton" /> : counts.verified}
+              </div>
             </div>
+            <div className="kpi-sub-text">Document verified</div>
           </div>
         </div>
 
@@ -789,9 +990,12 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
               <span className="kpi-title">Pending Review</span>
               <ChevronRight size={14} className="kpi-chevron" />
             </div>
-            <div className="kpi-value">
-              {loading ? <div className="kpi-bar-skeleton" /> : counts.pending}
+            <div className="kpi-value-row">
+              <div className="kpi-value">
+                {loading ? <div className="kpi-bar-skeleton" /> : counts.pending}
+              </div>
             </div>
+            <div className="kpi-sub-text">Awaiting verification</div>
           </div>
         </div>
 
@@ -813,9 +1017,12 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
               <span className="kpi-title">Inactive Vendors</span>
               <ChevronRight size={14} className="kpi-chevron" />
             </div>
-            <div className="kpi-value">
-              {loading ? <div className="kpi-bar-skeleton" /> : counts.inactive}
+            <div className="kpi-value-row">
+              <div className="kpi-value">
+                {loading ? <div className="kpi-bar-skeleton" /> : counts.inactive}
+              </div>
             </div>
+            <div className="kpi-sub-text">Currently inactive</div>
           </div>
         </div>
       </div>
@@ -827,7 +1034,7 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
           <input
             id="vendor-search-input"
             type="text"
-            placeholder="Search by vendor name, vendor ID, GSTIN, contact person, phone number, location..."
+            placeholder="Search by Vendor ID, vendor name, GSTIN, contact person, phone number, location..."
             value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value);
@@ -1041,6 +1248,18 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
           >
             Inactive ({counts.inactive})
           </button>
+          <button
+            className={`status-tab-btn ${activeTab === 'drafts' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveTab('drafts');
+              setCurrentPage(1);
+              fetchDrafts();
+            }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+          >
+            <Bookmark size={14} />
+            <span>Drafts ({drafts.length})</span>
+          </button>
         </div>
 
         <div className="table-actions-group" style={{ position: 'relative' }}>
@@ -1077,7 +1296,7 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
                     checked={visibleColumns.vendorId}
                     onChange={(e) => setVisibleColumns({ ...visibleColumns, vendorId: e.target.checked })}
                   />
-                  <span>Vendor ID</span>
+                  <span>Vendor ID & Company</span>
                 </label>
                 <label className="column-toggle-item">
                   <input
@@ -1102,6 +1321,22 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
                     onChange={(e) => setVisibleColumns({ ...visibleColumns, location: e.target.checked })}
                   />
                   <span>Location</span>
+                </label>
+                <label className="column-toggle-item">
+                  <input
+                    type="checkbox"
+                    checked={visibleColumns.gstin}
+                    onChange={(e) => setVisibleColumns({ ...visibleColumns, gstin: e.target.checked })}
+                  />
+                  <span>GSTIN</span>
+                </label>
+                <label className="column-toggle-item">
+                  <input
+                    type="checkbox"
+                    checked={visibleColumns.panNumber}
+                    onChange={(e) => setVisibleColumns({ ...visibleColumns, panNumber: e.target.checked })}
+                  />
+                  <span>PAN Number</span>
                 </label>
                 <label className="column-toggle-item">
                   <input
@@ -1144,6 +1379,8 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
                       vendorType: true,
                       contactPerson: true,
                       location: true,
+                      gstin: true,
+                      panNumber: true,
                       services: true,
                       verificationStatus: true,
                       accountStatus: true,
@@ -1157,6 +1394,14 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
               </div>
             )}
           </div>
+
+          <button
+            className="btn-action-outline btn-square-icon"
+            title="Display density options"
+            onClick={() => showToast('Display density: Standard enterprise view')}
+          >
+            <Layers size={14} />
+          </button>
         </div>
       </div>
 
@@ -1189,8 +1434,196 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
         </div>
       )}
 
-      {/* 6. Vendor Data Table Card */}
-      <div className="client-table-card">
+      {/* 6. Vendor Data Table Card / Drafts Table Card */}
+      {activeTab === 'drafts' ? (
+        <div className="client-table-card" style={{ overflowX: 'auto' }}>
+          <table className="client-table" id="vendor-drafts-table">
+            <thead>
+              <tr>
+                <th style={{ minWidth: '220px', paddingLeft: '20px' }}>Draft Title & Business</th>
+                <th style={{ minWidth: '160px' }}>Primary Contact</th>
+                <th style={{ minWidth: '120px' }}>Fleet Vehicles</th>
+                <th style={{ minWidth: '150px' }}>Current Step</th>
+                <th style={{ minWidth: '150px' }}>Completion Progress</th>
+                <th style={{ minWidth: '150px' }}>Last Saved</th>
+                <th style={{ minWidth: '140px', textAlign: 'center', paddingRight: '20px' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {draftsLoading ? (
+                Array.from({ length: 3 }).map((_, i) => (
+                  <tr key={i}>
+                    <td colSpan={7} style={{ padding: '20px' }}>
+                      <div className="table-skeleton-cell" style={{ width: '100%', height: 26 }} />
+                    </td>
+                  </tr>
+                ))
+              ) : drafts.length === 0 ? (
+                <tr>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '64px 20px' }}>
+                    <div
+                      style={{
+                        width: 56,
+                        height: 56,
+                        borderRadius: 16,
+                        background: '#FFF1E8',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginBottom: 16,
+                      }}
+                    >
+                      <Bookmark size={28} color="#F05A22" />
+                    </div>
+                    <h3 style={{ color: '#172B4D', fontSize: 16, fontWeight: 700, margin: '0 0 8px' }}>
+                      No Saved Vendor Drafts Found
+                    </h3>
+                    <p
+                      style={{
+                        color: '#64748B',
+                        margin: '0 0 20px',
+                        fontSize: 13.5,
+                        maxWidth: 440,
+                        marginLeft: 'auto',
+                        marginRight: 'auto',
+                      }}
+                    >
+                      Partially entered vendor registrations and vehicle enrollments saved using "Save Draft" will appear here. You can resume them anytime.
+                    </p>
+                    <button className="btn-create-orange" onClick={() => onNavigateToInvite()}>
+                      <Plus size={16} />
+                      <span>Create Vendor Draft</span>
+                    </button>
+                  </td>
+                </tr>
+              ) : (
+                drafts.map((draft) => {
+                  const contactName = draft.form_data?.contactName || draft.form_data?.contact_name || '—';
+                  const contactMobile = draft.form_data?.mobile || draft.form_data?.contactPhone || '—';
+                  const contactEmail = draft.form_data?.email || draft.form_data?.contactEmail || '—';
+                  const vehCount = Array.isArray(draft.vehicle_details) ? draft.vehicle_details.length : 0;
+                  const pct = draft.completion_percentage || 25;
+
+                  return (
+                    <tr key={draft.id} className="client-row">
+                      <td style={{ padding: '14px 20px' }}>
+                        <div style={{ fontWeight: 700, color: '#0F172A', fontSize: 14 }}>
+                          {draft.title || 'Untitled Vendor Draft'}
+                        </div>
+                        <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
+                          Draft ID: <span style={{ fontFamily: 'monospace' }}>{draft.id.slice(0, 8)}</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: '14px 20px' }}>
+                        <div style={{ fontWeight: 600, color: '#334155', fontSize: 13 }}>{contactName}</div>
+                        <div style={{ fontSize: 12, color: '#64748B' }}>{contactMobile} • {contactEmail}</div>
+                      </td>
+                      <td style={{ padding: '14px 20px' }}>
+                        <span
+                          style={{
+                            background: vehCount > 0 ? '#EFF6FF' : '#F1F5F9',
+                            color: vehCount > 0 ? '#1D4ED8' : '#64748B',
+                            padding: '3px 8px',
+                            borderRadius: 6,
+                            fontSize: 12,
+                            fontWeight: 700,
+                          }}
+                        >
+                          {vehCount} Commercial Vehicle{vehCount === 1 ? '' : 's'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px 20px' }}>
+                        <span
+                          style={{
+                            background: '#F1F5F9',
+                            color: '#475569',
+                            padding: '3px 8px',
+                            borderRadius: 6,
+                            fontSize: 12,
+                            fontWeight: 600,
+                          }}
+                        >
+                          {draft.step_progress || 'In Progress'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px 20px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ flex: 1, height: 6, background: '#E2E8F0', borderRadius: 9999, overflow: 'hidden' }}>
+                            <div
+                              style={{
+                                width: `${pct}%`,
+                                height: '100%',
+                                background: pct >= 80 ? '#10B981' : pct >= 40 ? '#F05A22' : '#F59E0B',
+                                borderRadius: 9999,
+                                transition: 'width 0.3s ease',
+                              }}
+                            />
+                          </div>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#334155', minWidth: 32 }}>
+                            {pct}%
+                          </span>
+                        </div>
+                      </td>
+                      <td style={{ padding: '14px 20px', fontSize: 12.5, color: '#64748B' }}>
+                        {new Date(draft.updated_at).toLocaleString([], {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </td>
+                      <td style={{ padding: '14px 20px', textAlign: 'center' }}>
+                        <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                          <button
+                            type="button"
+                            onClick={() => onNavigateToInvite(draft.id)}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 5,
+                              padding: '6px 12px',
+                              background: '#FFF1E8',
+                              color: '#F05A22',
+                              border: '1px solid #FFD8C7',
+                              borderRadius: 6,
+                              fontSize: 12,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                            title="Resume draft and continue registration"
+                          >
+                            <FileText size={13} />
+                            <span>Resume</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDraftToDelete(draft)}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              padding: '6px 8px',
+                              background: '#FEF2F2',
+                              color: '#DC2626',
+                              border: '1px solid #FECACA',
+                              borderRadius: 6,
+                              fontSize: 12,
+                              cursor: 'pointer',
+                            }}
+                            title="Delete draft"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="client-table-card">
         <div className="table-wrapper vendor-table-scroll">
           <table className="client-table" id="vendor-directory-table">
             <thead>
@@ -1204,32 +1637,27 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
                     title="Select all on current page"
                   />
                 </th>
-                <th onClick={() => handleSort('vendor_name')} style={{ cursor: 'pointer', minWidth: '250px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span>Vendor</span>
-                    {sortField === 'vendor_name' ? (
-                      sortOrder === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />
-                    ) : (
-                      <ArrowUpDown size={13} style={{ color: '#94A3B8' }} />
-                    )}
-                  </div>
-                </th>
+                {/* Vendor ID & Company */}
                 {visibleColumns.vendorId && (
-                  <th onClick={() => handleSort('id')} style={{ cursor: 'pointer', minWidth: '175px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span>Vendor ID</span>
-                      {sortField === 'id' ? (
+                  <th style={{ minWidth: 180 }}>
+                    <button
+                      type="button"
+                      className={`th-sortable-button ${sortField === 'vendor_name' ? 'active-sort' : ''}`}
+                      onClick={() => handleSort('vendor_name')}
+                    >
+                      <span>Vendor ID & Company</span>
+                      {sortField === 'vendor_name' ? (
                         sortOrder === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />
                       ) : (
-                        <ArrowUpDown size={13} style={{ color: '#94A3B8' }} />
+                        <ArrowUpDown size={12} color="#94A3B8" />
                       )}
-                    </div>
+                    </button>
                   </th>
                 )}
-                {visibleColumns.vendorType && <th style={{ minWidth: '130px' }}>Vendor Type</th>}
-                {visibleColumns.contactPerson && <th style={{ minWidth: '180px' }}>Contact Person</th>}
+                {visibleColumns.vendorType && <th style={{ minWidth: '120px' }}>Vendor Type</th>}
+                {visibleColumns.contactPerson && <th style={{ minWidth: '160px' }}>Contact Person</th>}
                 {visibleColumns.location && (
-                  <th onClick={() => handleSort('location')} style={{ cursor: 'pointer', minWidth: '190px' }}>
+                  <th onClick={() => handleSort('location')} style={{ cursor: 'pointer', minWidth: '180px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span>Location</span>
                       {sortField === 'location' ? (
@@ -1240,9 +1668,11 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
                     </div>
                   </th>
                 )}
+                {visibleColumns.gstin && <th style={{ minWidth: '170px' }}>GSTIN</th>}
+                {visibleColumns.panNumber && <th style={{ minWidth: '140px' }}>PAN Number</th>}
                 {visibleColumns.services && <th style={{ minWidth: '150px' }}>Services</th>}
                 {visibleColumns.verificationStatus && (
-                  <th onClick={() => handleSort('status')} style={{ cursor: 'pointer', minWidth: '140px' }}>
+                  <th onClick={() => handleSort('status')} style={{ cursor: 'pointer', minWidth: '130px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span>Verification</span>
                       {sortField === 'status' ? (
@@ -1253,7 +1683,7 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
                     </div>
                   </th>
                 )}
-                {visibleColumns.accountStatus && <th style={{ minWidth: '130px' }}>Account Status</th>}
+                {visibleColumns.accountStatus && <th style={{ minWidth: '120px' }}>Account Status</th>}
                 {visibleColumns.lastActivity && (
                   <th onClick={() => handleSort('created_at')} style={{ cursor: 'pointer', minWidth: '130px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -1266,38 +1696,60 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
                     </div>
                   </th>
                 )}
-                <th style={{ width: '80px', minWidth: '80px', textAlign: 'right' }}>Actions</th>
+                <th style={{ width: '90px', minWidth: '90px', textAlign: 'center' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 Array.from({ length: 6 }).map((_, i) => (
                   <tr key={`skel-${i}`} className="table-skeleton-row">
-                    <td><div className="table-skeleton-cell" style={{ width: '16px', height: '16px' }} /></td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <div className={`client-avatar-squircle ${['peach', 'purple', 'orange', 'blue', 'teal', 'red'][i % 6]}`} />
-                        <div className="table-skeleton-cell" style={{ width: `${130 + (i % 3) * 30}px`, height: '14px' }} />
-                      </div>
-                    </td>
-                    {visibleColumns.vendorId && <td><div className="table-skeleton-cell" style={{ width: '90px', height: '12px' }} /></td>}
-                    {visibleColumns.vendorType && <td><div className="table-skeleton-cell" style={{ width: '75px', height: '18px', borderRadius: '4px' }} /></td>}
-                    {visibleColumns.contactPerson && <td><div className="table-skeleton-cell" style={{ width: '110px', height: '12px' }} /></td>}
-                    {visibleColumns.location && <td><div className="table-skeleton-cell" style={{ width: '80px', height: '12px' }} /></td>}
-                    {visibleColumns.services && <td><div className="table-skeleton-cell" style={{ width: '95px', height: '12px' }} /></td>}
-                    {visibleColumns.verificationStatus && <td><div className="table-skeleton-cell" style={{ width: '90px', height: '20px', borderRadius: '12px' }} /></td>}
-                    {visibleColumns.accountStatus && <td><div className="table-skeleton-cell" style={{ width: '60px', height: '20px', borderRadius: '12px' }} /></td>}
-                    {visibleColumns.lastActivity && <td><div className="table-skeleton-cell" style={{ width: '100px', height: '12px' }} /></td>}
-                    <td style={{ textAlign: 'right' }}>
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
-                        <div className="table-skeleton-cell" style={{ width: '28px', height: '28px', borderRadius: '50%' }} />
-                      </div>
+                    <td style={{ textAlign: 'center' }}><div className="table-skeleton-cell" style={{ width: '16px', height: '16px', margin: '0 auto' }} /></td>
+                    {visibleColumns.vendorId && (
+                      <td>
+                        <div className="client-name-cell" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div
+                            className="client-avatar-squircle vendor-initial-avatar"
+                            style={{ background: '#F1F5F9', borderRadius: 10, width: 36, height: 36 }}
+                          />
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <div className="table-skeleton-cell" style={{ width: 120, height: 11 }} />
+                            <div className="table-skeleton-cell" style={{ width: 70, height: 8 }} />
+                          </div>
+                        </div>
+                      </td>
+                    )}
+                    {visibleColumns.vendorType && <td><div className="table-skeleton-cell" style={{ width: '80px', height: '22px', borderRadius: '4px' }} /></td>}
+                    {visibleColumns.contactPerson && (
+                      <td>
+                        <div className="table-skeleton-cell" style={{ width: '90px', height: '13px', marginBottom: '4px' }} />
+                        <div className="table-skeleton-cell" style={{ width: '100px', height: '11px' }} />
+                      </td>
+                    )}
+                    {visibleColumns.location && (
+                      <td>
+                        <div className="table-skeleton-cell" style={{ width: '110px', height: '13px', marginBottom: '4px' }} />
+                        <div className="table-skeleton-cell" style={{ width: '85px', height: '11px' }} />
+                      </td>
+                    )}
+                    {visibleColumns.gstin && <td><div className="table-skeleton-cell" style={{ width: '120px', height: '20px', borderRadius: '4px' }} /></td>}
+                    {visibleColumns.panNumber && <td><div className="table-skeleton-cell" style={{ width: '95px', height: '20px', borderRadius: '4px' }} /></td>}
+                    {visibleColumns.services && <td><div className="table-skeleton-cell" style={{ width: '110px', height: '20px' }} /></td>}
+                    {visibleColumns.verificationStatus && <td><div className="table-skeleton-cell" style={{ width: '90px', height: '22px', borderRadius: '12px' }} /></td>}
+                    {visibleColumns.accountStatus && <td><div className="table-skeleton-cell" style={{ width: '65px', height: '22px', borderRadius: '12px' }} /></td>}
+                    {visibleColumns.lastActivity && (
+                      <td>
+                        <div className="table-skeleton-cell" style={{ width: '80px', height: '13px', marginBottom: '4px' }} />
+                        <div className="table-skeleton-cell" style={{ width: '60px', height: '11px' }} />
+                      </td>
+                    )}
+                    <td style={{ textAlign: 'center' }}>
+                      <div className="table-skeleton-cell" style={{ width: '28px', height: '28px', borderRadius: '50%', margin: '0 auto' }} />
                     </td>
                   </tr>
                 ))
               ) : paginatedVendors.length === 0 ? (
                 <tr>
-                  <td colSpan={11}>
+                  <td colSpan={12}>
                     <div className="table-empty-state">
                       <div className="empty-state-icon-box">
                         <Users size={32} />
@@ -1342,23 +1794,10 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
                   const vendorCode = formatVendorCode(vendor.id, vendor.created_at, vendor.vendor_code);
                   const avatarColor = getAvatarColor(vendor.vendor_name);
                   const initials = getInitials(vendor.vendor_name);
-                  const subIdentifier = vendor.gstin
-                    ? `GSTIN: ${vendor.gstin}`
-                    : vendor.pan
-                    ? `PAN: ${vendor.pan}`
-                    : 'Registered Partner';
-
-                  const lastActivityDate = vendor.updated_at
-                    ? new Date(vendor.updated_at).toLocaleDateString('en-IN', {
-                        day: 'numeric',
-                        month: 'short',
-                        year: 'numeric',
-                      })
-                    : '—';
 
                   return (
                     <tr key={vendor.id} className={`client-data-row ${isSelected ? 'row-selected' : ''}`}>
-                      <td>
+                      <td style={{ textAlign: 'center' }}>
                         <input
                           type="checkbox"
                           className="custom-table-checkbox"
@@ -1367,65 +1806,141 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
                         />
                       </td>
 
-                      {/* Vendor Name & Avatar */}
-                      <td>
-                        <div className="client-info-cell">
-                          <div className="vendor-initial-avatar" style={{ backgroundColor: avatarColor }}>
-                            {initials}
-                          </div>
-                          <div>
-                            <div
-                              className="client-name-bold"
-                              style={{ cursor: 'pointer' }}
-                              onClick={() => onNavigateToProfile(vendor.id)}
-                              title="Click to view vendor details"
-                            >
-                              {vendor.vendor_name}
-                            </div>
-                            <div className="client-id-sub">{subIdentifier}</div>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Vendor ID */}
+                      {/* Vendor ID & Company Information */}
                       {visibleColumns.vendorId && (
                         <td>
-                          <span className="mono-code">{vendorCode}</span>
+                          <div className="client-name-cell" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div
+                              className="client-avatar-squircle vendor-initial-avatar"
+                              style={{
+                                background: avatarColor,
+                                color: '#FFFFFF',
+                                fontWeight: 700,
+                                fontSize: 13,
+                                borderRadius: 10,
+                                width: 36,
+                                height: 36,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                              }}
+                              aria-hidden="true"
+                            >
+                              {initials}
+                            </div>
+                            <div style={{ minWidth: 0, overflow: 'hidden' }}>
+                              <div
+                                className="client-name-text"
+                                onClick={() => onNavigateToProfile(vendor.id)}
+                                style={{
+                                  fontWeight: 600,
+                                  color: '#0F172A',
+                                  cursor: 'pointer',
+                                  whiteSpace: 'nowrap',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  maxWidth: 180,
+                                }}
+                                title={vendor.vendor_name}
+                              >
+                                {vendor.vendor_name}
+                              </div>
+                              <div
+                                className="client-id-text"
+                                style={{
+                                  fontFamily: 'monospace',
+                                  fontSize: 11,
+                                  color: '#64748B',
+                                  whiteSpace: 'nowrap',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 5,
+                                }}
+                              >
+                                <span>{vendorCode}</span>
+                                <button
+                                  type="button"
+                                  className="vendor-id-copy-btn"
+                                  onClick={(e) => handleCopyVendorId(e, vendorCode)}
+                                  title={copiedId === vendorCode ? 'Copied!' : 'Copy Vendor ID'}
+                                >
+                                  {copiedId === vendorCode ? <Check size={11} color="#16A34A" /> : <Copy size={11} />}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
                         </td>
                       )}
 
-                      {/* Vendor Type */}
+                      {/* 3. Vendor Type */}
                       {visibleColumns.vendorType && (
                         <td>
-                          <span className="vendor-type-pill">{vendor.vendor_type || 'Fleet Owner'}</span>
+                          <span
+                            className={
+                              vendor.vendor_type === 'Primary Contact'
+                                ? 'vendor-type-pill-green'
+                                : 'vendor-type-pill'
+                            }
+                          >
+                            {vendor.vendor_type || 'Fleet Owner'}
+                          </span>
                         </td>
                       )}
 
-                      {/* Contact Person */}
+                      {/* 4. Contact Person */}
                       {visibleColumns.contactPerson && (
                         <td>
-                          <div>
-                            <div style={{ fontWeight: 600, color: '#172B4D', fontSize: '13px' }}>
-                              {vendor.contact_name}
-                            </div>
-                            <div style={{ fontSize: '12px', color: '#64748B' }}>
+                          <div className="vendor-contact-cell">
+                            <div className="vendor-contact-name">{vendor.contact_name}</div>
+                            <div className="vendor-contact-phone">
                               {vendor.contact_phone ? `+91 ${vendor.contact_phone.replace(/\D/g, '').slice(-10)}` : '—'}
                             </div>
                           </div>
                         </td>
                       )}
 
-                      {/* Location */}
+                      {/* 5. Location */}
                       {visibleColumns.location && (
                         <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', color: '#172B4D' }}>
-                            <MapPin size={13} style={{ color: '#F05A22', flexShrink: 0 }} />
-                            <span>{vendor.city ? `${vendor.city}, ${vendor.state || 'IN'}` : vendor.address || '—'}</span>
-                          </div>
+                          {(() => {
+                            const { line1, line2 } = formatLocationLines(vendor.city, vendor.state, vendor.pincode, vendor.address);
+                            return (
+                              <div className="vendor-location-cell">
+                                <MapPin size={13} className="vendor-location-icon" />
+                                <div>
+                                  <div className="vendor-location-line1">{line1}</div>
+                                  {line2 && <div className="vendor-location-line2">{line2}</div>}
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </td>
                       )}
 
-                      {/* Services */}
+                      {/* 6. GSTIN (Dedicated Column) */}
+                      {visibleColumns.gstin && (
+                        <td>
+                          {vendor.gstin ? (
+                            <span className="mono-code gstin-badge">{vendor.gstin.toUpperCase()}</span>
+                          ) : (
+                            <span style={{ color: '#94A3B8', fontSize: '13px', fontWeight: 500 }}>—</span>
+                          )}
+                        </td>
+                      )}
+
+                      {/* 7. PAN Number (Dedicated Column) */}
+                      {visibleColumns.panNumber && (
+                        <td>
+                          {vendor.pan ? (
+                            <span className="mono-code pan-badge">{vendor.pan.toUpperCase()}</span>
+                          ) : (
+                            <span style={{ color: '#94A3B8', fontSize: '13px', fontWeight: 500 }}>—</span>
+                          )}
+                        </td>
+                      )}
+
+                      {/* 8. Services */}
                       {visibleColumns.services && (
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
@@ -1436,8 +1951,7 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
                             ))}
                             {(vendor.services || []).length > 2 && (
                               <span
-                                className="service-tag-pill"
-                                style={{ background: '#E2E8F0', color: '#475569', fontWeight: 700 }}
+                                className="service-tag-pill service-tag-pill-count"
                                 title={(vendor.services || []).slice(2).join(', ')}
                               >
                                 +{(vendor.services || []).length - 2}
@@ -1447,7 +1961,7 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
                         </td>
                       )}
 
-                      {/* Verification Status */}
+                      {/* 9. Verification */}
                       {visibleColumns.verificationStatus && (
                         <td>
                           <span
@@ -1466,7 +1980,7 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
                         </td>
                       )}
 
-                      {/* Account Status */}
+                      {/* 10. Account Status */}
                       {visibleColumns.accountStatus && (
                         <td>
                           <span className={isInactive || isRejected ? 'badge-account-inactive' : 'badge-account-active'}>
@@ -1476,188 +1990,49 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
                         </td>
                       )}
 
-                      {/* Last Activity */}
+                      {/* 11. Last Activity */}
                       {visibleColumns.lastActivity && (
                         <td>
-                          <span style={{ fontSize: '12.5px', color: '#64748B' }}>{lastActivityDate}</span>
+                          {(() => {
+                            const { date, time } = formatLastActivity(vendor.updated_at || vendor.created_at);
+                            return (
+                              <div className="vendor-activity-cell">
+                                <div className="vendor-activity-date">{date}</div>
+                                {time && <div className="vendor-activity-time">{time}</div>}
+                              </div>
+                            );
+                          })()}
                         </td>
                       )}
 
-                      {/* Actions: Compact 3-Dot Menu */}
-                      <td style={{ textAlign: 'right' }}>
-                        <div className="action-menu-container" style={{ position: 'relative', display: 'inline-block' }}>
+                      {/* 12. Actions (Explicit Full View + 3-Dot Actions Menu) */}
+                      <td style={{ width: '90px', minWidth: '90px', textAlign: 'center' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}>
                           <button
+                            type="button"
                             className="row-action-btn-circle"
-                            onClick={() => setOpenActionMenuId(openActionMenuId === vendor.id ? null : vendor.id)}
-                            title="Actions menu"
-                            aria-expanded={openActionMenuId === vendor.id}
+                            title="Full View"
+                            aria-label={`Full View for ${vendor.vendor_name}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onNavigateToProfile(vendor.id);
+                            }}
                           >
-                            <MoreVertical size={15} />
+                            <Eye size={14} />
                           </button>
-
-                          {openActionMenuId === vendor.id && (
-                            <div
-                              className="vendor-action-menu-dropdown"
-                              style={{
-                                position: 'absolute',
-                                right: 0,
-                                ...(paginatedVendors.length > 2 && rowIndex >= paginatedVendors.length - 2
-                                  ? { bottom: 'calc(100% + 4px)' }
-                                  : { top: 'calc(100% + 4px)' }),
-                                background: '#FFFFFF',
-                                border: '1px solid #CBD5E1',
-                                borderRadius: '8px',
-                                boxShadow: '0 8px 24px rgba(15, 23, 42, 0.14)',
-                                zIndex: 60,
-                                width: '180px',
-                                padding: '6px 0',
-                                textAlign: 'left',
-                              }}
-                              role="menu"
+                          <div className="action-menu-container" style={{ position: 'relative', display: 'inline-block' }}>
+                            <button
+                              type="button"
+                              className={`row-action-btn-circle ${menuAnchor?.id === vendor.id ? 'active' : ''}`}
+                              onClick={(e) => handleToggleActionMenu(vendor, e)}
+                              title="Actions menu"
+                              aria-expanded={menuAnchor?.id === vendor.id}
                             >
-                              <button
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '8px',
-                                  width: '100%',
-                                  padding: '8px 14px',
-                                  background: 'none',
-                                  border: 'none',
-                                  fontSize: '13px',
-                                  color: '#1E293B',
-                                  cursor: 'pointer',
-                                }}
-                                onClick={() => {
-                                  setOpenActionMenuId(null);
-                                  onNavigateToProfile(vendor.id);
-                                }}
-                              >
-                                <Eye size={14} color="#64748B" />
-                                <span>View Vendor</span>
-                              </button>
-
-                              <button
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '8px',
-                                  width: '100%',
-                                  padding: '8px 14px',
-                                  background: 'none',
-                                  border: 'none',
-                                  fontSize: '13px',
-                                  color: '#1E293B',
-                                  cursor: 'pointer',
-                                }}
-                                onClick={() => {
-                                  setOpenActionMenuId(null);
-                                  setEditingVendor(vendor);
-                                  setShowEditVendorModal(true);
-                                }}
-                              >
-                                <Edit size={14} color="#64748B" />
-                                <span>Edit Vendor</span>
-                              </button>
-
-                              <button
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '8px',
-                                  width: '100%',
-                                  padding: '8px 14px',
-                                  background: 'none',
-                                  border: 'none',
-                                  fontSize: '13px',
-                                  color: '#1E293B',
-                                  cursor: 'pointer',
-                                }}
-                                onClick={() => {
-                                  setOpenActionMenuId(null);
-                                  onNavigateToProfile(vendor.id);
-                                }}
-                              >
-                                <FileText size={14} color="#64748B" />
-                                <span>Review Documents</span>
-                              </button>
-
-                              <div style={{ height: '1px', background: '#F1F5F9', margin: '4px 0' }} />
-
-                              {!isApproved && (
-                                <button
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px',
-                                    width: '100%',
-                                    padding: '8px 14px',
-                                    background: 'none',
-                                    border: 'none',
-                                    fontSize: '13px',
-                                    color: '#16A34A',
-                                    cursor: 'pointer',
-                                    fontWeight: 600,
-                                  }}
-                                  onClick={() => {
-                                    setOpenActionMenuId(null);
-                                    handleVerifyVendor(vendor.id, vendor.vendor_name);
-                                  }}
-                                >
-                                  <ShieldCheck size={14} />
-                                  <span>Verify Vendor</span>
-                                </button>
-                              )}
-
-                              {vendor.status !== 'REJECTED' && (
-                                <button
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px',
-                                    width: '100%',
-                                    padding: '8px 14px',
-                                    background: 'none',
-                                    border: 'none',
-                                    fontSize: '13px',
-                                    color: '#DC2626',
-                                    cursor: 'pointer',
-                                  }}
-                                  onClick={() => {
-                                    setOpenActionMenuId(null);
-                                    handleRejectVendor(vendor.id, vendor.vendor_name);
-                                  }}
-                                >
-                                  <ShieldAlert size={14} />
-                                  <span>Reject Verification</span>
-                                </button>
-                              )}
-
-                              <button
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '8px',
-                                  width: '100%',
-                                  padding: '8px 14px',
-                                  background: 'none',
-                                  border: 'none',
-                                  fontSize: '13px',
-                                  color: isInactive ? '#16A34A' : '#DC2626',
-                                  cursor: 'pointer',
-                                }}
-                                onClick={() => {
-                                  setOpenActionMenuId(null);
-                                  handleToggleStatus(vendor.id, vendor.vendor_name, vendor.status);
-                                }}
-                              >
-                                {isInactive ? <CheckCircle2 size={14} /> : <UserX size={14} />}
-                                <span>{isInactive ? 'Activate Vendor' : 'Deactivate Vendor'}</span>
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </td>
+                              <MoreVertical size={15} />
+                            </button>
+                          </div>
+                      </div>
+                    </td>
                     </tr>
                   );
                 })
@@ -1735,6 +2110,7 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
           </div>
         </div>
       </div>
+      )}
 
       {/* 8. Add Vendor Modal (In-page Workflow) */}
       {showAddVendorModal && (
@@ -1751,12 +2127,14 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
       {/* 9. Edit Vendor Modal */}
       {showEditVendorModal && editingVendor && (
         <EditVendorModal
+          isOpen={true}
           vendor={editingVendor}
+          primaryContact={vendorUsers.find((u) => u.vendor_id === editingVendor.id)}
           onClose={() => {
             setShowEditVendorModal(false);
             setEditingVendor(null);
           }}
-          onSuccess={() => {
+          onSaved={() => {
             setShowEditVendorModal(false);
             setEditingVendor(null);
             showToast('✅ Vendor details updated successfully.');
@@ -1805,6 +2183,385 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
           </div>
         </div>
       )}
+
+      {/* 12. Floating Action Menu (Decoupled from table container to prevent ANY clipping or vertical scrollbars) */}
+      {menuAnchor && (() => {
+        const activeVendor = vendors.find((v) => v.id === menuAnchor.id);
+        if (!activeVendor) return null;
+        const isApproved = activeVendor.status === 'APPROVED';
+        const isInactive = activeVendor.status === 'INACTIVE';
+
+        return (
+          <div
+            className="vendor-action-menu-dropdown"
+            style={{
+              position: 'fixed',
+              top: menuAnchor.top !== undefined ? `${menuAnchor.top}px` : undefined,
+              bottom: menuAnchor.bottom !== undefined ? `${menuAnchor.bottom}px` : undefined,
+              right: `${menuAnchor.right}px`,
+              zIndex: 9999,
+              width: '215px',
+              background: '#FFFFFF',
+              border: '1px solid #CBD5E1',
+              borderRadius: '10px',
+              boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.20), 0 8px 10px -6px rgba(15, 23, 42, 0.10)',
+              padding: '6px 0',
+              textAlign: 'left',
+            }}
+            role="menu"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                width: '100%',
+                padding: '8px 14px',
+                background: 'none',
+                border: 'none',
+                fontSize: '13px',
+                color: '#0F172A',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+              onClick={() => {
+                setMenuAnchor(null);
+                setOpenActionMenuId(null);
+                onNavigateToProfile(activeVendor.id);
+              }}
+            >
+              <Eye size={14} color="#F05A22" />
+              <span>View Vendor / Full View</span>
+            </button>
+
+            <button
+              type="button"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                width: '100%',
+                padding: '8px 14px',
+                background: 'none',
+                border: 'none',
+                fontSize: '13px',
+                color: '#1E293B',
+                cursor: 'pointer',
+              }}
+              onClick={() => {
+                setMenuAnchor(null);
+                setOpenActionMenuId(null);
+                setEditingVendor(activeVendor);
+                setShowEditVendorModal(true);
+              }}
+            >
+              <Edit size={14} color="#64748B" />
+              <span>Edit Vendor</span>
+            </button>
+
+            <button
+              type="button"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                width: '100%',
+                padding: '8px 14px',
+                background: 'none',
+                border: 'none',
+                fontSize: '13px',
+                color: '#1E293B',
+                cursor: 'pointer',
+              }}
+              onClick={() => {
+                setMenuAnchor(null);
+                setOpenActionMenuId(null);
+                onNavigateToProfile(activeVendor.id);
+              }}
+            >
+              <FileText size={14} color="#64748B" />
+              <span>Review Documents</span>
+            </button>
+
+            <div style={{ height: '1px', background: '#F1F5F9', margin: '4px 0' }} />
+
+            {!isApproved && (
+              <button
+                type="button"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  width: '100%',
+                  padding: '8px 14px',
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '13px',
+                  color: '#16A34A',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                }}
+                onClick={() => {
+                  setMenuAnchor(null);
+                  setOpenActionMenuId(null);
+                  handleVerifyVendor(activeVendor.id, activeVendor.vendor_name);
+                }}
+              >
+                <ShieldCheck size={14} />
+                <span>Verify Vendor</span>
+              </button>
+            )}
+
+            {activeVendor.status !== 'REJECTED' && (
+              <button
+                type="button"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  width: '100%',
+                  padding: '8px 14px',
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '13px',
+                  color: '#DC2626',
+                  cursor: 'pointer',
+                }}
+                onClick={() => {
+                  setMenuAnchor(null);
+                  setOpenActionMenuId(null);
+                  handleRejectVendor(activeVendor.id, activeVendor.vendor_name);
+                }}
+              >
+                <ShieldAlert size={14} />
+                <span>Reject Verification</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                width: '100%',
+                padding: '8px 14px',
+                background: 'none',
+                border: 'none',
+                fontSize: '13px',
+                color: isInactive ? '#16A34A' : '#DC2626',
+                cursor: 'pointer',
+              }}
+              onClick={() => {
+                setMenuAnchor(null);
+                setOpenActionMenuId(null);
+                handleToggleStatus(activeVendor.id, activeVendor.vendor_name, activeVendor.status);
+              }}
+            >
+              {isInactive ? <CheckCircle2 size={14} /> : <UserX size={14} />}
+              <span>{isInactive ? 'Activate Vendor' : 'Deactivate Vendor'}</span>
+            </button>
+
+            {canDelete && (
+              <>
+                <div style={{ height: '1px', background: '#E5E7EB', margin: '4px 0' }} />
+                <button
+                  type="button"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    width: '100%',
+                    padding: '8px 12px',
+                    background: 'none',
+                    border: 'none',
+                    fontSize: '13px',
+                    color: '#DC2626',
+                    cursor: 'pointer',
+                    fontWeight: 500,
+                  }}
+                  onClick={() => {
+                    setMenuAnchor(null);
+                    setOpenActionMenuId(null);
+                    setDeletingVendor(activeVendor);
+                  }}
+                >
+                  <Trash2 size={14} color="#DC2626" />
+                  <span>Delete User</span>
+                </button>
+              </>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* Permanent Delete Vendor Confirmation Dialog */}
+      {deletingVendor && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000,
+            padding: '16px',
+          }}
+          onClick={() => !deleteLoading && setDeletingVendor(null)}
+        >
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: '12px',
+              maxWidth: '480px',
+              width: '100%',
+              padding: '24px',
+              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <div
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '50%',
+                  background: '#FEE2E2',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#DC2626',
+                }}
+              >
+                <Trash2 size={20} />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#111827' }}>
+                  Permanently Delete Vendor?
+                </h3>
+                <p style={{ margin: 0, fontSize: '13px', color: '#6B7280' }}>
+                  This action cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            <div
+              style={{
+                background: '#FEF2F2',
+                border: '1px solid #FCA5A5',
+                borderRadius: '8px',
+                padding: '12px',
+                marginBottom: '16px',
+                fontSize: '13px',
+                color: '#991B1B',
+                lineHeight: 1.5,
+              }}
+            >
+              You are about to permanently delete <strong>{deletingVendor.vendor_name}</strong> (
+              {deletingVendor.contact_phone || 'No phone'}).
+              <br />
+              All linked driver associations, vehicle links, uploaded documents, quotations, and authentication credentials will be wiped from the system.
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>
+                Reason for Deletion (Optional)
+              </label>
+              <textarea
+                rows={2}
+                value={deleteReason}
+                onChange={(e) => setDeleteReason(e.target.value)}
+                placeholder="e.g. Duplicate account requested by vendor, fraudulent profile..."
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  borderRadius: '6px',
+                  border: '1px solid #D1D5DB',
+                  fontSize: '13px',
+                  outline: 'none',
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <button
+                type="button"
+                disabled={deleteLoading}
+                onClick={() => setDeletingVendor(null)}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  border: '1px solid #D1D5DB',
+                  background: '#fff',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  color: '#374151',
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteLoading}
+                onClick={handleConfirmDeleteVendor}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  background: '#DC2626',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  color: '#fff',
+                  cursor: deleteLoading ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  opacity: deleteLoading ? 0.7 : 1,
+                }}
+              >
+                {deleteLoading ? 'Deleting...' : 'Permanently Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Vendor Draft Delete Confirmation Modal ── */}
+      {draftToDelete && (
+        <div className="modal-backdrop-overlay" style={{ zIndex: 9999 }}>
+          <div className="modal-dialog-card" role="dialog" aria-modal="true">
+            <div className="modal-icon-circle-warning">
+              <AlertTriangle size={28} color="#DC2626" />
+            </div>
+            <h3 className="modal-title">Delete Vendor Registration Draft?</h3>
+            <p className="modal-desc">
+              Are you sure you want to permanently delete the draft for <strong>"{draftToDelete.title}"</strong>? All saved vehicle details and registration inputs will be discarded and cannot be recovered.
+            </p>
+            <div className="modal-btn-row" style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="btn-modal-secondary"
+                onClick={() => setDraftToDelete(null)}
+                disabled={isDeletingDraft}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-modal-danger"
+                onClick={() => handleDeleteDraft(draftToDelete.id)}
+                disabled={isDeletingDraft}
+              >
+                {isDeletingDraft ? 'Deleting Draft...' : 'Permanently Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -1813,6 +2570,25 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
 interface AddVendorModalProps {
   onClose: () => void;
   onSuccess: (id: string) => void;
+}
+
+interface AddModalVehicle {
+  id: string;
+  registrationNumber: string;
+  category: 'Lorry' | 'Trailer' | 'Van' | 'Heavy Carrier';
+  bodyType: 'Open Body' | 'Closed Body';
+  capacity: string;
+  capacityUnit: 'MT' | 'KG' | 'CBM';
+  makeModel?: string;
+  driverName?: string;
+  driverPhone?: string;
+  driverLicence?: string;
+  rcFile?: File | null;
+  cBookFile?: File | null;
+  permitFile?: File | null;
+  insuranceFile?: File | null;
+  pucFile?: File | null;
+  driverDlFile?: File | null;
 }
 
 const AddVendorModal: React.FC<AddVendorModalProps> = ({ onClose, onSuccess }) => {
@@ -1829,12 +2605,57 @@ const AddVendorModal: React.FC<AddVendorModalProps> = ({ onClose, onSuccess }) =
     city: 'Guwahati',
     state: 'Assam',
     pincode: '781001',
-    fleetSize: '10',
+    fleetSize: '',
     accountStatus: 'PENDING',
     onboardingNotes: '',
   });
 
   const [selectedServices, setSelectedServices] = useState<string[]>(['FTL', 'Container']);
+  const [vehicles, setVehicles] = useState<AddModalVehicle[]>([]);
+  const [isVehicleModalOpen, setIsVehicleModalOpen] = useState(false);
+  const [editingVehicleId, setEditingVehicleId] = useState<string | null>(null);
+  const [vehicleFormError, setVehicleFormError] = useState<string | null>(null);
+
+  const [vehicleForm, setVehicleForm] = useState<{
+    registrationNumber: string;
+    category: 'Lorry' | 'Trailer' | 'Van' | 'Heavy Carrier';
+    bodyType: 'Open Body' | 'Closed Body';
+    capacity: string;
+    capacityUnit: 'MT' | 'KG' | 'CBM';
+    makeModel: string;
+    driverName: string;
+    driverPhone: string;
+    driverLicence: string;
+    rcFile: File | null;
+    cBookFile: File | null;
+    permitFile: File | null;
+    insuranceFile: File | null;
+    pucFile: File | null;
+    driverDlFile: File | null;
+  }>({
+    registrationNumber: '',
+    category: 'Lorry',
+    bodyType: 'Open Body',
+    capacity: '15',
+    capacityUnit: 'MT',
+    makeModel: '',
+    driverName: '',
+    driverPhone: '',
+    driverLicence: '',
+    rcFile: null,
+    cBookFile: null,
+    permitFile: null,
+    insuranceFile: null,
+    pucFile: null,
+    driverDlFile: null,
+  });
+
+  // Transporter KYC files
+  const [panDocFile, setPanDocFile] = useState<File | null>(null);
+  const [chequeDocFile, setChequeDocFile] = useState<File | null>(null);
+  const [gstDocFile, setGstDocFile] = useState<File | null>(null);
+  const [declarationDocFile, setDeclarationDocFile] = useState<File | null>(null);
+
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -1844,6 +2665,192 @@ const AddVendorModal: React.FC<AddVendorModalProps> = ({ onClose, onSuccess }) =
     } else {
       setSelectedServices([...selectedServices, srv]);
     }
+  };
+
+  const handlePincodeChange = async (pin: string) => {
+    const clean = pin.replace(/\D/g, '').slice(0, 6);
+    setFormData((prev) => ({ ...prev, pincode: clean }));
+    if (clean.length === 6) {
+      try {
+        const res = await pincodeService.lookupPincode(clean);
+        if (res && res.success && res.data) {
+          setFormData((prev) => ({
+            ...prev,
+            pincode: clean,
+            city: res.data?.city || prev.city,
+            state: res.data?.state || prev.state,
+          }));
+        }
+      } catch (e) {
+        // network fallback
+      }
+    }
+  };
+
+  const handleGstinChange = (val: string) => {
+    const upper = val.toUpperCase().trim();
+    const updates: any = { gstin: upper };
+    if (upper.length >= 12) {
+      const derivedPan = upper.substring(2, 12);
+      if (/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(derivedPan) && !formData.pan) {
+        updates.pan = derivedPan;
+      }
+    }
+    setFormData((prev) => ({ ...prev, ...updates }));
+  };
+
+  const handleOpenAddVehicle = () => {
+    setEditingVehicleId(null);
+    setVehicleForm({
+      registrationNumber: '',
+      category: 'Lorry',
+      bodyType: 'Open Body',
+      capacity: '15',
+      capacityUnit: 'MT',
+      makeModel: '',
+      driverName: '',
+      driverPhone: '',
+      driverLicence: '',
+      rcFile: null,
+      cBookFile: null,
+      permitFile: null,
+      insuranceFile: null,
+      pucFile: null,
+      driverDlFile: null,
+    });
+    setVehicleFormError(null);
+    setIsVehicleModalOpen(true);
+  };
+
+  const handleOpenEditVehicle = (veh: AddModalVehicle) => {
+    setEditingVehicleId(veh.id);
+    setVehicleForm({
+      registrationNumber: veh.registrationNumber,
+      category: veh.category,
+      bodyType: veh.bodyType,
+      capacity: veh.capacity,
+      capacityUnit: veh.capacityUnit,
+      makeModel: veh.makeModel || '',
+      driverName: veh.driverName || '',
+      driverPhone: veh.driverPhone || '',
+      driverLicence: veh.driverLicence || '',
+      rcFile: veh.rcFile || null,
+      cBookFile: veh.cBookFile || null,
+      permitFile: veh.permitFile || null,
+      insuranceFile: veh.insuranceFile || null,
+      pucFile: veh.pucFile || null,
+      driverDlFile: veh.driverDlFile || null,
+    });
+    setVehicleFormError(null);
+    setIsVehicleModalOpen(true);
+  };
+
+  const handleSaveVehicleModal = () => {
+    const cleanReg = vehicleForm.registrationNumber.trim().toUpperCase();
+    if (!cleanReg) {
+      setVehicleFormError('Vehicle registration number is required (e.g. AS-01-EC-9944).');
+      return;
+    }
+    const capNum = parseFloat(vehicleForm.capacity);
+    if (isNaN(capNum) || capNum <= 0) {
+      setVehicleFormError('Rated capacity must be greater than zero.');
+      return;
+    }
+
+    if (editingVehicleId) {
+      setVehicles((prev) =>
+        prev.map((v) =>
+          v.id === editingVehicleId
+            ? {
+                ...v,
+                registrationNumber: cleanReg,
+                category: vehicleForm.category,
+                bodyType: vehicleForm.bodyType,
+                capacity: vehicleForm.capacity,
+                capacityUnit: vehicleForm.capacityUnit,
+                makeModel: vehicleForm.makeModel,
+                driverName: vehicleForm.driverName,
+                driverPhone: vehicleForm.driverPhone,
+                driverLicence: vehicleForm.driverLicence,
+                rcFile: vehicleForm.rcFile,
+                cBookFile: vehicleForm.cBookFile,
+                permitFile: vehicleForm.permitFile,
+                insuranceFile: vehicleForm.insuranceFile,
+                pucFile: vehicleForm.pucFile,
+                driverDlFile: vehicleForm.driverDlFile,
+              }
+            : v
+        )
+      );
+    } else {
+      const newVeh: AddModalVehicle = {
+        id: `veh-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        registrationNumber: cleanReg,
+        category: vehicleForm.category,
+        bodyType: vehicleForm.bodyType,
+        capacity: vehicleForm.capacity,
+        capacityUnit: vehicleForm.capacityUnit,
+        makeModel: vehicleForm.makeModel,
+        driverName: vehicleForm.driverName,
+        driverPhone: vehicleForm.driverPhone,
+        driverLicence: vehicleForm.driverLicence,
+        rcFile: vehicleForm.rcFile,
+        cBookFile: vehicleForm.cBookFile,
+        permitFile: vehicleForm.permitFile,
+        insuranceFile: vehicleForm.insuranceFile,
+        pucFile: vehicleForm.pucFile,
+        driverDlFile: vehicleForm.driverDlFile,
+      };
+      setVehicles((prev) => [...prev, newVeh]);
+      setFormData((prev) => ({ ...prev, fleetSize: String(vehicles.length + 1) }));
+    }
+    setIsVehicleModalOpen(false);
+  };
+
+  const handleRemoveVehicle = (id: string) => {
+    const updated = vehicles.filter((v) => v.id !== id);
+    setVehicles(updated);
+    setFormData((prev) => ({ ...prev, fleetSize: String(Math.max(0, updated.length)) }));
+  };
+
+  const uploadDocFile = async (
+    file: File,
+    folder: string,
+    entityId: string,
+    docType: string,
+    category: 'VENDOR' | 'VEHICLE' | 'DRIVER'
+  ) => {
+    const uploadReadyFile = await optimizeFileForUpload(file);
+    const fileExt = uploadReadyFile.name.split('.').pop() || 'pdf';
+    const filePath = `${folder}/${entityId}_${docType}_${Date.now()}.${fileExt}`;
+    let publicUrl = '';
+    try {
+      const { data: uploadData, error: uploadErr } = await supabase.storage
+        .from('documents')
+        .upload(filePath, uploadReadyFile, { upsert: true });
+
+      if (!uploadErr && uploadData) {
+        const { data: pubData } = supabase.storage
+          .from('documents')
+          .getPublicUrl(uploadData.path);
+        publicUrl = pubData?.publicUrl || '';
+      }
+    } catch (e) {
+      console.warn(`Storage upload note for ${docType}:`, e);
+    }
+
+    await supabase.from('documents').insert([
+      {
+        reference_id: entityId,
+        category,
+        document_type: docType,
+        file_name: file.name,
+        file_url: publicUrl || `https://storage.local/documents/${filePath}`,
+        storage_path: filePath,
+        status: 'PENDING_VERIFICATION',
+        created_at: new Date().toISOString(),
+      },
+    ]);
   };
 
   const validate = async (): Promise<boolean> => {
@@ -1869,8 +2876,8 @@ const AddVendorModal: React.FC<AddVendorModalProps> = ({ onClose, onSuccess }) =
       errs.contactName = 'Contact Person Name is required.';
     }
 
-    if (!formData.email.trim() || !formData.email.includes('@')) {
-      errs.email = 'Valid Email Address is required.';
+    if (formData.email && formData.email.trim() && !formData.email.includes('@')) {
+      errs.email = 'Valid Email Address format is required if provided.';
     }
 
     const cleanMobile = formData.mobile.replace(/\D/g, '');
@@ -1940,11 +2947,13 @@ const AddVendorModal: React.FC<AddVendorModalProps> = ({ onClose, onSuccess }) =
     setIsSubmitting(true);
     try {
       const fullAddress = `${formData.addressLine1.trim()}, ${formData.city.trim()}, ${formData.state.trim()} - ${formData.pincode.trim()}`;
+      const cleanMobile = formData.mobile.replace(/\D/g, '');
 
       // 1. Generate atomic NECL Vendor ID
       const vendorCode = await generateDbNeclId('VD');
 
       // 2. Insert Vendor Company
+      const fleetCount = vehicles.length > 0 ? vehicles.length : (formData.fleetSize ? parseInt(formData.fleetSize, 10) : 0);
       const { data: comp, error: compErr } = await supabase
         .from('vendor_companies')
         .insert([
@@ -1956,6 +2965,7 @@ const AddVendorModal: React.FC<AddVendorModalProps> = ({ onClose, onSuccess }) =
             address: fullAddress,
             status: formData.accountStatus as any,
             onboarding_source: 'ADMIN_PORTAL',
+            fleet_size: fleetCount,
           },
         ])
         .select()
@@ -1963,18 +2973,128 @@ const AddVendorModal: React.FC<AddVendorModalProps> = ({ onClose, onSuccess }) =
 
       if (compErr) throw compErr;
 
-      // 2. Insert Primary Contact User
+      // 3. Insert Primary Contact User
       const { error: userErr } = await supabase.from('vendor_users').insert([
         {
           vendor_id: comp.id,
           full_name: formData.contactName.trim(),
-          email: formData.email.trim(),
-          mobile: formData.mobile.replace(/\D/g, ''),
+          email: formData.email?.trim() || null,
+          mobile: cleanMobile,
           status: formData.accountStatus === 'APPROVED' ? 'ACTIVE' : 'PENDING',
         },
       ]);
 
       if (userErr) throw userErr;
+
+      // 4. Upload Transporter KYC Documents (Category: 'VENDOR', reference_id: comp.id)
+      if (panDocFile) {
+        await uploadDocFile(panDocFile, 'vendors/kyc', comp.id, 'PAN_CARD', 'VENDOR');
+      }
+      if (chequeDocFile) {
+        await uploadDocFile(chequeDocFile, 'vendors/kyc', comp.id, 'BANK_CANCELLED_CHEQUE', 'VENDOR');
+      }
+      if (gstDocFile) {
+        await uploadDocFile(gstDocFile, 'vendors/kyc', comp.id, 'GST_CERTIFICATE', 'VENDOR');
+      }
+      if (declarationDocFile) {
+        await uploadDocFile(declarationDocFile, 'vendors/kyc', comp.id, 'TRANSPORT_DECLARATION', 'VENDOR');
+      }
+
+      // 5. Insert Fleet Vehicles and Vehicle-Specific Documents
+      for (const veh of vehicles) {
+        const capNum = parseFloat(veh.capacity) || 15;
+        const capacityInMT = veh.capacityUnit === 'MT' ? capNum : veh.capacityUnit === 'KG' ? capNum / 1000 : capNum;
+
+        // Insert vehicle record
+        const { data: createdVeh, error: vehErr } = await supabase
+          .from('vehicles')
+          .insert([
+            {
+              registration_number: veh.registrationNumber.trim().toUpperCase(),
+              vehicle_type: veh.category,
+              body_type: veh.bodyType,
+              rated_capacity_mt: capacityInMT,
+              status: 'ACTIVE',
+            },
+          ])
+          .select()
+          .single();
+
+        if (vehErr) {
+          console.error('Error inserting vehicle:', vehErr);
+          continue;
+        }
+
+        // Link vehicle to vendor
+        await supabase.from('vendor_vehicle_links').insert([
+          {
+            vendor_id: comp.id,
+            vehicle_id: createdVeh.id,
+            status: 'ACTIVE',
+          },
+        ]);
+
+        // If driver details are provided, register driver linked to this vendor & vehicle
+        if (veh.driverName && veh.driverName.trim()) {
+          const driverCode = await generateDbNeclId('DR');
+          const cleanDriverPhone = (veh.driverPhone || '').replace(/\D/g, '') || cleanMobile;
+          await supabase.from('drivers').insert([
+            {
+              driver_code: driverCode,
+              full_name: veh.driverName.trim(),
+              mobile: cleanDriverPhone,
+              phone: cleanDriverPhone,
+              licence_number: veh.driverLicence?.trim() || null,
+              primary_vendor_id: comp.id,
+              assigned_vehicle_id: createdVeh.id,
+              status: 'ACTIVE',
+            },
+          ]);
+        }
+
+        // Upload Vehicle-Specific Documents (Category: 'VEHICLE', reference_id: createdVeh.id)
+        if (veh.rcFile) {
+          await uploadDocFile(veh.rcFile, 'vehicles/rc', createdVeh.id, 'REGISTRATION_CERTIFICATE', 'VEHICLE');
+        }
+        if (veh.cBookFile) {
+          await uploadDocFile(veh.cBookFile, 'vehicles/cbook', createdVeh.id, 'FITNESS_CERTIFICATE', 'VEHICLE');
+        }
+        if (veh.permitFile) {
+          await uploadDocFile(veh.permitFile, 'vehicles/permit', createdVeh.id, 'VEHICLE_PERMIT', 'VEHICLE');
+        }
+        if (veh.insuranceFile) {
+          await uploadDocFile(veh.insuranceFile, 'vehicles/insurance', createdVeh.id, 'INSURANCE_CERTIFICATE', 'VEHICLE');
+        }
+        if (veh.pucFile) {
+          await uploadDocFile(veh.pucFile, 'vehicles/puc', createdVeh.id, 'PUC_CERTIFICATE', 'VEHICLE');
+        }
+        if (veh.driverDlFile) {
+          await uploadDocFile(veh.driverDlFile, 'vehicles/driver_dl', createdVeh.id, 'DRIVING_LICENCE', 'VEHICLE');
+        }
+      }
+
+      // 6. Log Audit Log for Vendor Mobile Registration Modal review
+      await supabase.from('auth_audit_log').insert({
+        user_id: comp.id,
+        event_type: 'VENDOR_REGISTRATION_SUBMITTED',
+        details: {
+          vendorName: formData.businessName,
+          fleetStrength: `${vehicles.length} Commercial Vehicles`,
+          totalFleetCount: vehicles.length,
+          vehicleConfigs: vehicles.map((v) => ({
+            id: v.id,
+            registrationNumber: v.registrationNumber,
+            vehicleType: v.category,
+            bodyType: v.bodyType,
+            capacity: parseFloat(v.capacity) || 15,
+            capacityUnit: v.capacityUnit,
+            count: 1,
+            driverName: v.driverName,
+            driverPhone: v.driverPhone,
+            driverLicence: v.driverLicence,
+          })),
+        },
+      });
 
       onSuccess(comp.id);
     } catch (err: any) {
@@ -1987,12 +3107,12 @@ const AddVendorModal: React.FC<AddVendorModalProps> = ({ onClose, onSuccess }) =
 
   return (
     <div className="client-modal-overlay">
-      <div className="client-modal-container" style={{ maxWidth: '780px', maxHeight: '90vh', overflowY: 'auto' }}>
+      <div className="client-modal-container" style={{ maxWidth: '820px', maxHeight: '92vh', overflowY: 'auto' }}>
         <div className="client-modal-header">
           <div>
             <h3 className="client-modal-title">Register New Vendor</h3>
             <p style={{ margin: '2px 0 0', fontSize: '13px', color: '#64748B' }}>
-              Onboard a verified logistics partner, transporter, or fleet owner.
+              Onboard a verified logistics partner, transporter, or fleet owner with complete vehicle fleet.
             </p>
           </div>
           <button className="client-modal-close" onClick={onClose}>
@@ -2050,7 +3170,7 @@ const AddVendorModal: React.FC<AddVendorModalProps> = ({ onClose, onSuccess }) =
                     className="client-field-input"
                     placeholder="15-character GSTIN (e.g. 18AABCN1234F1Z5)"
                     value={formData.gstin}
-                    onChange={(e) => setFormData({ ...formData, gstin: e.target.value.toUpperCase() })}
+                    onChange={(e) => handleGstinChange(e.target.value)}
                   />
                   {errors.gstin && <div className="field-error-text">{errors.gstin}</div>}
                 </div>
@@ -2116,11 +3236,11 @@ const AddVendorModal: React.FC<AddVendorModalProps> = ({ onClose, onSuccess }) =
                 </div>
 
                 <div className="form-field-group">
-                  <label className="field-label-req">Official Email Address *</label>
+                  <label className="field-label-opt">Email Address (Optional)</label>
                   <input
                     type="email"
                     className="client-field-input"
-                    placeholder="contact@company.com"
+                    placeholder="vendor@company.com"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   />
@@ -2148,6 +3268,19 @@ const AddVendorModal: React.FC<AddVendorModalProps> = ({ onClose, onSuccess }) =
                 </div>
 
                 <div className="form-field-group">
+                  <label className="field-label-req">PIN Code *</label>
+                  <input
+                    type="text"
+                    maxLength={6}
+                    className="client-field-input"
+                    placeholder="6-digit PIN"
+                    value={formData.pincode}
+                    onChange={(e) => handlePincodeChange(e.target.value)}
+                  />
+                  {errors.pincode && <div className="field-error-text">{errors.pincode}</div>}
+                </div>
+
+                <div className="form-field-group">
                   <label className="field-label-req">City *</label>
                   <input
                     type="text"
@@ -2170,28 +3303,27 @@ const AddVendorModal: React.FC<AddVendorModalProps> = ({ onClose, onSuccess }) =
                   />
                   {errors.state && <div className="field-error-text">{errors.state}</div>}
                 </div>
-
-                <div className="form-field-group">
-                  <label className="field-label-req">PIN Code *</label>
-                  <input
-                    type="text"
-                    maxLength={6}
-                    className="client-field-input"
-                    placeholder="6-digit PIN"
-                    value={formData.pincode}
-                    onChange={(e) => setFormData({ ...formData, pincode: e.target.value.replace(/\D/g, '') })}
-                  />
-                  {errors.pincode && <div className="field-error-text">{errors.pincode}</div>}
-                </div>
               </div>
             </div>
 
             {/* Section D: Services and Fleet */}
             <div className="create-section-card" style={{ padding: '16px 20px' }}>
-              <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#172B4D', margin: '0 0 12px 0' }}>
-                D. Services and Fleet
-              </h4>
-              <div style={{ marginBottom: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#172B4D', margin: 0 }}>
+                  D. Services and Fleet
+                </h4>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={handleOpenAddVehicle}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', padding: '6px 12px', color: '#F05A22', borderColor: '#F05A22' }}
+                >
+                  <Plus size={14} />
+                  <span>+ Add Vehicle (Step 5)</span>
+                </button>
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
                 <label className="field-label-req">Services Provided</label>
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '6px' }}>
                   {SERVICES_OPTIONS.map((srv) => {
@@ -2208,6 +3340,7 @@ const AddVendorModal: React.FC<AddVendorModalProps> = ({ onClose, onSuccess }) =
                           background: isSelected ? 'rgba(240, 90, 34, 0.12)' : '#FFFFFF',
                           color: isSelected ? '#F05A22' : '#334155',
                           fontWeight: 600,
+                          borderRadius: '6px',
                         }}
                         onClick={() => toggleService(srv)}
                       >
@@ -2219,19 +3352,144 @@ const AddVendorModal: React.FC<AddVendorModalProps> = ({ onClose, onSuccess }) =
                 </div>
               </div>
 
-              <div className="form-field-group">
-                <label className="field-label-opt">Approximate Fleet Size (Vehicles)</label>
-                <input
-                  type="number"
-                  className="client-field-input"
-                  placeholder="e.g. 15"
-                  value={formData.fleetSize}
-                  onChange={(e) => setFormData({ ...formData, fleetSize: e.target.value })}
-                />
+              {/* Fleet Strength - Commercial Vehicles Table */}
+              <div style={{ marginTop: '16px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '14px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Truck size={16} color="#F05A22" />
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#1E293B' }}>
+                      Fleet Strength ({vehicles.length} vehicles registered)
+                    </span>
+                  </div>
+                  <span style={{ fontSize: '12px', color: '#64748B' }}>
+                    RC, Insurance, Permit, and driver linked per vehicle
+                  </span>
+                </div>
+
+                {vehicles.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '18px 12px', color: '#64748B', fontSize: '13px' }}>
+                    <p style={{ margin: '0 0 8px 0' }}>No vehicles added yet.</p>
+                    <button
+                      type="button"
+                      className="btn-create-orange"
+                      onClick={handleOpenAddVehicle}
+                      style={{ padding: '6px 14px', fontSize: '12px', margin: '0 auto' }}
+                    >
+                      <Plus size={14} />
+                      <span>Add First Commercial Vehicle</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {vehicles.map((v, index) => (
+                      <div
+                        key={v.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '10px 14px',
+                          background: '#FFFFFF',
+                          border: '1px solid #E2E8F0',
+                          borderRadius: '6px',
+                        }}
+                      >
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontWeight: 700, color: '#0F172A', fontSize: '13px' }}>
+                              #{index + 1} {v.registrationNumber}
+                            </span>
+                            <span style={{ fontSize: '11px', background: '#EFF6FF', color: '#2563EB', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                              {v.category}
+                            </span>
+                            <span style={{ fontSize: '11px', background: '#F1F5F9', color: '#475569', padding: '2px 6px', borderRadius: '4px' }}>
+                              {v.bodyType}
+                            </span>
+                            <span style={{ fontSize: '11px', background: '#ECFDF5', color: '#059669', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                              {v.capacity} {v.capacityUnit}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#64748B', marginTop: '4px' }}>
+                            Driver: {v.driverName ? `${v.driverName} (${v.driverPhone || 'No phone'})` : 'Unassigned'} • Docs: {[v.rcFile && 'RC', v.insuranceFile && 'Insurance', v.permitFile && 'Permit', v.cBookFile && 'C-Book', v.pucFile && 'PUC'].filter(Boolean).join(', ') || 'No docs uploaded'}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditVehicle(v)}
+                            style={{ background: 'none', border: 'none', color: '#2563EB', cursor: 'pointer', fontSize: '12px' }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveVehicle(v.id)}
+                            style={{ background: 'none', border: 'none', color: '#DC2626', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Transporter Compliance Documents (KYC) */}
+              <div style={{ marginTop: '16px', background: '#FAFAFA', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '14px' }}>
+                <h5 style={{ margin: '0 0 10px 0', fontSize: '13px', fontWeight: 700, color: '#1E293B' }}>
+                  Compliance KYC Documents (Transporter Level)
+                </h5>
+                <div className="form-grid-2col">
+                  <div>
+                    <label className="field-label-req">PAN Card (Mandatory) *</label>
+                    <input
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      onChange={(e) => setPanDocFile(e.target.files?.[0] || null)}
+                      className="client-field-input"
+                      style={{ fontSize: '12px', padding: '4px' }}
+                    />
+                    {panDocFile && <div style={{ fontSize: '11px', color: '#16A34A', marginTop: '2px' }}>✓ {panDocFile.name}</div>}
+                  </div>
+                  <div>
+                    <label className="field-label-req">Cancelled Cheque (Mandatory) *</label>
+                    <input
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      onChange={(e) => setChequeDocFile(e.target.files?.[0] || null)}
+                      className="client-field-input"
+                      style={{ fontSize: '12px', padding: '4px' }}
+                    />
+                    {chequeDocFile && <div style={{ fontSize: '11px', color: '#16A34A', marginTop: '2px' }}>✓ {chequeDocFile.name}</div>}
+                  </div>
+                  <div>
+                    <label className="field-label-opt">GST Certificate (Optional)</label>
+                    <input
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      onChange={(e) => setGstDocFile(e.target.files?.[0] || null)}
+                      className="client-field-input"
+                      style={{ fontSize: '12px', padding: '4px' }}
+                    />
+                    {gstDocFile && <div style={{ fontSize: '11px', color: '#16A34A', marginTop: '2px' }}>✓ {gstDocFile.name}</div>}
+                  </div>
+                  <div>
+                    <label className="field-label-opt">Transport Declaration (Optional)</label>
+                    <input
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      onChange={(e) => setDeclarationDocFile(e.target.files?.[0] || null)}
+                      className="client-field-input"
+                      style={{ fontSize: '12px', padding: '4px' }}
+                    />
+                    {declarationDocFile && <div style={{ fontSize: '11px', color: '#16A34A', marginTop: '2px' }}>✓ {declarationDocFile.name}</div>}
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Section E & F: Account Settings */}
+            {/* Section E: Account Settings */}
             <div className="create-section-card" style={{ padding: '16px 20px' }}>
               <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#172B4D', margin: '0 0 12px 0' }}>
                 E. Account Settings
@@ -2286,148 +3544,223 @@ const AddVendorModal: React.FC<AddVendorModalProps> = ({ onClose, onSuccess }) =
             </button>
           </div>
         </form>
-      </div>
-    </div>
-  );
-};
 
-// ─── Edit Vendor Modal Component ──────────────────────────────────────────────
-interface EditVendorModalProps {
-  vendor: VendorCompany;
-  onClose: () => void;
-  onSuccess: () => void;
-}
-
-const EditVendorModal: React.FC<EditVendorModalProps> = ({ vendor, onClose, onSuccess }) => {
-  const [formData, setFormData] = useState({
-    vendorName: vendor.vendor_name || '',
-    vendorType: vendor.vendor_type || 'Fleet Owner',
-    gstin: vendor.gstin || '',
-    pan: vendor.pan || '',
-    address: vendor.address || '',
-    status: vendor.status || 'PENDING',
-  });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.vendorName.trim()) {
-      setError('Vendor name is required.');
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const { error: updErr } = await supabase
-        .from('vendor_companies')
-        .update({
-          vendor_name: formData.vendorName.trim(),
-          gstin: formData.gstin.trim().toUpperCase() || null,
-          pan: formData.pan.trim().toUpperCase() || null,
-          address: formData.address.trim(),
-          status: formData.status as any,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', vendor.id);
-
-      if (updErr) throw updErr;
-
-      onSuccess();
-    } catch (err: any) {
-      setError(err.message || 'Failed to update vendor');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="client-modal-overlay">
-      <div className="client-modal-container" style={{ maxWidth: '580px' }}>
-        <div className="client-modal-header">
-          <h3 className="client-modal-title">Edit Vendor: {vendor.vendor_name}</h3>
-          <button className="client-modal-close" onClick={onClose}>
-            <X size={18} />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit}>
-          <div className="client-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            {error && (
-              <div className="error-alert-box">
-                <AlertTriangle size={15} />
-                <span>{error}</span>
-              </div>
-            )}
-
-            <div className="form-field-group">
-              <label className="field-label-req">Vendor / Company Legal Name *</label>
-              <input
-                type="text"
-                className="client-field-input"
-                value={formData.vendorName}
-                onChange={(e) => setFormData({ ...formData, vendorName: e.target.value })}
-              />
-            </div>
-
-            <div className="form-grid-2col">
-              <div className="form-field-group">
-                <label className="field-label-opt">GSTIN</label>
-                <input
-                  type="text"
-                  maxLength={15}
-                  className="client-field-input"
-                  value={formData.gstin}
-                  onChange={(e) => setFormData({ ...formData, gstin: e.target.value.toUpperCase() })}
-                />
+        {/* ── Sub-Modal: Add / Edit Vehicle Form (Step 5) ── */}
+        {isVehicleModalOpen && (
+          <div className="client-modal-overlay" style={{ zIndex: 10001 }}>
+            <div className="client-modal-container" style={{ maxWidth: '640px', maxHeight: '88vh', overflowY: 'auto' }}>
+              <div className="client-modal-header">
+                <h4 className="client-modal-title" style={{ fontSize: '15px' }}>
+                  {editingVehicleId ? 'Edit Vehicle Details' : 'Add Commercial Vehicle (Step 5)'}
+                </h4>
+                <button className="client-modal-close" onClick={() => setIsVehicleModalOpen(false)}>
+                  <X size={16} />
+                </button>
               </div>
 
-              <div className="form-field-group">
-                <label className="field-label-opt">PAN</label>
-                <input
-                  type="text"
-                  maxLength={10}
-                  className="client-field-input"
-                  value={formData.pan}
-                  onChange={(e) => setFormData({ ...formData, pan: e.target.value.toUpperCase() })}
-                />
+              <div className="client-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {vehicleFormError && (
+                  <div className="error-alert-box" style={{ padding: '8px 12px', fontSize: '13px' }}>
+                    <AlertTriangle size={15} />
+                    <span>{vehicleFormError}</span>
+                  </div>
+                )}
+
+                <div className="form-grid-2col">
+                  <div className="form-field-group">
+                    <label className="field-label-req">Vehicle Registration Number *</label>
+                    <input
+                      type="text"
+                      className="client-field-input"
+                      placeholder="e.g. AS-01-EC-9944"
+                      value={vehicleForm.registrationNumber}
+                      onChange={(e) => setVehicleForm({ ...vehicleForm, registrationNumber: e.target.value.toUpperCase() })}
+                    />
+                  </div>
+
+                  <div className="form-field-group">
+                    <label className="field-label-req">Vehicle Category *</label>
+                    <select
+                      className="client-field-input"
+                      value={vehicleForm.category}
+                      onChange={(e) => setVehicleForm({ ...vehicleForm, category: e.target.value as any })}
+                    >
+                      <option value="Lorry">Lorry</option>
+                      <option value="Trailer">Trailer</option>
+                      <option value="Van">Van</option>
+                      <option value="Heavy Carrier">Heavy Carrier</option>
+                    </select>
+                  </div>
+
+                  <div className="form-field-group">
+                    <label className="field-label-req">Body Type *</label>
+                    <select
+                      className="client-field-input"
+                      value={vehicleForm.bodyType}
+                      onChange={(e) => setVehicleForm({ ...vehicleForm, bodyType: e.target.value as any })}
+                    >
+                      <option value="Open Body">Open Body</option>
+                      <option value="Closed Body">Closed Body</option>
+                    </select>
+                  </div>
+
+                  <div className="form-field-group">
+                    <label className="field-label-req">Capacity & Unit *</label>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <input
+                        type="number"
+                        className="client-field-input"
+                        placeholder="15"
+                        value={vehicleForm.capacity}
+                        onChange={(e) => setVehicleForm({ ...vehicleForm, capacity: e.target.value })}
+                        style={{ flex: 1 }}
+                      />
+                      <select
+                        className="client-field-input"
+                        value={vehicleForm.capacityUnit}
+                        onChange={(e) => setVehicleForm({ ...vehicleForm, capacityUnit: e.target.value as any })}
+                        style={{ width: '90px' }}
+                      >
+                        <option value="MT">MT</option>
+                        <option value="KG">KG</option>
+                        <option value="CBM">CBM</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Driver Details */}
+                <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: '12px' }}>
+                  <h5 style={{ margin: '0 0 10px 0', fontSize: '13px', fontWeight: 600, color: '#334155' }}>
+                    Assigned Driver Information (Optional)
+                  </h5>
+                  <div className="form-grid-2col">
+                    <div className="form-field-group">
+                      <label className="field-label-opt">Driver Full Name</label>
+                      <input
+                        type="text"
+                        className="client-field-input"
+                        placeholder="Driver Name"
+                        value={vehicleForm.driverName}
+                        onChange={(e) => setVehicleForm({ ...vehicleForm, driverName: e.target.value })}
+                      />
+                    </div>
+                    <div className="form-field-group">
+                      <label className="field-label-opt">Driver Phone</label>
+                      <input
+                        type="tel"
+                        maxLength={10}
+                        className="client-field-input"
+                        placeholder="10-digit mobile"
+                        value={vehicleForm.driverPhone}
+                        onChange={(e) => setVehicleForm({ ...vehicleForm, driverPhone: e.target.value.replace(/\D/g, '') })}
+                      />
+                    </div>
+                    <div className="form-field-group" style={{ gridColumn: 'span 2' }}>
+                      <label className="field-label-opt">Driver Licence Number</label>
+                      <input
+                        type="text"
+                        className="client-field-input"
+                        placeholder="DL Number"
+                        value={vehicleForm.driverLicence}
+                        onChange={(e) => setVehicleForm({ ...vehicleForm, driverLicence: e.target.value.toUpperCase() })}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Vehicle-Specific Documents */}
+                <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: '12px' }}>
+                  <h5 style={{ margin: '0 0 10px 0', fontSize: '13px', fontWeight: 600, color: '#334155' }}>
+                    Vehicle-Specific Documents
+                  </h5>
+                  <div className="form-grid-2col">
+                    <div className="form-field-group">
+                      <label className="field-label-req">RC (Registration Certificate) *</label>
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={(e) => setVehicleForm({ ...vehicleForm, rcFile: e.target.files?.[0] || null })}
+                        className="client-field-input"
+                        style={{ fontSize: '12px', padding: '4px' }}
+                      />
+                      {vehicleForm.rcFile && <span style={{ fontSize: '11px', color: '#16A34A' }}>✓ {vehicleForm.rcFile.name}</span>}
+                    </div>
+
+                    <div className="form-field-group">
+                      <label className="field-label-opt">Insurance Certificate</label>
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={(e) => setVehicleForm({ ...vehicleForm, insuranceFile: e.target.files?.[0] || null })}
+                        className="client-field-input"
+                        style={{ fontSize: '12px', padding: '4px' }}
+                      />
+                      {vehicleForm.insuranceFile && <span style={{ fontSize: '11px', color: '#16A34A' }}>✓ {vehicleForm.insuranceFile.name}</span>}
+                    </div>
+
+                    <div className="form-field-group">
+                      <label className="field-label-opt">C-Book / Fitness Certificate</label>
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={(e) => setVehicleForm({ ...vehicleForm, cBookFile: e.target.files?.[0] || null })}
+                        className="client-field-input"
+                        style={{ fontSize: '12px', padding: '4px' }}
+                      />
+                      {vehicleForm.cBookFile && <span style={{ fontSize: '11px', color: '#16A34A' }}>✓ {vehicleForm.cBookFile.name}</span>}
+                    </div>
+
+                    <div className="form-field-group">
+                      <label className="field-label-opt">Vehicle Permit</label>
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={(e) => setVehicleForm({ ...vehicleForm, permitFile: e.target.files?.[0] || null })}
+                        className="client-field-input"
+                        style={{ fontSize: '12px', padding: '4px' }}
+                      />
+                      {vehicleForm.permitFile && <span style={{ fontSize: '11px', color: '#16A34A' }}>✓ {vehicleForm.permitFile.name}</span>}
+                    </div>
+
+                    <div className="form-field-group">
+                      <label className="field-label-opt">PUC Certificate</label>
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={(e) => setVehicleForm({ ...vehicleForm, pucFile: e.target.files?.[0] || null })}
+                        className="client-field-input"
+                        style={{ fontSize: '12px', padding: '4px' }}
+                      />
+                      {vehicleForm.pucFile && <span style={{ fontSize: '11px', color: '#16A34A' }}>✓ {vehicleForm.pucFile.name}</span>}
+                    </div>
+
+                    <div className="form-field-group">
+                      <label className="field-label-opt">Driver's Driving Licence (DL)</label>
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={(e) => setVehicleForm({ ...vehicleForm, driverDlFile: e.target.files?.[0] || null })}
+                        className="client-field-input"
+                        style={{ fontSize: '12px', padding: '4px' }}
+                      />
+                      {vehicleForm.driverDlFile && <span style={{ fontSize: '11px', color: '#16A34A' }}>✓ {vehicleForm.driverDlFile.name}</span>}
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
 
-            <div className="form-field-group">
-              <label className="field-label-req">Address</label>
-              <input
-                type="text"
-                className="client-field-input"
-                value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-              />
-            </div>
-
-            <div className="form-field-group">
-              <label className="field-label-req">Verification Status</label>
-              <select
-                className="client-field-input"
-                value={formData.status}
-                onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-              >
-                <option value="APPROVED">APPROVED (Verified)</option>
-                <option value="PENDING">PENDING (Under Review)</option>
-                <option value="REJECTED">REJECTED</option>
-                <option value="INACTIVE">INACTIVE</option>
-              </select>
+              <div className="client-modal-footer">
+                <button type="button" className="btn-secondary" onClick={() => setIsVehicleModalOpen(false)}>
+                  Cancel
+                </button>
+                <button type="button" className="btn-create-orange" onClick={handleSaveVehicleModal}>
+                  Save Vehicle
+                </button>
+              </div>
             </div>
           </div>
-
-          <div className="client-modal-footer">
-            <button type="button" className="btn-secondary" onClick={onClose} disabled={isSubmitting}>
-              Cancel
-            </button>
-            <button type="submit" className="btn-create-orange" disabled={isSubmitting}>
-              {isSubmitting ? 'Saving...' : 'Save Changes'}
-            </button>
-          </div>
-        </form>
+        )}
       </div>
     </div>
   );

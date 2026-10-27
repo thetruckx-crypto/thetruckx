@@ -5,7 +5,7 @@ import * as path from 'path';
 describe('NECL Client Mobile App Home Screen (ClientDashboardScreen) Redesign Requirements', () => {
   const screenPath = path.resolve(
     __dirname,
-    '../../../../mobile/src/screens/ClientDashboardScreen.tsx'
+    '../../../../mobile/src/screens/client/dashboard/ClientDashboardScreen.tsx'
   );
   const screenCode = fs.readFileSync(screenPath, 'utf-8');
 
@@ -60,8 +60,8 @@ describe('NECL Client Mobile App Home Screen (ClientDashboardScreen) Redesign Re
   });
 
   describe('3. Shipment Tracking Section (Primary Action)', () => {
-    it('should provide LR / tracking number input with search icon', () => {
-      expect(screenCode).toContain('placeholder="e.g. TRP-15102026-0001, BK-..."');
+    it('should provide LR / tracking number input with simple label and search icon', () => {
+      expect(screenCode).toContain('Enter LR / Consignment Number to Track Shipment');
       expect(screenCode).toContain('<Search size={17} color="#667085" />');
     });
 
@@ -70,9 +70,9 @@ describe('NECL Client Mobile App Home Screen (ClientDashboardScreen) Redesign Re
       expect(screenCode).toContain('<X size={16} color="#667085" />');
     });
 
-    it('should offer a QR / barcode scan option', () => {
-      expect(screenCode).toContain('<QrCode size={19} color="#0C1A34" strokeWidth={2.2} />');
-      expect(screenCode).toContain('setShowScanModal(true)');
+    it('should completely remove QR / barcode scan option and buttons', () => {
+      expect(screenCode).not.toContain('<QrCode size={19} color="#0C1A34" strokeWidth={2.2} />');
+      expect(screenCode).not.toContain('setShowScanModal(true)');
     });
 
     it('should feature a prominent orange Track Shipment button', () => {

@@ -22,9 +22,11 @@ import {
   Phone,
   MapPin,
   Check,
-  X
+  X,
+  Smartphone
 } from 'lucide-react';
-import { supabase } from '../../utils/supabase';
+import { supabase, ensureAdminSession } from '../../utils/supabase';
+import { VendorMobileRegistrationModal } from './VendorMobileRegistrationModal';
 
 interface VendorVerificationRequestsProps {
   onNavigateToDocumentApprovals: (vendorId?: string) => void;
@@ -38,6 +40,7 @@ export const VendorVerificationRequests: React.FC<VendorVerificationRequestsProp
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [inspectVendorId, setInspectVendorId] = useState<string | null>(null);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -59,6 +62,7 @@ export const VendorVerificationRequests: React.FC<VendorVerificationRequestsProp
   const loadRequests = useCallback(async () => {
     setLoading(true);
     try {
+      await ensureAdminSession();
       // Fetch vendor companies with their contacts and documents
       // Only include onboarding/verification candidates (PENDING, REJECTED, or UNDER_VERIFICATION)
       const { data: companies, error: compErr } = await supabase
@@ -794,6 +798,27 @@ export const VendorVerificationRequests: React.FC<VendorVerificationRequestsProp
                             <ArrowRight size={13} />
                           </button>
                           <button
+                            title="Review & Verification Inspector"
+                            style={{
+                              background: '#F0FDF4',
+                              color: '#16A34A',
+                              border: '1px solid #BBF7D0',
+                              padding: '5px 10px',
+                              borderRadius: '6px',
+                              fontWeight: 700,
+                              fontSize: '12px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '5px',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease',
+                            }}
+                            onClick={() => setInspectVendorId(req.id)}
+                          >
+                            <Smartphone size={13} />
+                            <span>Inspector</span>
+                          </button>
+                          <button
                             title="View Profile"
                             style={{
                               background: '#FFFFFF',
@@ -879,6 +904,16 @@ export const VendorVerificationRequests: React.FC<VendorVerificationRequestsProp
           </div>
         </div>
       </div>
+
+      {/* Vendor Mobile Registration Flow Inspector Modal */}
+      {inspectVendorId && (
+        <VendorMobileRegistrationModal
+          vendorId={inspectVendorId}
+          isOpen={!!inspectVendorId}
+          onClose={() => setInspectVendorId(null)}
+          onStatusUpdated={() => loadRequests()}
+        />
+      )}
     </div>
   );
 };

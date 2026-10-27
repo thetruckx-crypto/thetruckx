@@ -271,6 +271,68 @@ export const TripDetailView: React.FC = () => {
         </div>
       </div>
 
+      {/* Live GPS & Telematics Signal */}
+      <div className="content-card" style={{ marginBottom: "1.5rem" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+            <Navigation size={18} color="#F45325" />
+            <h2 style={{ fontSize: "1rem", fontWeight: 700, color: "#111111", margin: 0 }}>
+              Live Telematics & GPS Tracking
+            </h2>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              backgroundColor: (trip.current_lat && trip.current_lng) ? "#10B981" : "#F59E0B",
+              display: "inline-block",
+              boxShadow: (trip.current_lat && trip.current_lng) ? "0 0 8px #10B981" : "0 0 6px #F59E0B"
+            }} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: (trip.current_lat && trip.current_lng) ? "#047857" : "#B45309" }}>
+              {(trip.current_lat && trip.current_lng) ? "Live Beacon Active" : "Awaiting Telematics Beacon"}
+            </span>
+          </div>
+        </div>
+
+        {(trip.current_lat && trip.current_lng) ? (
+          <div style={{ background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 8, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#166534" }}>Current Coordinates</div>
+              <div style={{ fontSize: 12, color: "#15803D", marginTop: 2 }}>
+                Latitude: {Number(trip.current_lat).toFixed(5)}, Longitude: {Number(trip.current_lng).toFixed(5)}
+              </div>
+            </div>
+            <div style={{ fontSize: 12, color: "#166534" }}>
+              Last Ping: {trip.updated_at ? new Date(trip.updated_at).toLocaleTimeString() : "Just now"}
+            </div>
+          </div>
+        ) : (
+          <div style={{ background: "#F8FAFC", border: "1px dashed #CBD5E1", borderRadius: 8, padding: "16px 20px", display: "flex", alignItems: "center", gap: 16 }}>
+            <div style={{
+              width: 44,
+              height: 44,
+              borderRadius: "50%",
+              background: "#FEF3EE",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0
+            }}>
+              <Navigation size={22} color="#F45325" />
+            </div>
+            <div>
+              <p style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 700, color: "#1E293B" }}>
+                Awaiting GPS Telematics Ping
+              </p>
+              <p style={{ margin: 0, fontSize: 12, color: "#64748B", lineHeight: 1.5 }}>
+                Coordinates will stream automatically in real-time as the assigned driver advances transit updates from the TRUCKS Mobile Driver App or onboard FASTag / AIS-140 GPS telematics device.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Trip Lifecycle Status Pipeline */}
       <div className="content-card" style={{ marginBottom: "1.5rem" }}>
         <h2 style={{ fontSize: "1rem", fontWeight: 700, color: "#111111", margin: "0 0 1rem" }}>
