@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
   <uses-permission android:name="android.permission.INTERNET"/>
   <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
   <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
@@ -19,10 +20,12 @@
     <!-- Default notification icon and accent color for Firebase Cloud Messaging -->
     <meta-data
         android:name="com.google.firebase.messaging.default_notification_icon"
-        android:resource="@drawable/notification_icon" />
+        android:resource="@drawable/notification_icon"
+        tools:replace="android:resource" />
     <meta-data
         android:name="com.google.firebase.messaging.default_notification_color"
-        android:resource="@color/notification_icon_color" />
+        android:resource="@color/notification_icon_color"
+        tools:replace="android:resource" />
     <activity android:name=".MainActivity" android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode" android:launchMode="singleTask" android:windowSoftInputMode="adjustResize" android:theme="@style/Theme.App.SplashScreen" android:exported="true" android:screenOrientation="portrait">
       <intent-filter>
         <action android:name="android.intent.action.MAIN"/>
