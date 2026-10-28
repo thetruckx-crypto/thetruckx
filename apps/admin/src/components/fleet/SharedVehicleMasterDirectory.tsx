@@ -184,7 +184,51 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
   const [sortBy, setSortBy] = useState<string>('created_at');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
-  // Column Visibility State (Admin Customizable)
+  // Row Checkbox Selection State
+  const [selectedVehicleIds, setSelectedVehicleIds] = useState<Set<string>>(new Set());
+
+  // Debounced Search Query (300ms debounce to prevent database hammering)
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchQuery);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    setPage(1);
+    setSelectedVehicleIds(new Set());
+  }, [debouncedSearchQuery]);
+
+  // Selection computed states and handlers
+  const isAllSelected = vehicles.length > 0 && vehicles.every((v) => selectedVehicleIds.has(v.id));
+  const isSomeSelected = vehicles.some((v) => selectedVehicleIds.has(v.id)) && !isAllSelected;
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      const allIds = new Set(vehicles.map((v) => v.id));
+      setSelectedVehicleIds(allIds);
+    } else {
+      setSelectedVehicleIds(new Set());
+    }
+  };
+
+  const handleToggleSelectVehicle = (id: string, e: React.MouseEvent | React.ChangeEvent) => {
+    (e as any).stopPropagation?.();
+    setSelectedVehicleIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  // Column Visibility State (Admin Customizable matching Reference Image)
   const [showColumnConfig, setShowColumnConfig] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState({
     vendor: true,
@@ -193,10 +237,36 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
     ratedCapacity: true,
     minCapacity: true,
     ownership: true,
+    verification: true,
     documents: true,
-    status: true,
     updatedAt: true,
   });
+
+  // Handle vehicle registration number copy with feedback
+  const handleCopyVehicleNumber = (regNumber: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (!regNumber) return;
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(regNumber).then(
+        () => toast.success('Vehicle number copied'),
+        () => {
+          try {
+            const el = document.createElement('textarea');
+            el.value = regNumber;
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+            toast.success('Vehicle number copied');
+          } catch {
+            toast.error('Failed to copy vehicle number');
+          }
+        }
+      );
+    } else {
+      toast.error('Clipboard not supported');
+    }
+  };
 
   // Handle column sort toggle
   const handleSort = (field: string) => {
@@ -387,8 +457,8 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
 
       const filters: VehicleFilters = {};
 
-      if (searchQuery.trim()) {
-        filters.search = searchQuery.trim();
+      if (debouncedSearchQuery.trim()) {
+        filters.search = debouncedSearchQuery.trim();
       }
 
       // Priority: Specific status dropdown or KPI Tab
@@ -599,7 +669,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
 
   useEffect(() => {
     fetchVehicles();
-  }, [page, itemsPerPage, activeTab, categoryFilter, bodyTypeFilter, ownershipFilter, statusFilter, docStatusFilter, sortBy, sortOrder]);
+  }, [page, itemsPerPage, activeTab, categoryFilter, bodyTypeFilter, ownershipFilter, statusFilter, docStatusFilter, debouncedSearchQuery, sortBy, sortOrder]);
 
   // Close open dropdowns on outer click
   useEffect(() => {
@@ -796,6 +866,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
 
   const handleResetFilters = () => {
     setSearchQuery('');
+    setDebouncedSearchQuery('');
     setCategoryFilter('ALL');
     setBodyTypeFilter('ALL');
     setOwnershipFilter('ALL');
@@ -803,6 +874,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
     setDocStatusFilter('ALL');
     setActiveTab('ALL');
     setPage(1);
+    setSelectedVehicleIds(new Set());
   };
 
   const handleRefresh = () => {
@@ -1101,7 +1173,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
     }
   };
 
-  // Helper to render comprehensive document breakdown & micro-chips (RC, INS, FIT, PER)
+  // Helper to render comprehensive document breakdown & micro-chips (RC, INS, FIT, PER) for VERIFICATION column
   const renderDocumentSummary = (vehicle: Vehicle) => {
     const rc = vehicle.rc_verification_status || 'PENDING';
     const ins = vehicle.insurance_verification_status || 'PENDING';
@@ -1120,42 +1192,36 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
     const rejectedCount = docList.filter((d) => d.status === 'REJECTED').length;
     const expiredCount = docList.filter((d) => d.expiry && d.expiry < now).length;
 
-    let pillClass = 'has-pending';
-    let pillText = `${verifiedCount}/4 Verified`;
-    if (verifiedCount === 4) {
-      pillClass = 'all-verified';
-      pillText = '4/4 Verified';
-    } else if (rejectedCount > 0 || expiredCount > 0) {
-      pillClass = 'has-rejected';
-      pillText = expiredCount > 0 ? `${expiredCount} Expired` : `${rejectedCount} Rejected`;
-    }
+    const isAllOk = verifiedCount === 4;
+    const hasIssues = rejectedCount > 0 || expiredCount > 0;
+    const summaryColor = isAllOk ? '#12A66A' : hasIssues ? '#E53935' : '#D97706';
 
     return (
       <div
-        className="doc-summary-badge-wrap cursor-pointer"
+        className="cursor-pointer"
         onClick={(e) => {
           e.stopPropagation();
           setVerifyingVehicle(vehicle);
         }}
         title="Click to view & verify documents"
       >
-        <div className={`doc-count-pill ${pillClass}`}>
-          <span className="doc-count-text">{pillText}</span>
+        <div style={{ fontSize: 11.5, fontWeight: 700, color: summaryColor, lineHeight: 1.2 }}>
+          {verifiedCount}/4 Verified
         </div>
 
-        <div className="doc-chips-row">
+        <div className="vdir-doc-chips">
           {docList.map((doc) => {
             const isExpired = doc.expiry && doc.expiry < now;
-            let chipClass = 'chip-warn';
+            let chipClass = 'vdir-chip-pending';
             if (isExpired || doc.status === 'REJECTED') {
-              chipClass = 'chip-err';
+              chipClass = 'vdir-chip-rejected';
             } else if (doc.status === 'APPROVED') {
-              chipClass = 'chip-ok';
+              chipClass = 'vdir-chip-approved';
             }
             return (
               <span
                 key={doc.label}
-                className={`doc-chip ${chipClass}`}
+                className={`vdir-chip ${chipClass}`}
                 title={`${doc.name}: ${isExpired ? 'EXPIRED' : doc.status}`}
               >
                 {doc.label}
@@ -1167,46 +1233,15 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
     );
   };
 
-  // Helper to render document status icon with mini badge
-  const renderDocIcon = (
-    status: 'PENDING' | 'APPROVED' | 'REJECTED' | undefined,
-    tooltip: string
-  ) => {
-    const isApproved = status === 'APPROVED';
-    const isRejected = status === 'REJECTED';
-    const isPending = !isApproved && !isRejected;
-
-    return (
-      <div className="doc-status-icon-wrap" title={tooltip}>
-        <FileText size={14} />
-        {isApproved && (
-          <span className="mini-badge approved" title="Verified">
-            <Check size={8} strokeWidth={3} />
-          </span>
-        )}
-        {isPending && (
-          <span className="mini-badge pending" title="Pending Verification">
-            <Clock size={8} strokeWidth={3} />
-          </span>
-        )}
-        {isRejected && (
-          <span className="mini-badge rejected" title="Rejected">
-            <X size={8} strokeWidth={3} />
-          </span>
-        )}
-      </div>
-    );
-  };
-
-  // Helper to render overall status pill badge
+  // Helper to render overall status pill badge for DOCUMENTS column
   const renderVerificationBadge = (vehicle: Vehicle) => {
     const isCorrection = vehicle.rejection_reason?.startsWith('CORRECTION_REQUIRED');
 
     if (isCorrection) {
       return (
-        <span className="pill-badge orange" title="Corrections requested from vendor">
-          <AlertTriangle size={12} />
-          <span>Correction Required</span>
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11.5px] font-semibold bg-[#FFF4D6] text-[#D97706] border border-[#FDE68A]" title="Corrections requested from vendor">
+          <AlertTriangle size={11} />
+          <span>Correction</span>
         </span>
       );
     }
@@ -1220,9 +1255,9 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
 
     if (hasExpiredDoc) {
       return (
-        <span className="pill-badge red" title="One or more vehicle compliance documents have expired">
-          <AlertCircle size={12} />
-          <span>Expired Docs</span>
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11.5px] font-semibold bg-[#FFF0F0] text-[#E53935] border border-[#FECACA]" title="One or more vehicle compliance documents have expired">
+          <AlertCircle size={11} />
+          <span>Expired</span>
         </span>
       );
     }
@@ -1230,40 +1265,53 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
     switch (vehicle.verification_status) {
       case 'APPROVED':
         return (
-          <span className="pill-badge green" title="All vehicle verification checks passed">
-            <CheckCircle size={12} />
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11.5px] font-semibold bg-[#E7FAF0] text-[#12A66A] border border-[#A7F3D0]" title="All vehicle verification checks passed">
+            <Check size={11} strokeWidth={2.5} />
             <span>Verified</span>
           </span>
         );
       case 'REJECTED':
       case 'BLOCKED':
         return (
-          <span className="pill-badge red" title={vehicle.rejection_reason || 'Vehicle rejected'}>
-            <XCircle size={12} />
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11.5px] font-semibold bg-[#FFF0F0] text-[#E53935] border border-[#FECACA]" title={vehicle.rejection_reason || 'Vehicle rejected'}>
+            <XCircle size={11} />
             <span>Rejected</span>
           </span>
         );
       case 'PENDING_DOCS':
       default:
         return (
-          <span className="pill-badge amber" title="Verification pending administrative review">
-            <Clock size={12} />
-            <span>Pending Review</span>
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11.5px] font-semibold bg-[#FFF4D6] text-[#D97706] border border-[#FDE68A]" title="Verification pending administrative review">
+            <Clock size={11} strokeWidth={2.5} />
+            <span>Pending</span>
           </span>
         );
     }
   };
 
   // Helper to render ownership badge
-  const renderOwnershipBadge = (ownership: 'Owned' | 'Attached' | 'Both') => {
+  const renderOwnershipBadge = (ownership: 'Owned' | 'Attached' | 'Both' | string) => {
     switch (ownership) {
       case 'Attached':
-        return <span className="pill-badge purple">Attached</span>;
+      case 'Leased':
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11.5px] font-semibold bg-[#F5F3FF] text-[#7C3AED] border border-[#DDD6FE]">
+            {ownership}
+          </span>
+        );
       case 'Both':
-        return <span className="pill-badge amber">Both</span>;
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11.5px] font-semibold bg-[#FFFBEB] text-[#D97706] border border-[#FDE68A]">
+            Both
+          </span>
+        );
       case 'Owned':
       default:
-        return <span className="pill-badge blue">Owned</span>;
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11.5px] font-semibold bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE]">
+            Owned
+          </span>
+        );
     }
   };
 
@@ -1419,7 +1467,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
         </div>
       </div>
 
-      {/* 3. Search and Filters Toolbar matching Client Management */}
+      {/* 3. Search and Filters Toolbar matching Reference Image */}
       <div className="filters-bar-card">
         {/* Search */}
         <div className="search-input-wrap">
@@ -1429,10 +1477,9 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
             value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value);
-              setPage(1);
             }}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            placeholder="Search vehicle number, vendor name, or vendor ID..."
+            placeholder="Search by vehicle number, vendor name, or vendor ID..."
             className="client-search-input"
             id="vehicle-search-input"
             aria-label="Search vehicles"
@@ -1442,6 +1489,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
               className="clear-search-btn"
               onClick={() => {
                 setSearchQuery('');
+                setDebouncedSearchQuery('');
                 setPage(1);
               }}
               aria-label="Clear search"
@@ -1451,7 +1499,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
           )}
         </div>
 
-        {/* Category Filter */}
+        {/* 1. Category Filter */}
         <select
           value={categoryFilter}
           onChange={(e) => {
@@ -1474,7 +1522,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
           <option value="Container">Container</option>
         </select>
 
-        {/* Ownership Filter */}
+        {/* 2. Ownership Filter */}
         <select
           value={ownershipFilter}
           onChange={(e) => {
@@ -1490,7 +1538,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
           <option value="Both">Both</option>
         </select>
 
-        {/* Verification Status Filter */}
+        {/* 3. Status Filter */}
         <select
           value={statusFilter}
           onChange={(e) => {
@@ -1498,7 +1546,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
             setPage(1);
           }}
           className="filter-select"
-          aria-label="Filter by Verification Status"
+          aria-label="Filter by Status"
         >
           <option value="ALL">All Status</option>
           <option value="Verified">Verified</option>
@@ -1507,7 +1555,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
           <option value="Correction Required">Correction Required</option>
         </select>
 
-        {/* Body Type Filter */}
+        {/* 4. Body Type Filter */}
         <select
           value={bodyTypeFilter}
           onChange={(e) => {
@@ -1524,22 +1572,6 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
           <option value="Container">Container</option>
         </select>
 
-        {/* Document Status Filter */}
-        <select
-          value={docStatusFilter}
-          onChange={(e) => {
-            setDocStatusFilter(e.target.value);
-            setPage(1);
-          }}
-          className="filter-select"
-          aria-label="Filter by Document Status"
-        >
-          <option value="ALL">All Documents</option>
-          <option value="ALL_VERIFIED">All Verified (4/4)</option>
-          <option value="HAS_PENDING">Pending Documents</option>
-          <option value="EXPIRED_REJECTED">Expired / Rejected</option>
-        </select>
-
         {/* Reset Button */}
         <button onClick={handleResetFilters} className="btn-filter-reset" title="Reset all search queries and filters">
           <RotateCcw size={14} />
@@ -1554,7 +1586,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
       </div>
 
       {/* Active Filter Chips Strip */}
-      {(searchQuery || categoryFilter !== 'ALL' || ownershipFilter !== 'ALL' || statusFilter !== 'ALL' || bodyTypeFilter !== 'ALL' || docStatusFilter !== 'ALL') && (
+      {(searchQuery || categoryFilter !== 'ALL' || ownershipFilter !== 'ALL' || statusFilter !== 'ALL' || bodyTypeFilter !== 'ALL') && (
         <div className="active-filters-chips-bar" role="region" aria-label="Active filters">
           <span style={{ fontSize: 12, fontWeight: 700, color: "#64748B", marginRight: 4 }}>
             Active Filters:
@@ -1562,7 +1594,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
           {searchQuery && (
             <div className="filter-chip-tag">
               <span>Query: <strong>"{searchQuery}"</strong></span>
-              <button className="filter-chip-remove-btn" onClick={() => { setSearchQuery(''); setPage(1); }} aria-label="Remove search filter">
+              <button className="filter-chip-remove-btn" onClick={() => { setSearchQuery(''); setDebouncedSearchQuery(''); setPage(1); }} aria-label="Remove search filter">
                 <X size={12} />
               </button>
             </div>
@@ -1587,6 +1619,14 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
             <div className="filter-chip-tag">
               <span>Status: <strong>{statusFilter}</strong></span>
               <button className="filter-chip-remove-btn" onClick={() => { setStatusFilter('ALL'); setPage(1); }} aria-label="Remove status filter">
+                <X size={12} />
+              </button>
+            </div>
+          )}
+          {bodyTypeFilter !== 'ALL' && (
+            <div className="filter-chip-tag">
+              <span>Body Type: <strong>{bodyTypeFilter}</strong></span>
+              <button className="filter-chip-remove-btn" onClick={() => { setBodyTypeFilter('ALL'); setPage(1); }} aria-label="Remove body type filter">
                 <X size={12} />
               </button>
             </div>
@@ -1656,12 +1696,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
             Total: <strong style={{ color: '#0F172A' }}>{total}</strong>
           </span>
 
-          <button onClick={handleExportCSV} className="btn-action-outline" title="Export current list to CSV">
-            <Download size={14} />
-            <span>Export</span>
-          </button>
-
-          {/* Column Visibility Toggle Button */}
+          {/* Column Visibility Toggle Button (Matches Reference Order) */}
           <div className="relative">
             <button
               onClick={() => setShowColumnConfig(!showColumnConfig)}
@@ -1690,8 +1725,8 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                         ratedCapacity: true,
                         minCapacity: true,
                         ownership: true,
+                        verification: true,
                         documents: true,
-                        status: true,
                         updatedAt: true,
                       })
                     }
@@ -1703,13 +1738,13 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                 <div className="space-y-1.5 max-h-60 overflow-y-auto">
                   {[
                     { key: 'vendor', label: 'Vendor ID & Name' },
-                    { key: 'category', label: 'Vehicle Category' },
+                    { key: 'category', label: 'Category' },
                     { key: 'bodyType', label: 'Body Type' },
                     { key: 'ratedCapacity', label: 'Rated Capacity (MT)' },
                     { key: 'minCapacity', label: 'Minimum Capacity (MT)' },
                     { key: 'ownership', label: 'Ownership' },
+                    { key: 'verification', label: 'Verification' },
                     { key: 'documents', label: 'Documents' },
-                    { key: 'status', label: 'Verification Status' },
                     { key: 'updatedAt', label: 'Updated At' },
                   ].map((col) => (
                     <label
@@ -1734,6 +1769,12 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
               </div>
             )}
           </div>
+
+          {/* Export Button */}
+          <button onClick={handleExportCSV} className="btn-action-outline" title="Export current list to CSV">
+            <Download size={14} />
+            <span>Export</span>
+          </button>
         </div>
       </div>
 
@@ -1741,28 +1782,32 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
       <div className="client-table-card">
         {loading && vehicles.length === 0 ? (
           <div className="vendor-table-scroll" style={{ overflowX: 'auto', overflowY: 'hidden', width: '100%' }}>
-            <table className="client-table" style={{ minWidth: 1240 }}>
+            <table className="client-table" style={{ minWidth: 1280 }}>
               <thead>
                 <tr>
-                  <th style={{ width: 56, minWidth: 56, textAlign: 'center' }}>#</th>
-                  <th style={{ width: 170, minWidth: 170 }}>Vehicle Number</th>
-                  <th style={{ width: 230, minWidth: 230 }}>Vendor ID & Name</th>
-                  <th style={{ width: 150, minWidth: 150 }}>Category</th>
-                  <th style={{ width: 130, minWidth: 130 }}>Body Type</th>
-                  <th style={{ width: 140, minWidth: 140, textAlign: 'right', paddingRight: 24 }}>Rated Cap (MT)</th>
-                  <th style={{ width: 130, minWidth: 130, textAlign: 'right', paddingRight: 24 }}>Min Cap (MT)</th>
+                  <th style={{ width: 44, minWidth: 44, textAlign: 'center' }}>
+                    <div className="table-skeleton-cell" style={{ width: 16, height: 16, margin: '0 auto', borderRadius: 4 }} />
+                  </th>
+                  <th style={{ width: 48, minWidth: 48, textAlign: 'center' }}>#</th>
+                  <th style={{ width: 175, minWidth: 175 }}>Vehicle Number</th>
+                  <th style={{ width: 220, minWidth: 220 }}>Vendor ID & Name</th>
+                  <th style={{ width: 140, minWidth: 140 }}>Category</th>
+                  <th style={{ width: 120, minWidth: 120 }}>Body Type</th>
+                  <th style={{ width: 130, minWidth: 130, textAlign: 'right', paddingRight: 24 }}>Rated Cap (MT)</th>
+                  <th style={{ width: 120, minWidth: 120, textAlign: 'right', paddingRight: 24 }}>Min Cap (MT)</th>
                   <th style={{ width: 110, minWidth: 110 }}>Ownership</th>
-                  <th style={{ width: 180, minWidth: 180 }}>Documents</th>
-                  <th style={{ width: 170, minWidth: 170 }}>Verification</th>
-                  <th style={{ width: 170, minWidth: 170 }}>Updated At</th>
+                  <th style={{ width: 160, minWidth: 160 }}>Verification</th>
+                  <th style={{ width: 130, minWidth: 130 }}>Documents</th>
+                  <th style={{ width: 180, minWidth: 180 }}>Updated At</th>
                   <th style={{ width: 90, minWidth: 90, textAlign: 'center' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {Array.from({ length: 6 }).map((_, idx) => (
                   <tr key={idx} className="table-skeleton-row">
-                    <td style={{ textAlign: 'center' }}><div className="table-skeleton-cell" style={{ width: 24, margin: '0 auto' }} /></td>
-                    <td><div className="table-skeleton-cell" style={{ width: 120, height: 26, borderRadius: 6 }} /></td>
+                    <td style={{ textAlign: 'center' }}><div className="table-skeleton-cell" style={{ width: 16, height: 16, margin: '0 auto', borderRadius: 4 }} /></td>
+                    <td style={{ textAlign: 'center' }}><div className="table-skeleton-cell" style={{ width: 20, margin: '0 auto' }} /></td>
+                    <td><div className="table-skeleton-cell" style={{ width: 135, height: 26, borderRadius: 6 }} /></td>
                     <td><div className="table-skeleton-cell" style={{ width: 150 }} /></td>
                     <td><div className="table-skeleton-cell" style={{ width: 90 }} /></td>
                     <td><div className="table-skeleton-cell" style={{ width: 80 }} /></td>
@@ -1770,8 +1815,8 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                     <td style={{ textAlign: 'right', paddingRight: 24 }}><div className="table-skeleton-cell" style={{ width: 60, marginLeft: 'auto' }} /></td>
                     <td><div className="table-skeleton-cell" style={{ width: 70 }} /></td>
                     <td><div className="table-skeleton-cell" style={{ width: 110 }} /></td>
-                    <td><div className="table-skeleton-cell" style={{ width: 90, height: 22, borderRadius: 9999 }} /></td>
-                    <td><div className="table-skeleton-cell" style={{ width: 100 }} /></td>
+                    <td><div className="table-skeleton-cell" style={{ width: 85, height: 22, borderRadius: 9999 }} /></td>
+                    <td><div className="table-skeleton-cell" style={{ width: 120 }} /></td>
                     <td style={{ textAlign: 'center' }}><div className="table-skeleton-cell" style={{ width: 50, height: 28, margin: '0 auto', borderRadius: 8 }} /></td>
                   </tr>
                 ))}
@@ -1794,11 +1839,11 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
             </div>
             <h3 className="text-lg font-bold text-slate-800 mb-1">No vehicles found</h3>
             <p className="text-slate-500 text-sm max-w-md mx-auto mb-5">
-              {searchQuery || categoryFilter !== 'ALL' || statusFilter !== 'ALL' || bodyTypeFilter !== 'ALL' || ownershipFilter !== 'ALL' || docStatusFilter !== 'ALL'
+              {searchQuery || categoryFilter !== 'ALL' || statusFilter !== 'ALL' || bodyTypeFilter !== 'ALL' || ownershipFilter !== 'ALL'
                 ? 'No vehicle records matched your filter criteria. Try resetting filters.'
                 : 'Vehicles registered by vendors will automatically appear here for verification and fleet management.'}
             </p>
-            {searchQuery || categoryFilter !== 'ALL' || statusFilter !== 'ALL' || bodyTypeFilter !== 'ALL' || ownershipFilter !== 'ALL' || docStatusFilter !== 'ALL' ? (
+            {searchQuery || categoryFilter !== 'ALL' || statusFilter !== 'ALL' || bodyTypeFilter !== 'ALL' || ownershipFilter !== 'ALL' ? (
               <button onClick={handleResetFilters} className="btn-filter-reset" style={{ margin: '0 auto' }}>
                 Clear Filters
               </button>
@@ -1812,19 +1857,33 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
         ) : (
           <>
             {/* Desktop / Tablet Scrollable Table View - NATURAL SCROLLING, NO STICKY COLUMNS */}
-            <div className="vendor-table-scroll hidden md:block" style={{ overflowX: 'auto', overflowY: 'hidden', width: '100%' }}>
-              <table className="client-table" style={{ minWidth: 1240 }}>
+            <div className="vendor-table-scroll" style={{ overflowX: 'auto', overflowY: 'hidden', width: '100%' }}>
+              <table className="client-table" style={{ minWidth: 1280 }}>
                 <thead>
                   <tr>
-                    {/* 1. Row # */}
-                    <th style={{ width: 56, minWidth: 56, textAlign: 'center' }}>
+                    {/* 1. Selection Checkbox */}
+                    <th style={{ width: 44, minWidth: 44, textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        checked={isAllSelected}
+                        ref={(el) => {
+                          if (el) el.indeterminate = isSomeSelected;
+                        }}
+                        onChange={handleSelectAll}
+                        className="rounded border-slate-300 text-[#F4510B] focus:ring-[#F4510B] cursor-pointer"
+                        aria-label="Select all vehicles on current page"
+                      />
+                    </th>
+
+                    {/* 2. Row # */}
+                    <th style={{ width: 48, minWidth: 48, textAlign: 'center' }}>
                       #
                     </th>
 
-                    {/* 2. Vehicle Number */}
+                    {/* 3. Vehicle Number */}
                     <th
                       className="select-none cursor-pointer"
-                      style={{ width: 170, minWidth: 170 }}
+                      style={{ width: 175, minWidth: 175 }}
                       onClick={() => handleSort('registration_number')}
                       title="Sort by vehicle number"
                     >
@@ -1838,18 +1897,18 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                       </div>
                     </th>
 
-                    {/* 3. Vendor ID & Name */}
+                    {/* 4. Vendor ID & Name */}
                     {visibleColumns.vendor && (
-                      <th style={{ width: 230, minWidth: 230 }}>
+                      <th style={{ width: 220, minWidth: 220 }}>
                         <span>Vendor ID & Name</span>
                       </th>
                     )}
 
-                    {/* 4. Vehicle Category */}
+                    {/* 5. Category */}
                     {visibleColumns.category && (
                       <th
                         className="select-none cursor-pointer"
-                        style={{ width: 150, minWidth: 150 }}
+                        style={{ width: 140, minWidth: 140 }}
                         onClick={() => handleSort('vehicle_type')}
                         title="Sort by category"
                       >
@@ -1864,16 +1923,16 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                       </th>
                     )}
 
-                    {/* 5. Body Type */}
+                    {/* 6. Body Type */}
                     {visibleColumns.bodyType && (
-                      <th style={{ width: 130, minWidth: 130 }}>Body Type</th>
+                      <th style={{ width: 120, minWidth: 120 }}>Body Type</th>
                     )}
 
-                    {/* 6. Rated Capacity */}
+                    {/* 7. Rated Capacity */}
                     {visibleColumns.ratedCapacity && (
                       <th
                         className="select-none cursor-pointer"
-                        style={{ width: 140, minWidth: 140, textAlign: 'right', paddingRight: '24px' }}
+                        style={{ width: 130, minWidth: 130, textAlign: 'right', paddingRight: '24px' }}
                         onClick={() => handleSort('rated_capacity_mt')}
                         title="Sort by rated capacity"
                       >
@@ -1888,47 +1947,33 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                       </th>
                     )}
 
-                    {/* 7. Minimum Capacity */}
+                    {/* 8. Minimum Capacity */}
                     {visibleColumns.minCapacity && (
-                      <th style={{ width: 130, minWidth: 130, textAlign: 'right', paddingRight: '24px' }}>
+                      <th style={{ width: 120, minWidth: 120, textAlign: 'right', paddingRight: '24px' }}>
                         Min Cap (MT)
                       </th>
                     )}
 
-                    {/* 8. Ownership */}
+                    {/* 9. Ownership */}
                     {visibleColumns.ownership && (
                       <th style={{ width: 110, minWidth: 110 }}>Ownership</th>
                     )}
 
-                    {/* 9. Documents */}
+                    {/* 10. Verification (Shows 0/4 Verified & chips) */}
+                    {visibleColumns.verification && (
+                      <th style={{ width: 160, minWidth: 160 }}>Verification</th>
+                    )}
+
+                    {/* 11. Documents (Shows overall Verified status pill badge) */}
                     {visibleColumns.documents && (
-                      <th style={{ width: 180, minWidth: 180 }}>Documents</th>
+                      <th style={{ width: 130, minWidth: 130 }}>Documents</th>
                     )}
 
-                    {/* 10. Verification Status */}
-                    {visibleColumns.status && (
-                      <th
-                        className="select-none cursor-pointer"
-                        style={{ width: 170, minWidth: 170 }}
-                        onClick={() => handleSort('verification_status')}
-                        title="Sort by verification status"
-                      >
-                        <div className="flex items-center gap-1.5">
-                          <span>Verification</span>
-                          {sortBy === 'verification_status' ? (
-                            sortOrder === 'asc' ? <ChevronUp size={13} className="text-[#F05A22]" /> : <ChevronDown size={13} className="text-[#F05A22]" />
-                          ) : (
-                            <ArrowUpDown size={12} className="opacity-40" />
-                          )}
-                        </div>
-                      </th>
-                    )}
-
-                    {/* 11. Updated At */}
+                    {/* 12. Updated At */}
                     {visibleColumns.updatedAt && (
                       <th
                         className="select-none cursor-pointer"
-                        style={{ width: 170, minWidth: 170 }}
+                        style={{ width: 180, minWidth: 180 }}
                         onClick={() => handleSort('updated_at')}
                         title="Sort by last updated"
                       >
@@ -1943,7 +1988,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                       </th>
                     )}
 
-                    {/* 12. Actions (Natural Non-Sticky) */}
+                    {/* 13. Actions (Natural Non-Sticky) */}
                     <th style={{ width: 90, minWidth: 90, textAlign: 'center' }}>
                       Actions
                     </th>
@@ -1966,38 +2011,46 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                         onClick={() => setFullViewVehicle(vehicle)}
                         className="cursor-pointer hover:bg-slate-50 transition-colors"
                       >
-                        {/* 1. Row # */}
-                        <td style={{ textAlign: 'center', color: '#64748B', fontWeight: 600 }}>
+                        {/* 1. Selection Checkbox */}
+                        <td onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center' }}>
+                          <input
+                            type="checkbox"
+                            checked={selectedVehicleIds.has(vehicle.id)}
+                            onChange={(e) => handleToggleSelectVehicle(vehicle.id, e)}
+                            className="rounded border-slate-300 text-[#F4510B] focus:ring-[#F4510B] cursor-pointer"
+                            aria-label={`Select vehicle ${vehicle.registration_number}`}
+                          />
+                        </td>
+
+                        {/* 2. Row # */}
+                        <td style={{ textAlign: 'center', color: '#172B4D', fontWeight: 600 }}>
                           {rowNum}
                         </td>
 
-                        {/* 2. Vehicle Number */}
+                        {/* 3. Vehicle Number (Badge + Copy inline on same line) */}
                         <td onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center gap-1.5">
-                            <div
-                              className="vehicle-plate-badge cursor-pointer"
+                          <div className="vehicle-number-cell">
+                            <span
+                              className="vehicle-number-badge cursor-pointer"
                               onClick={() => setFullViewVehicle(vehicle)}
                               title="Click to view vehicle details"
                             >
-                              <span className="plate-ind">IND</span>
-                              <span className="plate-number">{vehicle.registration_number}</span>
-                            </div>
+                              <span className="vehicle-country-code">IND</span>
+                              <span className="vehicle-registration-number">{vehicle.registration_number}</span>
+                            </span>
                             <button
                               type="button"
-                              onClick={() => {
-                                navigator.clipboard.writeText(vehicle.registration_number);
-                                toast.success(`Vehicle number ${vehicle.registration_number} copied`);
-                              }}
-                              className="p-1 text-slate-400 hover:text-slate-700 rounded transition-colors"
+                              className="vehicle-copy-button"
+                              aria-label={`Copy vehicle number ${vehicle.registration_number}`}
                               title="Copy vehicle number"
-                              aria-label="Copy vehicle number"
+                              onClick={(e) => handleCopyVehicleNumber(vehicle.registration_number, e)}
                             >
-                              <Copy size={12} />
+                              <Copy size={13} />
                             </button>
                           </div>
                         </td>
 
-                        {/* 3. Vendor ID & Name */}
+                        {/* 4. Vendor ID & Name */}
                         {visibleColumns.vendor && (
                           <td onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center gap-2.5">
@@ -2061,57 +2114,55 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                           </td>
                         )}
 
-                        {/* 4. Vehicle Category */}
+                        {/* 5. Category */}
                         {visibleColumns.category && (
                           <td>
                             <div className="flex items-center gap-1.5">
-                              <Truck size={15} className="text-slate-400 shrink-0" />
-                              <span className="font-semibold text-slate-800 text-[13px]" title={vehicle.vehicle_type}>
+                              <Truck size={14} className="text-slate-400 shrink-0" />
+                              <span className="font-medium text-slate-800 text-[13px] whitespace-nowrap" title={vehicle.vehicle_type}>
                                 {formatVehicleCategory(vehicle.vehicle_type)}
                               </span>
                             </div>
                           </td>
                         )}
 
-                        {/* 5. Body Type */}
+                        {/* 6. Body Type */}
                         {visibleColumns.bodyType && (
-                          <td>
-                            <span className="inline-block px-2.5 py-0.5 rounded-md text-[12px] font-medium bg-slate-100 text-slate-700 border border-slate-200 whitespace-nowrap">
-                              {vehicle.body_type || 'Open Body'}
-                            </span>
+                          <td className="text-slate-700 text-[13px] whitespace-nowrap">
+                            {vehicle.body_type || 'Open Body'}
                           </td>
                         )}
 
-                        {/* 6. Rated Capacity */}
+                        {/* 7. Rated Capacity */}
                         {visibleColumns.ratedCapacity && (
-                          <td className="font-mono font-bold text-slate-700 text-right pr-6 whitespace-nowrap">
+                          <td className="font-mono text-slate-700 text-[13px] text-right pr-6 whitespace-nowrap">
                             {vehicle.rated_capacity_mt != null ? `${Number(vehicle.rated_capacity_mt).toFixed(1)} MT` : '—'}
                           </td>
                         )}
 
-                        {/* 7. Minimum Capacity */}
+                        {/* 8. Minimum Capacity */}
                         {visibleColumns.minCapacity && (
-                          <td className="font-mono text-slate-600 text-right pr-6 whitespace-nowrap">
+                          <td className="font-mono text-slate-600 text-[13px] text-right pr-6 whitespace-nowrap">
                             {vehicle.minimum_capacity_mt != null ? `${Number(vehicle.minimum_capacity_mt).toFixed(1)} MT` : '—'}
                           </td>
                         )}
 
-                        {/* 8. Ownership */}
+                        {/* 9. Ownership */}
                         {visibleColumns.ownership && (
                           <td>{renderOwnershipBadge(ownership)}</td>
                         )}
 
-                        {/* 9. Documents */}
-                        {visibleColumns.documents && (
+                        {/* 10. Verification (0/4 Verified & chips) */}
+                        {visibleColumns.verification && (
                           <td>{renderDocumentSummary(vehicle)}</td>
                         )}
 
-                        {/* 10. Verification Status */}
-                        {visibleColumns.status && (
+                        {/* 11. Documents (Verified status pill badge) */}
+                        {visibleColumns.documents && (
                           <td>{renderVerificationBadge(vehicle)}</td>
                         )}
 
-                        {/* 11. Updated At (Single-line) */}
+                        {/* 12. Updated At */}
                         {visibleColumns.updatedAt && (
                           <td className="text-slate-600 text-[12px] whitespace-nowrap">
                             <span title={`Full timestamp: ${vehicle.updated_at || vehicle.created_at}`}>
@@ -2120,7 +2171,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                           </td>
                         )}
 
-                        {/* 12. Actions (Natural Non-Sticky) */}
+                        {/* 13. Actions (Natural Non-Sticky) */}
                         <td onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center' }}>
                           <div className="flex items-center justify-center gap-1">
                             {/* Primary Eye View Button */}
@@ -2154,84 +2205,6 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                   })}
                 </tbody>
               </table>
-            </div>
-
-            {/* Mobile Card-Based List (Shown on screens < 768px) */}
-            <div className="block md:hidden divide-y divide-slate-100 p-2">
-              {vehicles.map((vehicle) => {
-                const vendorMeta = transporterDetails[vehicle.id];
-                const hasVendor = Boolean(vendorMeta && vendorMeta.vendorName);
-                const vendorName = hasVendor ? vendorMeta.vendorName : 'Vendor name not provided';
-                const vendorCode = vendorMeta?.vendorCode || '—';
-                const ownership = vendorMeta?.ownership || (vehicle as any).ownership_type || 'Owned';
-
-                return (
-                  <div
-                    key={vehicle.id}
-                    className="p-3.5 space-y-2.5 bg-white hover:bg-slate-50 rounded-xl transition-all"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="vehicle-plate-badge">
-                        <span className="plate-ind">IND</span>
-                        <span className="plate-number">{vehicle.registration_number}</span>
-                      </div>
-                      <div>{renderVerificationBadge(vehicle)}</div>
-                    </div>
-
-                    <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100 space-y-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-500">Vendor:</span>
-                        <span className="font-bold text-slate-800 truncate max-w-[180px]">{vendorName}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-500">Vendor ID:</span>
-                        <span className="font-mono text-slate-600">{vendorCode}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-500">Category & Type:</span>
-                        <span className="font-semibold text-slate-800">
-                          {formatVehicleCategory(vehicle.vehicle_type)} • {vehicle.body_type || 'Open Body'}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-500">Rated Capacity:</span>
-                        <span className="font-mono font-bold text-slate-700">
-                          {vehicle.rated_capacity_mt != null ? `${Number(vehicle.rated_capacity_mt).toFixed(1)} MT` : '—'}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-500">Ownership:</span>
-                        <span>{renderOwnershipBadge(ownership)}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-200">
-                        <span className="text-slate-500">Documents:</span>
-                        <div>{renderDocumentSummary(vehicle)}</div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-1">
-                      <span className="text-[11px] text-slate-400">
-                        Updated: {formatSingleLineDateTime(vehicle.updated_at || vehicle.created_at)}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setFullViewVehicle(vehicle)}
-                          className="px-3 py-1.5 text-xs font-bold rounded-lg bg-orange-50 text-[#F05A22] hover:bg-orange-100"
-                        >
-                          View Details
-                        </button>
-                        <button
-                          onClick={(e) => handleToggleActionMenu(vehicle, e)}
-                          className="p-1.5 text-slate-500 hover:text-slate-800 rounded-lg border border-slate-200"
-                          title="More actions"
-                        >
-                          <MoreVertical size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
             </div>
           </>
         )}
