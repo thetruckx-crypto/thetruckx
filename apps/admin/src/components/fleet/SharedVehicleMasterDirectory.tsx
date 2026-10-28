@@ -2406,7 +2406,16 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
               </div>
 
               {/* Scrollable Body */}
-              <div className="vfv-body">
+              <div
+                className="vfv-body"
+                style={{
+                  flex: '1 1 0%',
+                  minHeight: 0,
+                  maxHeight: 'calc(100vh - 120px)',
+                  overflowY: 'auto',
+                  WebkitOverflowScrolling: 'touch',
+                }}
+              >
                 {/* 1. Four Compact Overview Status Cards */}
                 <div className="vfv-status-grid">
                   {/* Card 1: Verification Status */}
@@ -2472,7 +2481,10 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                     {hasVendor && onNavigateToVendorProfile && vendorMeta?.vendorId && (
                       <button
                         type="button"
-                        onClick={() => onNavigateToVendorProfile(vendorMeta.vendorId)}
+                        onClick={() => {
+                          setFullViewVehicle(null);
+                          onNavigateToVendorProfile(vendorMeta.vendorId);
+                        }}
                         className="text-xs font-semibold text-[#F45B0B] hover:underline flex items-center gap-1"
                       >
                         <span>View Vendor Profile</span>
@@ -2619,6 +2631,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                                 <button
                                   type="button"
                                   onClick={() => {
+                                    setFullViewVehicle(null);
                                     if (onNavigateToDriverProfile) {
                                       onNavigateToDriverProfile(currentDriver.id);
                                     } else {
@@ -2821,7 +2834,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
 
       {/* 8. Edit Vehicle Modal */}
       {editingVehicle && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4" style={{ zIndex: 1200 }}>
           <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl border border-slate-200 overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <div className="flex items-center gap-2">
@@ -2957,7 +2970,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
 
       {/* 9. Verify Documents Modal */}
       {verifyingVehicle && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4" style={{ zIndex: 1200 }}>
           <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl border border-slate-200 overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-emerald-50">
               <div className="flex items-center gap-2">
@@ -3075,7 +3088,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
 
       {/* 10. Reject Vehicle Modal */}
       {rejectingVehicle && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4" style={{ zIndex: 1200 }}>
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl border border-slate-200 overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-rose-50">
               <div className="flex items-center gap-2">
@@ -3132,7 +3145,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
 
       {/* 11. Request Corrections Modal */}
       {correctionVehicle && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4" style={{ zIndex: 1200 }}>
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl border border-slate-200 overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-amber-50">
               <div className="flex items-center gap-2">
@@ -3476,7 +3489,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
         const displayId = d.driver_code || formatDisplayId('DR', d.id);
 
         return (
-          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4" style={{ zIndex: 1200 }}>
             <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl border border-slate-200 overflow-hidden">
               <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
                 <div className="flex items-center gap-2">
@@ -3627,7 +3640,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
         const vendorMeta = transporterDetails[veh.id];
 
         return (
-          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4" style={{ zIndex: 1200 }}>
             <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl border border-slate-200 overflow-hidden">
               <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
                 <div className="flex items-center gap-2">
@@ -3756,7 +3769,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
       {viewingHistoryVehicle && (() => {
         const veh = viewingHistoryVehicle;
         return (
-          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4" style={{ zIndex: 1200 }}>
             <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl border border-slate-200 overflow-hidden">
               <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
                 <div className="flex items-center gap-2">
@@ -3835,7 +3848,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
         const vm = viewingVendorModal.vendorMeta;
         const veh = viewingVendorModal.vehicle;
         return (
-          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4" style={{ zIndex: 1200 }}>
             <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl border border-slate-200 overflow-hidden">
               <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
                 <div className="flex items-center gap-2">

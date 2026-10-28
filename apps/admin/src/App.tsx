@@ -1190,6 +1190,8 @@ function AdminShell() {
                   <SharedVehicleMasterDirectory
                     onNavigateToVerification={(id) => navigate(`/admin/fleet/verification/${id}`)}
                     onNavigateToAddVehicle={() => navigate('/admin/fleet/new')}
+                    onNavigateToVendorProfile={(id) => navigate(`/admin/vendors/${id}`)}
+                    onNavigateToDriverProfile={(_id) => navigate('/admin/drivers')}
                   />
                 </RequirePermission>
               } />
