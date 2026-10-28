@@ -4,7 +4,7 @@ import {
   CheckCircle, Search, ChevronLeft, ChevronRight, X
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "../../utils/supabase";
+import { supabase, ensureAdminSession } from "../../utils/supabase";
 import { useToast } from "../../context/ToastContext";
 
 interface Booking {
@@ -14,8 +14,8 @@ interface Booking {
   grand_total: number;
   amount_received: number;
   balance_due: number;
-  payment_status: "PAYMENT_PENDING" | "PARTIALLY_PAID" | "PAID";
-  completed_at: string;
+  payment_status: "PAYMENT_PENDING" | "PARTIALLY_PAID" | "PAID" | "NOT_DUE" | "UNPAID" | string;
+  completed_at?: string;
   days_overdue?: number;
 }
 
@@ -30,7 +30,7 @@ export const PaymentsModule: React.FC = () => {
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"ALL" | "PAYMENT_PENDING" | "PARTIALLY_PAID">("ALL");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "PAYMENT_PENDING" | "PARTIALLY_PAID" | "PAID">("ALL");
   const [page, setPage] = useState(1);
   const [paymentForm, setPaymentForm] = useState({
     amount: "", date: new Date().toISOString().split("T")[0], mode: "NEFT", reference: "", notes: ""
@@ -39,33 +39,80 @@ export const PaymentsModule: React.FC = () => {
 
   const fetchKpis = useCallback(async () => {
     try {
-      const [pendRes, partRes] = await Promise.all([
-        supabase.from("bookings").select("grand_total, amount_received").eq("payment_status", "PAYMENT_PENDING"),
-        supabase.from("bookings").select("grand_total, amount_received").eq("payment_status", "PARTIALLY_PAID"),
-      ]);
-      const pendingTotal = (pendRes.data || []).reduce((s, b) => s + ((b.grand_total || 0) - (b.amount_received || 0)), 0);
-      const partialTotal = (partRes.data || []).reduce((s, b) => s + ((b.grand_total || 0) - (b.amount_received || 0)), 0);
-      setKpis({ outstanding: pendingTotal, overdue: 0, partiallyPaid: partialTotal, paidThisMonth: 0 });
-    } catch {}
+      await ensureAdminSession();
+      const { data: allBookings, error } = await supabase
+        .from("bookings")
+        .select("grand_total, total_amount, amount_received, payment_status, accepted_quote_id, client_quotes(total_client_amount)");
+
+      if (!allBookings || error) return;
+
+      let outstanding = 0;
+      let partiallyPaid = 0;
+      let paidThisMonth = 0;
+
+      for (const b of allBookings) {
+        const quoteAmt = (b.client_quotes as any)?.total_client_amount;
+        const total = Number(b.grand_total || b.total_amount || quoteAmt || 0);
+        const received = Number(b.amount_received || 0);
+        const balance = Math.max(0, total - received);
+        const st = (b.payment_status || "PAYMENT_PENDING").toUpperCase();
+
+        if (st === "PAID") {
+          paidThisMonth += received;
+        } else if (st === "PARTIALLY_PAID") {
+          partiallyPaid += balance;
+          outstanding += balance;
+        } else {
+          outstanding += balance;
+        }
+      }
+
+      setKpis({ outstanding, overdue: 0, partiallyPaid, paidThisMonth });
+    } catch (err) {
+      console.error("fetchKpis error:", err);
+    }
   }, []);
 
   const fetchBookings = useCallback(async () => {
     setLoading(true);
     try {
-      let q = supabase.from("bookings")
-        .select("*")
-        .in("payment_status", statusFilter === "ALL" ? ["PAYMENT_PENDING", "PARTIALLY_PAID"] : [statusFilter])
-        .order("created_at", { ascending: true });
-      const { data } = await q;
+      await ensureAdminSession();
+
+      let q = supabase
+        .from("bookings")
+        .select("*, client_companies(id, company_name), client_quotes(id, total_client_amount)")
+        .order("confirmed_at", { ascending: false });
+
+      if (statusFilter !== "ALL") {
+        if (statusFilter === "PAYMENT_PENDING") {
+          q = q.in("payment_status", ["PAYMENT_PENDING", "NOT_DUE", "UNPAID"]);
+        } else {
+          q = q.eq("payment_status", statusFilter);
+        }
+      }
+
+      const { data, error } = await q;
+      if (error) {
+        console.error("Error fetching bookings for payments:", error);
+      }
       if (data) {
-        setBookings(data.map(b => ({
-          ...b,
-          booking_reference: b.booking_reference || `BOK-${b.id.substring(0, 8)}`,
-          client_company_name: b.client_company_name || "—",
-          grand_total: b.grand_total || 0,
-          amount_received: b.amount_received || 0,
-          balance_due: (b.grand_total || 0) - (b.amount_received || 0),
-        })));
+        setBookings(data.map(b => {
+          const quoteAmt = (b.client_quotes as any)?.total_client_amount;
+          const total = Number(b.grand_total || b.total_amount || quoteAmt || 0);
+          const received = Number(b.amount_received || 0);
+          const compName = (b.client_companies as any)?.company_name || b.client_company_name || "Enterprise Client";
+          const ref = b.booking_code || b.booking_reference || (b.id ? `BOK-${b.id.substring(0, 8)}` : "BOK-0000");
+
+          return {
+            ...b,
+            booking_reference: ref,
+            client_company_name: compName,
+            grand_total: total,
+            amount_received: received,
+            balance_due: Math.max(0, total - received),
+            payment_status: b.payment_status || (received >= total && total > 0 ? "PAID" : received > 0 ? "PARTIALLY_PAID" : "PAYMENT_PENDING"),
+          };
+        }));
       }
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
@@ -80,6 +127,7 @@ export const PaymentsModule: React.FC = () => {
     if (!paymentForm.date) { appToast.error("Payment date is required"); return; }
     setSaving(true);
     try {
+      await ensureAdminSession();
       const { data: { user } } = await supabase.auth.getUser();
       let insertError = null;
       try {
@@ -112,8 +160,13 @@ export const PaymentsModule: React.FC = () => {
         throw insertError;
       }
       const newReceived = selectedBooking.amount_received + amount;
-      const newStatus = newReceived >= selectedBooking.grand_total ? "PAID" : "PARTIALLY_PAID";
-      await supabase.from("bookings").update({ amount_received: newReceived, payment_status: newStatus }).eq("id", selectedBooking.id);
+      const targetGrandTotal = selectedBooking.grand_total > 0 ? selectedBooking.grand_total : newReceived;
+      const newStatus = newReceived >= targetGrandTotal ? "PAID" : "PARTIALLY_PAID";
+      await supabase.from("bookings").update({
+        grand_total: targetGrandTotal,
+        amount_received: newReceived,
+        payment_status: newStatus
+      }).eq("id", selectedBooking.id);
       appToast.success("Payment recorded successfully");
       setShowPaymentModal(false);
       setPaymentForm({ amount: "", date: new Date().toISOString().split("T")[0], mode: "NEFT", reference: "", notes: "" });
@@ -216,10 +269,10 @@ export const PaymentsModule: React.FC = () => {
           />
         </div>
         <div className="status-tabs-group">
-          {(["ALL", "PAYMENT_PENDING", "PARTIALLY_PAID"] as const).map(s => (
+          {(["ALL", "PAYMENT_PENDING", "PARTIALLY_PAID", "PAID"] as const).map(s => (
             <button key={s} onClick={() => { setStatusFilter(s); setPage(1); }}
               className={`status-tab-btn ${statusFilter === s ? "active" : ""}`}>
-              {s === "ALL" ? "All Pending" : s === "PAYMENT_PENDING" ? "Unpaid" : "Partial"}
+              {s === "ALL" ? "All Bookings" : s === "PAYMENT_PENDING" ? "Unpaid / Pending" : s === "PARTIALLY_PAID" ? "Partial" : "Paid"}
             </button>
           ))}
         </div>
@@ -274,8 +327,8 @@ export const PaymentsModule: React.FC = () => {
                         {fmt(booking.balance_due)}
                       </td>
                       <td>
-                        <span className={`status-badge-pastel ${booking.payment_status === "PAYMENT_PENDING" ? "inactive" : "pending"}`}>
-                          {booking.payment_status === "PAYMENT_PENDING" ? "Unpaid" : "Partial"}
+                        <span className={`status-badge-pastel ${booking.payment_status === "PAID" ? "active" : booking.payment_status === "PARTIALLY_PAID" ? "pending" : "inactive"}`}>
+                          {booking.payment_status === "PAID" ? "Paid" : booking.payment_status === "PARTIALLY_PAID" ? "Partial" : "Unpaid"}
                         </span>
                       </td>
                       <td style={{ textAlign: "right" }}>

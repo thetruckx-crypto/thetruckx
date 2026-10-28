@@ -1317,10 +1317,10 @@ export const vendorService = {
       // 2. Direct Supabase Query with active mobile session (handles RLS)
       await ensureMobileSession();
 
-      let resolvedId = (vendorId && vendorId.includes('-') && !vendorId.startsWith('NECL-') && !vendorId.startsWith('VND-')) ? vendorId : undefined;
+      let resolvedId = (vendorId && vendorId.includes('-') && !vendorId.startsWith('NECL-') && !vendorId.startsWith('VND-') && !vendorId.startsWith('VD-')) ? vendorId : undefined;
 
-      // If vendorId is a vendor_code, lookup UUID by vendor_code
-      if (!resolvedId && vendorId && (vendorId.startsWith('NECL-') || vendorId.startsWith('VND-'))) {
+      // If vendorId is a vendor_code or application number, lookup UUID by vendor_code
+      if (!resolvedId && vendorId && (vendorId.startsWith('NECL-') || vendorId.startsWith('VND-') || vendorId.startsWith('VD-'))) {
         const { data: cByCode } = await supabase
           .from('vendor_companies')
           .select('id')
@@ -1335,14 +1335,17 @@ export const vendorService = {
           .select('vendor_id')
           .or(`mobile.eq.${cleanPhone},mobile.eq.+91${cleanPhone}`)
           .maybeSingle();
-        if (uRec?.vendor_id) resolvedId = uRec.vendor_id;
-        else {
-          const { data: cRec } = await supabase
-            .from('vendor_companies')
-            .select('id')
-            .or(`phone.eq.${cleanPhone},phone.eq.+91${cleanPhone}`)
-            .maybeSingle();
-          if (cRec?.id) resolvedId = cRec.id;
+        if (uRec?.vendor_id) {
+          resolvedId = uRec.vendor_id;
+        } else {
+          // Check local cache for mapped vendorId
+          try {
+            const cachedRaw = await AsyncStorage.getItem(`${VENDOR_APP_PREFIX}${cleanPhone}`);
+            if (cachedRaw) {
+              const cached = JSON.parse(cachedRaw);
+              if (cached?.vendorId) resolvedId = cached.vendorId;
+            }
+          } catch {}
         }
       }
 

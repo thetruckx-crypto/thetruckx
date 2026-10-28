@@ -17,8 +17,8 @@ import {
   Lock,
   Headphones,
   ChevronRight,
-} from 'lucide-react-native';
 import { authService } from '../../../services/authService';
+import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 
 interface SettingsScreenProps {
   onBack: () => void;
@@ -124,7 +124,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <ArrowLeft size={20} color="#0B1730" />
         </TouchableOpacity>
 
-        <Text style={styles.topBarTitle}>Settings</Text>
+        <BrandLogoHeader size="sm" showSubtitle={false} />
 
         <View style={{ width: 38 }} />
       </View>

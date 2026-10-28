@@ -29,6 +29,7 @@ import {
   AlertTriangle,
 } from 'lucide-react-native';
 import { ScenicHeroBanner } from '../../../components/ScenicHeroBanner';
+import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { ClientBusinessDetails, clientService } from '../../../services/clientService';
 import { supabase } from '../../../supabase';
 
@@ -227,8 +228,11 @@ export const ClientRegistrationConfirmationScreen: React.FC<
         {/* Header & Scenic Illustrated Banner */}
         <View style={styles.bannerContainer}>
           <ScenicHeroBanner height={120} />
-          
-          
+          <View style={styles.brandBadgeWrap}>
+            <View style={styles.brandLogoCard}>
+              <BrandLogoHeader size="sm" showSubtitle={false} />
+            </View>
+          </View>
         </View>
 
         {/* Content Body */}

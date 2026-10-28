@@ -33,6 +33,7 @@ import {
 } from 'lucide-react-native';
 import { clientService } from '../../../services/clientService';
 import { buildGoogleMapsDirectionsUrl } from '../../../utils/googleMapsUtil';
+import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 
 export type RequirementStatusFilter =
   | 'ALL'
@@ -263,7 +264,7 @@ export const MyRequirementsScreen: React.FC<MyRequirementsScreenProps> = ({
         >
           <ArrowLeft size={20} color="#101D36" />
         </TouchableOpacity>
-        <Text style={styles.headerTopTitle}>My Requirements</Text>
+        <BrandLogoHeader size="sm" showSubtitle={false} />
         <TouchableOpacity
           style={styles.addBtn}
           onPress={onCreateNew}

@@ -40,6 +40,7 @@ import {
 import { clientService } from '../../../services/clientService';
 import { supabase } from '../../../supabase';
 import { formatDisplayId } from '../../../utils/idGenerator';
+import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -374,7 +375,7 @@ export const MyBookingsScreen: React.FC<MyBookingsScreenProps> = ({
           <ArrowLeft size={22} color="#1D2D46" strokeWidth={2.4} />
         </TouchableOpacity>
 
-        <Text style={styles.headerTitle}>My Bookings</Text>
+        <BrandLogoHeader size="sm" showSubtitle={false} />
 
         <View style={styles.headerRightSpacer} />
       </View>

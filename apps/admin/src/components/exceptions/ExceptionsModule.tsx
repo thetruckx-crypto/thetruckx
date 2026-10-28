@@ -4,7 +4,7 @@ import {
   RefreshCw, Search, ChevronLeft, ChevronRight
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "../../utils/supabase";
+import { supabase, ensureAdminSession } from "../../utils/supabase";
 import { useToast } from "../../context/ToastContext";
 import { SkeletonTable } from "../common/Skeleton";
 
@@ -46,30 +46,41 @@ export const ExceptionsModule: React.FC = () => {
 
   const fetchCounts = useCallback(async () => {
     try {
-      const [openRes, highRes, critRes] = await Promise.all([
+      await ensureAdminSession();
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+
+      const [openRes, highRes, critRes, resRes] = await Promise.all([
         supabase.from("exceptions").select("id", { count: "exact", head: true }).eq("status", "OPEN"),
         supabase.from("exceptions").select("id", { count: "exact", head: true }).eq("status", "OPEN").eq("severity", "HIGH"),
         supabase.from("exceptions").select("id", { count: "exact", head: true }).eq("status", "OPEN").eq("severity", "CRITICAL"),
+        supabase.from("exceptions").select("id", { count: "exact", head: true }).eq("status", "RESOLVED"),
       ]);
       setCounts({
         open: openRes.count ?? 0,
         high: highRes.count ?? 0,
         critical: critRes.count ?? 0,
-        resolvedToday: 0,
+        resolvedToday: resRes.count ?? 0,
       });
-    } catch {}
+    } catch (err) {
+      console.error("fetchCounts error:", err);
+    }
   }, []);
 
   const fetchExceptions = useCallback(async () => {
     setLoading(true);
     try {
+      await ensureAdminSession();
       let q = supabase
         .from("exceptions")
         .select("*")
         .eq("status", "OPEN")
         .order("created_at", { ascending: false });
       if (severityFilter !== "ALL") q = q.eq("severity", severityFilter);
-      const { data } = await q;
+      const { data, error } = await q;
+      if (error) {
+        console.error("Error fetching exceptions:", error);
+      }
       if (data) {
         setExceptions(data.map((e, i) => ({
           ...e,
@@ -86,6 +97,7 @@ export const ExceptionsModule: React.FC = () => {
     if (!form.description.trim()) { toast.error("Description is required"); return; }
     setSaving(true);
     try {
+      await ensureAdminSession();
       const { data: { user } } = await supabase.auth.getUser();
       const { error } = await supabase.from("exceptions").insert({
         exception_type: form.type,
@@ -110,6 +122,7 @@ export const ExceptionsModule: React.FC = () => {
     e.stopPropagation();
     if (!confirm("Mark this exception as resolved?")) return;
     try {
+      await ensureAdminSession();
       const { data: { user } } = await supabase.auth.getUser();
       await supabase.from("exceptions").update({
         status: "RESOLVED",

@@ -232,3 +232,56 @@ dist/assets/index-D7hG5rEw.css   48.21 kB │ gzip:   8.94 kB
 dist/assets/index-C3jX9pLm.js   894.12 kB │ gzip: 242.31 kB
 ✓ built in 38.23s
 ```
+
+---
+
+## 5. Vitest Unit & Integration Test Suite Transcript (100% Passed)
+
+**Command:** `npm --prefix apps/admin test`  
+**Exit Code:** `0`  
+**Execution Timestamp:** 2026-10-28T14:06:46Z  
+**Results:** **31 / 31 test files passed (100%)**, **713 / 713 tests passed (100%)**
+
+```text
+> @necl/admin@1.0.0 test
+> vitest --run
+
+ RUN  v5.0.3 E:/lOGISTICS/North eastern carriers  logistics/NECL/apps/admin
+
+ ✓ src/components/clients/MyBookingsScreen.test.ts (28 tests)
+ ✓ src/components/clients/UnifiedShipmentsAndDocumentsScreen.test.ts (25 tests)
+ ✓ src/components/vendors/VendorDashboardAndMobileRedesign.test.ts (26 tests)
+ ✓ src/components/clients/ClientRegistrationConfirmationScreen.test.ts (19 tests)
+ ✓ src/components/clients/ShipmentsAndBookingsModules.test.ts (99 tests)
+ ✓ src/components/clients/EditClientModal.test.tsx (18 tests)
+ ✓ src/services/vehicleService.preservation.test.ts (36 tests)
+ ✓ src/utils/idGenerator.test.ts (11 tests)
+ ✓ src/components/drivers/DriverVerificationQueue.comprehensive.test.tsx (33 tests)
+ ✓ src/components/requirements/RequirementsModule.test.tsx (30 tests)
+ ✓ src/components/fleet/SharedVehicleMasterDirectory.bug2-preservation.test.tsx (21 tests)
+ ✓ src/components/drivers/SingleScreenDriverRegistration.test.ts (20 tests)
+ ✓ src/components/vendors/VendorRegistrationSteps3to7.test.ts (35 tests)
+ ✓ src/components/quotations/QuotationsModule.test.tsx (19 tests)
+ ✓ src/components/vendors/VendorUpdateMissingStepsValidation.test.ts (28 tests)
+ ✓ src/components/vendors/VendorDirectory.test.tsx (26 tests)
+ ✓ src/components/clients/ClientDirectory.test.tsx (22 tests)
+ ✓ src/components/vendors/VendorComplianceAndApprovalWorkflow.test.ts (41 tests)
+ ✓ src/components/vendors/VendorWorkflowImprovements.test.ts (13 tests)
+ ✓ src/components/fleet/SharedVehicleMasterDirectory.redesign.test.tsx (12 tests)
+ ✓ src/components/documents/DocumentClearanceModule.test.tsx (9 tests)
+ ✓ src/components/bookings/BookingsModule.test.tsx (3 tests)
+ ✓ src/components/clients/TransportRequirementStep2NavigationAndDraftSaved.test.ts (18 tests)
+ ✓ src/components/clients/ClientProfile.test.tsx (23 tests)
+ ✓ src/components/pricing/PricingModule.test.tsx (20 tests)
+ ✓ src/components/clients/ClientShipmentsIntegration.test.ts (12 tests)
+ ✓ src/components/requirements/RequirementsAndBookingWorkflow.test.ts (13 tests)
+ ✓ src/components/clients/ClientDashboardScreen.test.ts (24 tests)
+ ✓ src/components/LoginScreen.auth.test.tsx (14 tests)
+ ✓ src/components/bookings/BookingsModule.redesign.test.tsx (7 tests)
+ ✓ src/components/vendors/EditVendorModal.test.tsx (8 tests)
+
+ Test Files  31 passed (31)
+      Tests  713 passed (713)
+   Duration  40.12s
+```
+

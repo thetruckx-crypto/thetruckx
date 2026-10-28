@@ -31,6 +31,7 @@ import {
 } from 'lucide-react-native';
 import { clientService } from '../../../services/clientService';
 import { supabase } from '../../../supabase';
+import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 
 interface ShipmentTrackingScreenProps {
   trackingId: string;
@@ -296,7 +297,7 @@ export const ShipmentTrackingScreen: React.FC<ShipmentTrackingScreenProps> = ({
           <ArrowLeft size={20} color="#0B1730" />
         </TouchableOpacity>
 
-        <Text style={styles.topBarTitle}>Live Tracking</Text>
+        <BrandLogoHeader size="sm" showSubtitle={false} />
 
         <TouchableOpacity
           style={styles.helpBtn}

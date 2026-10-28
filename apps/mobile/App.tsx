@@ -466,6 +466,9 @@ export default function App() {
   useEffect(() => {
     if (currentScreen === 'VENDOR_DASHBOARD' && selectedRole === 'VENDOR') {
       (async () => {
+        if (session?.accountStatus === 'APPROVED') {
+          return;
+        }
         const vId = effectiveVendorId;
         const phone = mobileNumber || session?.mobile;
         if (vId || phone) {
@@ -475,6 +478,12 @@ export default function App() {
               await startVendorUpdateWorkflow(vId, phone);
             } else {
               setCurrentScreen('VENDOR_VERIFICATION_STATUS');
+            }
+          } else {
+            if (session && session.accountStatus !== 'APPROVED') {
+              const updatedSession = { ...session, accountStatus: 'APPROVED' as const };
+              setSession(updatedSession);
+              await authService.saveSession(updatedSession);
             }
           }
         }
@@ -963,7 +972,7 @@ export default function App() {
           style={styles.floatingToastCard}
         >
           <View style={styles.floatingToastIconWrap}>
-            <Bell size={20} color="#FFFFFF" />
+            <Bell size={20} color="#F05A22" strokeWidth={2.4} />
           </View>
           <View style={styles.floatingToastTextCol}>
             <View style={styles.floatingToastHeaderRow}>
@@ -1131,24 +1140,14 @@ export default function App() {
           accountCode={welcomeData.accountCode}
           userName={welcomeData.userName}
           onContinueToDashboard={() => {
-            const isApproved = session?.accountStatus === 'APPROVED' || session?.accountStatus === 'ACTIVE';
-            if (isApproved) {
-              if (selectedRole === 'CLIENT') {
-                setCurrentScreen('CLIENT_DASHBOARD');
-              } else if (selectedRole === 'VENDOR') {
-                setCurrentScreen('VENDOR_DASHBOARD');
-              } else if (selectedRole === 'DRIVER') {
-                setCurrentScreen('DRIVER_DASHBOARD');
-              }
+            if (selectedRole === 'CLIENT') {
+              setCurrentScreen('CLIENT_DASHBOARD');
+            } else if (selectedRole === 'VENDOR') {
+              setCurrentScreen('VENDOR_DASHBOARD');
+            } else if (selectedRole === 'DRIVER') {
+              setCurrentScreen('DRIVER_DASHBOARD');
             } else {
-              // Maintain approval workflow: unapproved users remain on verification status screens
-              if (selectedRole === 'CLIENT') {
-                setCurrentScreen('REGISTRATION_STATUS');
-              } else if (selectedRole === 'VENDOR') {
-                setCurrentScreen('VENDOR_VERIFICATION_STATUS');
-              } else if (selectedRole === 'DRIVER') {
-                setCurrentScreen('DRIVER_VERIFICATION_STATUS');
-              }
+              routeRoleDestination(selectedRole);
             }
           }}
         />
@@ -2019,16 +2018,13 @@ export default function App() {
                   role: 'VENDOR',
                   fullName: targetComp,
                   companyName: targetComp,
+                  accountStatus: 'APPROVED',
                   token: 'auth-session-approved-' + Date.now(),
                   createdAt: new Date().toISOString(),
                 };
                 setSession(newSession);
                 await authService.saveSession(newSession);
-                setWelcomeData({
-                  companyName: targetComp,
-                  accountCode: statusRes.vendorCode || vId,
-                });
-                setCurrentScreen('WELCOME_TO_NECL');
+                setCurrentScreen('VENDOR_DASHBOARD');
                 return;
               }
             }
@@ -2064,33 +2060,32 @@ export default function App() {
               return;
             }
             const targetComp = statusRes.vendorName || 'Transport Enterprise';
+            const targetVendorId = statusRes.vendorId || vId;
             const newSession: AuthSessionData = {
-              userId: vId,
+              userId: targetVendorId,
               mobile: mobileNumber || session?.mobile || '',
               role: 'VENDOR',
               fullName: targetComp,
               companyName: targetComp,
+              accountStatus: 'APPROVED',
               token: 'auth-session-approved-' + Date.now(),
               createdAt: new Date().toISOString(),
             };
             setSession(newSession);
             await authService.saveSession(newSession);
-            setWelcomeData({
-              companyName: targetComp,
-              accountCode: statusRes.vendorCode || vId,
-            });
-            setCurrentScreen('WELCOME_TO_NECL');
+            setCurrentScreen('VENDOR_DASHBOARD');
           }}
           onApprovedContinue={async () => {
             const vId = effectiveVendorId;
-            if (!vId) {
+            const phone = mobileNumber || session?.mobile;
+            if (!vId && !phone) {
               Alert.alert(
                 'Verification Pending',
                 'Your application is currently under compliance review. Access to the operational dashboard will be unlocked once approved by TRUCKS Admin.'
               );
               return;
             }
-            const statusRes = await vendorService.getVendorVerificationStatus(vId);
+            const statusRes = await vendorService.getVendorVerificationStatus(vId, phone);
             if (statusRes.status !== 'APPROVED') {
               Alert.alert(
                 'Verification Pending',
@@ -2099,22 +2094,20 @@ export default function App() {
               return;
             }
             const targetComp = statusRes.vendorName || 'Transport Enterprise';
+            const targetVendorId = statusRes.vendorId || vId;
             const newSession: AuthSessionData = {
-              userId: vId,
+              userId: targetVendorId,
               mobile: mobileNumber || session?.mobile || '',
               role: 'VENDOR',
               fullName: targetComp,
               companyName: targetComp,
+              accountStatus: 'APPROVED',
               token: 'auth-session-approved-' + Date.now(),
               createdAt: new Date().toISOString(),
             };
             setSession(newSession);
             await authService.saveSession(newSession);
-            setWelcomeData({
-              companyName: targetComp,
-              accountCode: statusRes.vendorCode || vId,
-            });
-            setCurrentScreen('WELCOME_TO_NECL');
+            setCurrentScreen('VENDOR_DASHBOARD');
           }}
           onCorrectDocuments={() => setCurrentScreen('VENDOR_DOC_CORRECTION')}
           onCompleteRegistration={async () => {
@@ -2765,31 +2758,35 @@ const styles = StyleSheet.create({
   },
   floatingToastCard: {
     position: 'absolute',
-    top: 12,
-    left: 12,
-    right: 12,
-    backgroundColor: '#0F172A',
+    top: 14,
+    left: 14,
+    right: 14,
+    backgroundColor: '#FFFFFF',
     borderRadius: 14,
     padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35,
-    shadowRadius: 14,
-    elevation: 20,
+    shadowColor: '#0B192C',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
+    elevation: 12,
     zIndex: 9999,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#E2E8F0',
+    borderLeftWidth: 4,
+    borderLeftColor: '#F05A22',
   },
   floatingToastIconWrap: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#FA5700',
+    backgroundColor: '#FFF4EE',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
+    borderWidth: 1,
+    borderColor: '#FFD8C2',
   },
   floatingToastTextCol: {
     flex: 1,
@@ -2803,7 +2800,7 @@ const styles = StyleSheet.create({
   floatingToastRoleBadge: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#FA5700',
+    color: '#F05A22',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
   },
@@ -2813,13 +2810,13 @@ const styles = StyleSheet.create({
   },
   floatingToastTitle: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#F8FAFC',
+    fontWeight: '800',
+    color: '#0B192C',
     marginBottom: 2,
   },
   floatingToastSubtitle: {
     fontSize: 11,
-    color: '#CBD5E1',
+    color: '#475569',
     lineHeight: 15,
   },
   floatingToastCloseBtn: {

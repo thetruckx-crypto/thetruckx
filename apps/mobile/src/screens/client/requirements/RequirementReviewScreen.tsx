@@ -34,6 +34,7 @@ import {
 } from 'lucide-react-native';
 import { TransportRequirementDraft } from '../../../types';
 import { clientService } from '../../../services/clientService';
+import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 
 interface RequirementReviewScreenProps {
   draft: TransportRequirementDraft;
@@ -224,7 +225,7 @@ export const RequirementReviewScreen: React.FC<RequirementReviewScreenProps> = (
           <ArrowLeft size={20} color="#0B1730" />
         </TouchableOpacity>
 
-        <Text style={styles.headerTopTitle}>Review Requirement</Text>
+        <BrandLogoHeader size="sm" showSubtitle={false} />
 
         <TouchableOpacity
           style={styles.helpBtn}

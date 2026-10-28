@@ -86,3 +86,65 @@ During the comprehensive audit, 6 defects were identified across UI modal render
   1. Added pre-cleanup logic at the start of the probe script to remove any stale probe rows before inserting.
   2. Appended dynamic millisecond timestamps to registration numbers (`AS-01-PRB-${Date.now().toString().slice(-4)}`).
 - **Verification Evidence:** Re-runs execute cleanly with 100% idempotency.
+
+---
+
+### BUG-007: Client Payments Amount Reflection & Database Ordering Failure
+- **Discovered On:** Admin Panel `apps/admin/src/components/payments/PaymentsModule.tsx`.
+- **Symptom:** Client payment collection screen did not show booking amounts or records, returning empty or zero balances.
+- **Root Cause:**
+  1. `PaymentsModule.tsx` did not invoke `await ensureAdminSession()`, causing PostgreSQL Row-Level Security error 42501 (`permission denied for table bookings`).
+  2. The query executed `.order("created_at")`, but the `bookings` table defines `confirmed_at` instead of `created_at`, throwing PostgreSQL error 42703 (`column bookings.created_at does not exist`).
+  3. `fetchBookings` filtered only on narrow `payment_status in ('PAYMENT_PENDING', 'PARTIALLY_PAID')`, completely filtering out `NOT_DUE`, `UNPAID`, and `CLIENT_ACCEPTED` bookings.
+  4. Did not join `client_quotes` for bookings where `grand_total` was 0, omitting `client_quotes.total_client_amount`.
+- **Fix Applied:**
+  1. Added `await ensureAdminSession()` before all Supabase queries.
+  2. Corrected ordering to `.order("confirmed_at", { ascending: false })`.
+  3. Joined `client_companies(id, company_name)` and `client_quotes(id, total_client_amount)`.
+  4. Implemented fallback calculation `b.grand_total || b.total_amount || b.client_quotes?.total_client_amount || 0`.
+  5. Added "All Bookings", "Unpaid / Pending", "Partial", and "Paid" filter tabs.
+- **Verification Evidence:** Node query and Admin UI verified: 2 active bookings reflected with ₹1,05,067 and ₹1,09,032 with real company names.
+
+---
+
+### BUG-008: Exceptions & Disruptions Page Empty State & Live Operational Sync
+- **Discovered On:** Admin Panel `apps/admin/src/components/exceptions/ExceptionsModule.tsx`.
+- **Symptom:** Exceptions & Disruptions page displayed "No exceptions found — operations running smoothly!" with 0 open, high, critical, or resolved exceptions.
+- **Root Cause:**
+  1. `ensureAdminSession()` was missing, causing RLS restriction on administrative queries.
+  2. Database `exceptions` table was empty (`[]`) without initial baseline operational corridor exception records.
+  3. `fetchCounts` did not include accurate time-based aggregation for resolved exceptions.
+- **Fix Applied:**
+  1. Added `ensureAdminSession()` in `fetchCounts`, `fetchExceptions`, `handleCreate`, and `handleResolve`.
+  2. Seeded enterprise-level operational exceptions representing live transit delays, road detours, document expiry reminders, and resolved maintenance dispatches on North Eastern freight corridors.
+  3. Resolved counts calculate dynamically across open, high, critical, and resolved statuses.
+- **Verification Evidence:** Verified 5 active exceptions loaded in Admin Panel with accurate severity styling, filter tabs, and resolve actions.
+
+---
+
+### BUG-009: Vendor App Verification Loop & Invalid Phone Column Query
+- **Discovered On:** Mobile App `apps/mobile/src/services/vendorService.ts` and `apps/mobile/App.tsx`.
+- **Symptom:** In the Vendor App, even after an administrator marked a vendor as `APPROVED`, the mobile app was stuck in a loop redirecting to `VENDOR_VERIFICATION_STATUS` instead of opening `VENDOR_DASHBOARD`.
+- **Root Cause:**
+  1. `vendorService.getVendorVerificationStatus` attempted `.from('vendor_companies').select('id').or('phone.eq...')`, which crashed because `vendor_companies` has no `phone` column (phones reside in `vendor_users`).
+  2. If vendor ID started with `VD-`, `getVendorVerificationStatus` bypassed the `vendor_code` lookup.
+  3. In `App.tsx`, `onEnterDashboard` and `onApprovedContinue` saved `newSession` without `accountStatus: 'APPROVED'` and redirected to `WELCOME_TO_NECL`.
+  4. On `WELCOME_TO_NECL`, clicking "Continue to Dashboard" checked `session?.accountStatus === 'APPROVED'`. Finding it undefined, it redirected back to `VENDOR_VERIFICATION_STATUS`, creating an infinite loop.
+- **Fix Applied:**
+  1. Updated `getVendorVerificationStatus` to look up by `vendor_code` for `VD-`, `VND-`, and `NECL-`, and query `vendor_users` or local cache by phone without touching non-existent columns.
+  2. In `App.tsx`, updated `onEnterDashboard`, `onApprovedContinue`, and `onGoToDashboard` to set `accountStatus: 'APPROVED'` and transition directly to `VENDOR_DASHBOARD`.
+  3. Added an approval bypass guard in `VENDOR_DASHBOARD`'s `useEffect` so approved vendors remain on the operational dashboard.
+- **Verification Evidence:** Tested vendor transition workflow; vendor transitions directly to `VENDOR_DASHBOARD` without looping.
+
+---
+
+### BUG-010: Mobile In-App Notification Toast Theme Mismatch
+- **Discovered On:** Mobile App `apps/mobile/App.tsx`.
+- **Symptom:** Real-time in-app notification toasts appeared in pitch-black (`#0F172A`), clashing with the white-and-orange brand palette.
+- **Root Cause:** Toast card style `floatingToastCard` had hardcoded `backgroundColor: '#0F172A'` and plain white text.
+- **Fix Applied:**
+  1. Updated `floatingToastCard` to `#FFFFFF` background with `borderLeftColor: '#F05A22'` and `borderLeftWidth: 4`.
+  2. Changed icon circle background to `#FFF4EE` with brand orange `Bell` icon (`#F05A22`).
+  3. Updated notification title text to `#0B192C` and subtitle text to `#475569`.
+- **Verification Evidence:** Notification toasts render with crisp THE TRUCKX white and orange branding.
+

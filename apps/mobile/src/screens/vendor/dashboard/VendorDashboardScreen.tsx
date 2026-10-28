@@ -211,6 +211,10 @@ export const VendorDashboardScreen: React.FC<VendorDashboardScreenProps> = ({
       <View style={styles.headerBar}>
         <View style={styles.headerLeft}>
           <BrandLogoHeader size="sm" theme="light" />
+          <Text style={styles.controlTowerTitle}>CARRIER CONTROL TOWER</Text>
+          <Text style={styles.carrierCompanyName} numberOfLines={1}>
+            {session?.companyName || session?.fullName || 'Carrier Partner'}
+          </Text>
         </View>
 
         <View style={styles.headerRight}>
