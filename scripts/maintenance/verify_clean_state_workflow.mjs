@@ -28,10 +28,14 @@ async function verifyFreshWorkflowReadiness() {
   let probeVendorId = null;
   let probeVRId = null;
   let probeQuoteId = null;
+  let probeVehicleId = null;
+  let probeDriverId = null;
 
   try {
-    // Clean up any stray probe client from earlier
+    // Clean up any stray probe records from earlier
     await supabase.from('client_companies').delete().ilike('company_name', '%NECL Fresh Verification%');
+    await supabase.from('vehicles').delete().ilike('registration_number', '%PROBE%');
+    await supabase.from('drivers').delete().ilike('licence_number', '%PROBE%');
 
     // 2. Test Client Registration Pipeline
     console.log('\n2. Testing fresh client creation pipeline...');
@@ -134,6 +138,60 @@ async function verifyFreshWorkflowReadiness() {
     probeVRId = newVR.id;
     console.log('✅ Sourcing Request Created:', newVR.id, '| Status:', newVR.status);
 
+    // 5b. Create a Probe Vehicle for the Vendor
+    console.log('\n5b. Testing vehicle registration for vendor quote...');
+    const probeRegNum = `AS-01-PRB-${Date.now().toString().slice(-4)}`;
+    const { data: newVeh, error: vehErr } = await supabase
+      .from('vehicles')
+      .insert([
+        {
+          registration_number: probeRegNum,
+          vehicle_type: '32FT_MXL',
+          rated_capacity_mt: 22,
+          minimum_capacity_mt: 12,
+          status: 'ACTIVE',
+          verification_status: 'APPROVED',
+          eligible_for_operations: true,
+        },
+      ])
+      .select('id, registration_number')
+      .single();
+
+    if (vehErr) {
+      console.error('❌ Probe vehicle creation failed:', vehErr.message);
+      process.exit(1);
+    }
+    probeVehicleId = newVeh.id;
+    console.log('✅ Probe Vehicle Created:', newVeh.registration_number, '(ID:', newVeh.id, ')');
+
+    // 5c. Create a Probe Driver for the Vendor
+    console.log('\n5c. Testing driver registration for vendor quote...');
+    const probeLicenceNum = `AS-01-PROBE-${Date.now().toString().slice(-5)}`;
+    const { data: newDriver, error: drvErr } = await supabase
+      .from('drivers')
+      .insert([
+        {
+          full_name: 'NECL Probe Driver Test',
+          mobile: '9876543210',
+          date_of_birth: '1992-05-15',
+          licence_number: probeLicenceNum,
+          licence_expiry_date: '2035-05-15',
+          primary_vendor_id: newVendor.id,
+          status: 'APPROVED',
+          verification_status: 'APPROVED',
+          is_active: true,
+        },
+      ])
+      .select('id, full_name')
+      .single();
+
+    if (drvErr) {
+      console.error('❌ Probe driver creation failed:', drvErr.message);
+      process.exit(1);
+    }
+    probeDriverId = newDriver.id;
+    console.log('✅ Probe Driver Created:', newDriver.full_name, '(ID:', newDriver.id, ')');
+
     // 6. Test Vendor Quotation Submission Pipeline
     console.log('\n6. Testing vendor quotation submission pipeline...');
     const { data: newQuote, error: quoteErr } = await supabase
@@ -141,6 +199,8 @@ async function verifyFreshWorkflowReadiness() {
       .insert([
         {
           vendor_request_id: newVR.id,
+          vehicle_id: newVeh.id,
+          driver_id: newDriver.id,
           quoted_rate: 45000,
           version: 1,
           is_locked: false,
@@ -161,8 +221,12 @@ async function verifyFreshWorkflowReadiness() {
     if (probeQuoteId) await supabase.from('vendor_quotations').delete().eq('id', probeQuoteId);
     if (probeVRId) await supabase.from('vendor_requests').delete().eq('id', probeVRId);
     if (probeReqId) await supabase.from('requirements').delete().eq('id', probeReqId);
+    if (probeDriverId) await supabase.from('drivers').delete().eq('id', probeDriverId);
+    if (probeVehicleId) await supabase.from('vehicles').delete().eq('id', probeVehicleId);
     if (probeClientId) await supabase.from('client_companies').delete().eq('id', probeClientId);
     if (probeVendorId) await supabase.from('vendor_companies').delete().eq('id', probeVendorId);
+    await supabase.from('drivers').delete().ilike('full_name', '%Probe Driver%');
+    await supabase.from('vehicles').delete().ilike('registration_number', '%PROBE%');
     await supabase.from('client_companies').delete().ilike('company_name', '%NECL Fresh Verification%');
     console.log('✅ Probe test records cleanly removed.');
   }

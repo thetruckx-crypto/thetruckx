@@ -155,15 +155,61 @@ async function runMasterWorkflow() {
   // ---------------------------------------------------------------------------
   console.log('\n--- STAGE 4: Vendor Quotation Submissions ---');
   // Load approved vehicles and drivers
-  const { data: approvedVehicles } = await supabase
+  let { data: approvedVehicles } = await supabase
     .from('vehicles')
     .select('id, registration_number, vehicle_type')
     .limit(2);
 
-  const { data: approvedDrivers } = await supabase
+  if (!approvedVehicles || approvedVehicles.length === 0) {
+    const { data: createdVeh } = await supabase.from('vehicles').insert([
+      {
+        registration_number: `AS-01-E2E-${runId}A`,
+        vehicle_type: '32FT_MXL',
+        rated_capacity_mt: 24,
+        minimum_capacity_mt: 12,
+        status: 'ACTIVE',
+        verification_status: 'APPROVED',
+        eligible_for_operations: true
+      },
+      {
+        registration_number: `AS-01-E2E-${runId}B`,
+        vehicle_type: '32FT_SXL',
+        rated_capacity_mt: 18,
+        minimum_capacity_mt: 9,
+        status: 'ACTIVE',
+        verification_status: 'APPROVED',
+        eligible_for_operations: true
+      }
+    ]).select('id, registration_number, vehicle_type');
+    approvedVehicles = createdVeh || [];
+  }
+
+  let { data: approvedDrivers } = await supabase
     .from('drivers')
     .select('id, full_name, mobile')
     .limit(2);
+
+  if (!approvedDrivers || approvedDrivers.length === 0) {
+    const { data: createdDrivers } = await supabase.from('drivers').insert([
+      {
+        full_name: `Bikash Bora ${runId}`,
+        mobile: `987654${runId}`,
+        licence_number: `AS-01-DL-${runId}A`,
+        status: 'APPROVED',
+        verification_status: 'APPROVED',
+        is_active: true
+      },
+      {
+        full_name: `Sunil Das ${runId}`,
+        mobile: `987655${runId}`,
+        licence_number: `AS-01-DL-${runId}B`,
+        status: 'APPROVED',
+        verification_status: 'APPROVED',
+        is_active: true
+      }
+    ]).select('id, full_name, mobile');
+    approvedDrivers = createdDrivers || [];
+  }
 
   const submittedQuotes = [];
   const baseRates = [84000, 79500]; // Multi-vendor competitive bids
