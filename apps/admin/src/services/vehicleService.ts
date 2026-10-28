@@ -1,4 +1,4 @@
-import { supabase } from '../utils/supabase';
+import { supabase, ensureAdminSession } from '../utils/supabase';
 import { optimizeFileForUpload } from '../utils/fileCompressor';
 
 // ============================================================================
@@ -119,13 +119,47 @@ export async function getVehicles(
   pagination: PaginationParams = { page: 1, pageSize: 10 }
 ): Promise<VehicleListResponse> {
   try {
+    await ensureAdminSession();
+
     let query = supabase
       .from('vehicles')
       .select('*', { count: 'exact' });
 
-    // Apply search filter
-    if (filters.search) {
-      query = query.or(`registration_number.ilike.%${filters.search}%,make.ilike.%${filters.search}%,model.ilike.%${filters.search}%`);
+    // Apply search filter (supports vehicle registration, make, model, or linked vendor name/ID)
+    if (filters.search && filters.search.trim()) {
+      const cleanTerm = filters.search.trim().replace(/['"%]/g, '');
+      
+      // Look up linked vehicles matching vendor name or code
+      let vendorVehicleIds: string[] = [];
+      try {
+        const { data: matchedVendors } = await supabase
+          .from('vendor_companies')
+          .select('id')
+          .or(`vendor_name.ilike.%${cleanTerm}%,vendor_code.ilike.%${cleanTerm}%`);
+        
+        if (matchedVendors && matchedVendors.length > 0) {
+          const vIds = matchedVendors.map((v: any) => v.id);
+          const { data: links } = await supabase
+            .from('vendor_vehicle_links')
+            .select('vehicle_id')
+            .in('vendor_id', vIds);
+          if (links) {
+            vendorVehicleIds = links.map((l: any) => l.vehicle_id).filter(Boolean);
+          }
+        }
+      } catch (searchVendorErr) {
+        console.warn('Vendor search lookup warning:', searchVendorErr);
+      }
+
+      if (vendorVehicleIds.length > 0) {
+        query = query.or(
+          `registration_number.ilike.%${cleanTerm}%,make.ilike.%${cleanTerm}%,model.ilike.%${cleanTerm}%,id.in.(${vendorVehicleIds.join(',')})`
+        );
+      } else {
+        query = query.or(
+          `registration_number.ilike.%${cleanTerm}%,make.ilike.%${cleanTerm}%,model.ilike.%${cleanTerm}%`
+        );
+      }
     }
 
     // Apply vehicle type filter
@@ -304,6 +338,8 @@ export async function deleteVehicle(vehicleId: string): Promise<void> {
  */
 export async function getVehicleStats(): Promise<VehicleStats> {
   try {
+    await ensureAdminSession();
+
     const { data, error } = await supabase
       .from('vehicles')
       .select('verification_status');
@@ -311,9 +347,9 @@ export async function getVehicleStats(): Promise<VehicleStats> {
     if (error) throw error;
 
     const total = data?.length || 0;
-    const verified = data?.filter((v: any) => v.verification_status === 'APPROVED').length || 0;
-    const pending = data?.filter((v: any) => v.verification_status === 'PENDING_DOCS').length || 0;
-    const rejected = data?.filter((v: any) => v.verification_status === 'REJECTED').length || 0;
+    const verified = data?.filter((v: any) => v.verification_status === 'APPROVED' || v.verification_status === 'VERIFIED').length || 0;
+    const pending = data?.filter((v: any) => v.verification_status === 'PENDING_DOCS' || v.verification_status === 'PENDING').length || 0;
+    const rejected = data?.filter((v: any) => v.verification_status === 'REJECTED' || v.verification_status === 'BLOCKED').length || 0;
 
     return {
       totalVehicles: total,

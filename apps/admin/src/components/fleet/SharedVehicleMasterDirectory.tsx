@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
+  ChevronUp,
   Download,
   Truck,
   CheckCircle,
@@ -35,6 +36,9 @@ import {
   AlertCircle,
   ArrowRight,
   Lock,
+  Copy,
+  ArrowUpDown,
+  SlidersHorizontal,
 } from 'lucide-react';
 import {
   Vehicle,
@@ -92,21 +96,30 @@ function getVendorAvatar(name?: string, id?: string) {
   return { initials, bg };
 }
 
-// Helper to format date & time: e.g. "17 Oct 2026 03:52 PM"
-function formatDateTime(dateStr: string | null): string {
-  if (!dateStr) return '-';
+// Helper to format date & time on a single line: e.g. "17 Oct 2026, 03:52 PM"
+function formatSingleLineDateTime(dateStr?: string | null): string {
+  if (!dateStr) return '—';
   const d = new Date(dateStr);
-  const datePart = d.toLocaleDateString('en-IN', {
+  if (isNaN(d.getTime())) return '—';
+  const datePart = d.toLocaleDateString('en-GB', {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
   });
-  const timePart = d.toLocaleTimeString('en-IN', {
+  const timePart = d.toLocaleTimeString('en-US', {
     hour: '2-digit',
     minute: '2-digit',
     hour12: true,
   });
-  return `${datePart} ${timePart}`;
+  return `${datePart}, ${timePart}`;
+}
+
+const formatDateTime = formatSingleLineDateTime;
+
+// Helper to format vehicle category nicely (clean underscores: 32FT_MXL -> 32FT MXL)
+function formatVehicleCategory(cat?: string | null): string {
+  if (!cat) return 'Standard Lorry';
+  return cat.replace(/_/g, ' ').trim();
 }
 
 export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectoryProps> = ({
@@ -154,13 +167,44 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
   const [activeTab, setActiveTab] = useState<'ALL' | 'VERIFIED' | 'PENDING' | 'REJECTED'>('ALL');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [bodyTypeFilter, setBodyTypeFilter] = useState('ALL');
+  const [ownershipFilter, setOwnershipFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [docStatusFilter, setDocStatusFilter] = useState('ALL');
 
   // Pagination State
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  // Sorting State
+  const [sortBy, setSortBy] = useState<string>('created_at');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  // Column Visibility State (Admin Customizable)
+  const [showColumnConfig, setShowColumnConfig] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState({
+    vendor: true,
+    category: true,
+    bodyType: true,
+    ratedCapacity: true,
+    minCapacity: true,
+    ownership: true,
+    documents: true,
+    status: true,
+    updatedAt: true,
+  });
+
+  // Handle column sort toggle
+  const handleSort = (field: string) => {
+    if (sortBy === field) {
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortBy(field);
+      setSortOrder('asc');
+    }
+    setPage(1);
+  };
 
   // Active Actions & Modals State
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
@@ -294,18 +338,52 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
       const pagination: PaginationParams = {
         page,
         pageSize: itemsPerPage,
-        sortBy: 'created_at',
-        sortOrder: 'desc',
+        sortBy,
+        sortOrder,
       };
 
       const response = await getVehicles(filters, pagination);
 
-      // Body Type filter applied client-side if chosen
+      // Apply client-side body type filter
       let filteredVehicles = response.vehicles;
       if (bodyTypeFilter !== 'ALL') {
         filteredVehicles = filteredVehicles.filter(
           (v) => (v.body_type || '').toLowerCase() === bodyTypeFilter.toLowerCase()
         );
+      }
+
+      // Apply client-side document compliance filter
+      if (docStatusFilter !== 'ALL') {
+        const today = new Date().toISOString().split('T')[0];
+        if (docStatusFilter === 'ALL_VERIFIED') {
+          filteredVehicles = filteredVehicles.filter(
+            (v) =>
+              v.rc_verification_status === 'APPROVED' &&
+              v.insurance_verification_status === 'APPROVED' &&
+              v.fitness_verification_status === 'APPROVED' &&
+              v.permit_verification_status === 'APPROVED'
+          );
+        } else if (docStatusFilter === 'HAS_PENDING') {
+          filteredVehicles = filteredVehicles.filter(
+            (v) =>
+              v.rc_verification_status === 'PENDING' ||
+              v.insurance_verification_status === 'PENDING' ||
+              v.fitness_verification_status === 'PENDING' ||
+              v.permit_verification_status === 'PENDING'
+          );
+        } else if (docStatusFilter === 'EXPIRED_REJECTED') {
+          filteredVehicles = filteredVehicles.filter(
+            (v) =>
+              v.rc_verification_status === 'REJECTED' ||
+              v.insurance_verification_status === 'REJECTED' ||
+              v.fitness_verification_status === 'REJECTED' ||
+              v.permit_verification_status === 'REJECTED' ||
+              (v.rc_expiry_date && v.rc_expiry_date < today) ||
+              (v.insurance_expiry_date && v.insurance_expiry_date < today) ||
+              (v.fitness_expiry_date && v.fitness_expiry_date < today) ||
+              (v.permit_expiry_date && v.permit_expiry_date < today)
+          );
+        }
       }
 
       setVehicles(filteredVehicles);
@@ -445,7 +523,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
 
   useEffect(() => {
     fetchVehicles();
-  }, [page, itemsPerPage, activeTab, categoryFilter, bodyTypeFilter, statusFilter]);
+  }, [page, itemsPerPage, activeTab, categoryFilter, bodyTypeFilter, ownershipFilter, statusFilter, docStatusFilter, sortBy, sortOrder]);
 
   // Close open dropdowns on outer click
   useEffect(() => {
@@ -644,7 +722,9 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
     setSearchQuery('');
     setCategoryFilter('ALL');
     setBodyTypeFilter('ALL');
+    setOwnershipFilter('ALL');
     setStatusFilter('ALL');
+    setDocStatusFilter('ALL');
     setActiveTab('ALL');
     setPage(1);
   };
@@ -945,6 +1025,72 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
     }
   };
 
+  // Helper to render comprehensive document breakdown & micro-chips (RC, INS, FIT, PER)
+  const renderDocumentSummary = (vehicle: Vehicle) => {
+    const rc = vehicle.rc_verification_status || 'PENDING';
+    const ins = vehicle.insurance_verification_status || 'PENDING';
+    const fit = vehicle.fitness_verification_status || 'PENDING';
+    const per = vehicle.permit_verification_status || 'PENDING';
+
+    const docList = [
+      { label: 'RC', name: 'Registration Certificate', status: rc, expiry: vehicle.rc_expiry_date },
+      { label: 'INS', name: 'Vehicle Insurance', status: ins, expiry: vehicle.insurance_expiry_date },
+      { label: 'FIT', name: 'Fitness Certificate', status: fit, expiry: vehicle.fitness_expiry_date },
+      { label: 'PER', name: 'Transport Permit', status: per, expiry: vehicle.permit_expiry_date },
+    ];
+
+    const now = new Date().toISOString().split('T')[0];
+    const verifiedCount = docList.filter((d) => d.status === 'APPROVED').length;
+    const rejectedCount = docList.filter((d) => d.status === 'REJECTED').length;
+    const expiredCount = docList.filter((d) => d.expiry && d.expiry < now).length;
+
+    let pillClass = 'has-pending';
+    let pillText = `${verifiedCount}/4 Verified`;
+    if (verifiedCount === 4) {
+      pillClass = 'all-verified';
+      pillText = '4/4 Verified';
+    } else if (rejectedCount > 0 || expiredCount > 0) {
+      pillClass = 'has-rejected';
+      pillText = expiredCount > 0 ? `${expiredCount} Expired` : `${rejectedCount} Rejected`;
+    }
+
+    return (
+      <div
+        className="doc-summary-badge-wrap cursor-pointer"
+        onClick={(e) => {
+          e.stopPropagation();
+          setVerifyingVehicle(vehicle);
+        }}
+        title="Click to view & verify documents"
+      >
+        <div className={`doc-count-pill ${pillClass}`}>
+          <span className="doc-count-text">{pillText}</span>
+        </div>
+
+        <div className="doc-chips-row">
+          {docList.map((doc) => {
+            const isExpired = doc.expiry && doc.expiry < now;
+            let chipClass = 'chip-warn';
+            if (isExpired || doc.status === 'REJECTED') {
+              chipClass = 'chip-err';
+            } else if (doc.status === 'APPROVED') {
+              chipClass = 'chip-ok';
+            }
+            return (
+              <span
+                key={doc.label}
+                className={`doc-chip ${chipClass}`}
+                title={`${doc.name}: ${isExpired ? 'EXPIRED' : doc.status}`}
+              >
+                {doc.label}
+              </span>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   // Helper to render document status icon with mini badge
   const renderDocIcon = (
     status: 'PENDING' | 'APPROVED' | 'REJECTED' | undefined,
@@ -982,9 +1128,25 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
 
     if (isCorrection) {
       return (
-        <span className="pill-badge orange">
+        <span className="pill-badge orange" title="Corrections requested from vendor">
           <AlertTriangle size={12} />
           <span>Correction Required</span>
+        </span>
+      );
+    }
+
+    const now = new Date().toISOString().split('T')[0];
+    const hasExpiredDoc = Boolean(
+      (vehicle.insurance_expiry_date && vehicle.insurance_expiry_date < now) ||
+      (vehicle.fitness_expiry_date && vehicle.fitness_expiry_date < now) ||
+      (vehicle.permit_expiry_date && vehicle.permit_expiry_date < now)
+    );
+
+    if (hasExpiredDoc) {
+      return (
+        <span className="pill-badge red" title="One or more vehicle compliance documents have expired">
+          <AlertCircle size={12} />
+          <span>Expired Docs</span>
         </span>
       );
     }
@@ -992,14 +1154,15 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
     switch (vehicle.verification_status) {
       case 'APPROVED':
         return (
-          <span className="pill-badge green">
+          <span className="pill-badge green" title="All vehicle verification checks passed">
             <CheckCircle size={12} />
             <span>Verified</span>
           </span>
         );
       case 'REJECTED':
+      case 'BLOCKED':
         return (
-          <span className="pill-badge red">
+          <span className="pill-badge red" title={vehicle.rejection_reason || 'Vehicle rejected'}>
             <XCircle size={12} />
             <span>Rejected</span>
           </span>
@@ -1007,7 +1170,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
       case 'PENDING_DOCS':
       default:
         return (
-          <span className="pill-badge amber">
+          <span className="pill-badge amber" title="Verification pending administrative review">
             <Clock size={12} />
             <span>Pending Review</span>
           </span>
@@ -1030,7 +1193,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
 
   return (
     <div className="cli-dir-wrapper" style={{ padding: '24px 32px' }}>
-      {/* 1. Header Hero Banner (Matching Reference Image 1) */}
+      {/* 1. Header Hero Banner */}
       <div className="directory-hero-banner">
         <div className="directory-hero-info">
           <div className="directory-hero-breadcrumbs">
@@ -1040,19 +1203,44 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
           </div>
           <h1 className="directory-hero-title">Vehicle Directory</h1>
           <p className="directory-hero-desc">
-            Manage vendor-registered vehicles, documents, and verification status.
+            Manage registered vehicles, vendor associations, vehicle specifications, documents, and verification status.
           </p>
         </div>
 
-        <div className="directory-hero-actions">
+        <div className="directory-hero-actions flex items-center gap-2">
           <button
-            className="directory-btn-orange"
-            onClick={onNavigateToAddVehicle}
-            id="btn-register-vehicle"
+            onClick={handleRefresh}
+            className="directory-btn-outline"
+            style={{ color: '#FFFFFF', borderColor: 'rgba(255,255,255,0.25)', background: 'rgba(255,255,255,0.08)' }}
+            title="Refresh records from database"
+            aria-label="Refresh records"
+            disabled={refreshing || loading}
           >
-            <Plus size={16} strokeWidth={2.5} />
-            <span>+ Register Vehicle</span>
+            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+            <span>Refresh</span>
           </button>
+
+          <button
+            onClick={handleExportCSV}
+            className="directory-btn-outline"
+            style={{ color: '#FFFFFF', borderColor: 'rgba(255,255,255,0.25)', background: 'rgba(255,255,255,0.08)' }}
+            title="Export filtered vehicle directory to CSV"
+            aria-label="Export CSV"
+          >
+            <Download size={14} />
+            <span>Export CSV</span>
+          </button>
+
+          {onNavigateToAddVehicle && (
+            <button
+              className="directory-btn-orange"
+              onClick={onNavigateToAddVehicle}
+              id="btn-register-vehicle"
+            >
+              <Plus size={16} strokeWidth={2.5} />
+              <span>+ Register Vehicle</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -1147,17 +1335,17 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
         </div>
       </div>
 
-      {/* 3. Search and Filters Toolbar (Matching Reference Image 1) */}
+      {/* 3. Search and Filters Toolbar */}
       <div className="directory-filter-card">
         {/* Search */}
         <div className="directory-search-box">
-          <Search size={16} className="text-slate-400" />
+          <Search size={16} className="text-slate-400 shrink-0" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            placeholder="Search vehicle number, vendor ID or vendor name..."
+            placeholder="Search vehicle number, vendor name, or vendor ID..."
             className="directory-search-input"
           />
           {searchQuery && (
@@ -1167,6 +1355,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                 setPage(1);
               }}
               className="text-slate-400 hover:text-slate-600"
+              title="Clear search"
             >
               <X size={14} />
             </button>
@@ -1175,7 +1364,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
 
         {/* Category Filter */}
         <div className="directory-select-box">
-          <Truck size={15} className="text-slate-400" />
+          <Truck size={15} className="text-slate-400 shrink-0" />
           <select
             value={categoryFilter}
             onChange={(e) => {
@@ -1185,6 +1374,8 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
             className="directory-select"
           >
             <option value="ALL">All Categories</option>
+            <option value="32FT_MXL">32FT MXL</option>
+            <option value="40 FT High Bed Trailer">40 FT Trailer</option>
             <option value="Lorry">Lorry</option>
             <option value="Trailer">Trailer</option>
             <option value="Van">Van</option>
@@ -1192,13 +1383,14 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
             <option value="10 Wheeler">10 Wheeler</option>
             <option value="12 Wheeler">12 Wheeler</option>
             <option value="14 Wheeler">14 Wheeler</option>
+            <option value="Container">Container</option>
           </select>
           <ChevronDown size={14} className="text-slate-400 pointer-events-none" />
         </div>
 
         {/* Body Type Filter */}
         <div className="directory-select-box">
-          <FileText size={15} className="text-slate-400" />
+          <FileText size={15} className="text-slate-400 shrink-0" />
           <select
             value={bodyTypeFilter}
             onChange={(e) => {
@@ -1207,16 +1399,37 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
             }}
             className="directory-select"
           >
-            <option value="ALL">All Types</option>
+            <option value="ALL">All Body Types</option>
             <option value="Open Body">Open Body</option>
             <option value="Closed Body">Closed Body</option>
+            <option value="Flatbed">Flatbed</option>
+            <option value="Container">Container</option>
+          </select>
+          <ChevronDown size={14} className="text-slate-400 pointer-events-none" />
+        </div>
+
+        {/* Ownership Filter */}
+        <div className="directory-select-box">
+          <Users size={15} className="text-slate-400 shrink-0" />
+          <select
+            value={ownershipFilter}
+            onChange={(e) => {
+              setOwnershipFilter(e.target.value);
+              setPage(1);
+            }}
+            className="directory-select"
+          >
+            <option value="ALL">All Ownership</option>
+            <option value="Owned">Owned</option>
+            <option value="Attached">Attached</option>
+            <option value="Both">Both</option>
           </select>
           <ChevronDown size={14} className="text-slate-400 pointer-events-none" />
         </div>
 
         {/* Verification Status Filter */}
         <div className="directory-select-box">
-          <ShieldCheck size={15} className="text-slate-400" />
+          <ShieldCheck size={15} className="text-slate-400 shrink-0" />
           <select
             value={statusFilter}
             onChange={(e) => {
@@ -1226,10 +1439,29 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
             className="directory-select"
           >
             <option value="ALL">All Status</option>
-            <option value="Pending Review">Pending Review</option>
             <option value="Verified">Verified</option>
+            <option value="Pending Review">Pending Review</option>
             <option value="Rejected">Rejected</option>
             <option value="Correction Required">Correction Required</option>
+          </select>
+          <ChevronDown size={14} className="text-slate-400 pointer-events-none" />
+        </div>
+
+        {/* Document Status Filter */}
+        <div className="directory-select-box">
+          <FileText size={15} className="text-slate-400 shrink-0" />
+          <select
+            value={docStatusFilter}
+            onChange={(e) => {
+              setDocStatusFilter(e.target.value);
+              setPage(1);
+            }}
+            className="directory-select"
+          >
+            <option value="ALL">All Documents</option>
+            <option value="ALL_VERIFIED">All Verified (4/4)</option>
+            <option value="HAS_PENDING">Pending Documents</option>
+            <option value="EXPIRED_REJECTED">Expired / Rejected</option>
           </select>
           <ChevronDown size={14} className="text-slate-400 pointer-events-none" />
         </div>
@@ -1248,7 +1480,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
       </div>
 
       {/* 4. Tabs & Action Sub-bar */}
-      <div className="directory-subbar">
+      <div className="directory-subbar relative">
         <div className="directory-tabs">
           <button
             onClick={() => {
@@ -1292,19 +1524,91 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
           </button>
         </div>
 
-        <div className="directory-tab-actions">
+        <div className="directory-tab-actions flex items-center gap-2">
+          {/* Total Record Indicator */}
+          <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-lg text-xs font-semibold text-slate-600 border border-slate-200">
+            <span>Total:</span>
+            <span className="font-bold text-slate-900">{total}</span>
+          </div>
+
           <button onClick={handleExportCSV} className="directory-btn-outline" title="Export current list to CSV">
             <Download size={14} />
             <span>Export CSV</span>
           </button>
-          <button
-            onClick={() => toast.info('Column layout customized according to NECL Fleet standards')}
-            className="directory-btn-outline"
-            title="Configure columns"
-          >
-            <ColumnsIcon size={14} />
-            <span>Columns</span>
-          </button>
+
+          {/* Column Visibility Toggle Button */}
+          <div className="relative">
+            <button
+              onClick={() => setShowColumnConfig(!showColumnConfig)}
+              className={`directory-btn-outline ${showColumnConfig ? 'bg-orange-50 border-[#F05A22] text-[#F05A22]' : ''}`}
+              title="Configure visible columns"
+              aria-label="Configure columns"
+            >
+              <ColumnsIcon size={14} />
+              <span>Columns</span>
+            </button>
+
+            {/* Column Visibility Popover Dropdown */}
+            {showColumnConfig && (
+              <div
+                className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl shadow-2xl border border-slate-200 p-3 z-50 text-xs"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100">
+                  <span className="font-bold text-slate-800">Customize Columns</span>
+                  <button
+                    onClick={() =>
+                      setVisibleColumns({
+                        vendor: true,
+                        category: true,
+                        bodyType: true,
+                        ratedCapacity: true,
+                        minCapacity: true,
+                        ownership: true,
+                        documents: true,
+                        status: true,
+                        updatedAt: true,
+                      })
+                    }
+                    className="text-[11px] text-[#F05A22] hover:underline font-semibold"
+                  >
+                    Reset All
+                  </button>
+                </div>
+                <div className="space-y-1.5 max-h-60 overflow-y-auto">
+                  {[
+                    { key: 'vendor', label: 'Vendor ID & Name' },
+                    { key: 'category', label: 'Vehicle Category' },
+                    { key: 'bodyType', label: 'Body Type' },
+                    { key: 'ratedCapacity', label: 'Rated Capacity (MT)' },
+                    { key: 'minCapacity', label: 'Minimum Capacity (MT)' },
+                    { key: 'ownership', label: 'Ownership' },
+                    { key: 'documents', label: 'Documents' },
+                    { key: 'status', label: 'Verification Status' },
+                    { key: 'updatedAt', label: 'Updated At' },
+                  ].map((col) => (
+                    <label
+                      key={col.key}
+                      className="flex items-center gap-2 p-1.5 rounded hover:bg-slate-50 cursor-pointer select-none text-slate-700 font-medium"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={(visibleColumns as any)[col.key]}
+                        onChange={(e) =>
+                          setVisibleColumns({
+                            ...visibleColumns,
+                            [col.key]: e.target.checked,
+                          })
+                        }
+                        className="rounded border-slate-300 text-[#F05A22] focus:ring-[#F05A22]"
+                      />
+                      <span>{col.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1331,182 +1635,446 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
             </div>
             <h3 className="text-lg font-bold text-slate-800 mb-1">No vehicles found</h3>
             <p className="text-slate-500 text-sm max-w-md mx-auto mb-5">
-              {searchQuery || categoryFilter !== 'ALL' || statusFilter !== 'ALL'
+              {searchQuery || categoryFilter !== 'ALL' || statusFilter !== 'ALL' || bodyTypeFilter !== 'ALL' || ownershipFilter !== 'ALL' || docStatusFilter !== 'ALL'
                 ? 'No vehicle records matched your filter criteria. Try resetting filters.'
                 : 'Vehicles registered by vendors will automatically appear here for verification and fleet management.'}
             </p>
-            {searchQuery || categoryFilter !== 'ALL' || statusFilter !== 'ALL' ? (
+            {searchQuery || categoryFilter !== 'ALL' || statusFilter !== 'ALL' || bodyTypeFilter !== 'ALL' || ownershipFilter !== 'ALL' || docStatusFilter !== 'ALL' ? (
               <button onClick={handleResetFilters} className="directory-btn-reset" style={{ margin: '0 auto' }}>
                 Clear Filters
               </button>
-            ) : (
+            ) : onNavigateToAddVehicle ? (
               <button onClick={onNavigateToAddVehicle} className="directory-btn-orange" style={{ margin: '0 auto' }}>
                 <Plus size={16} />
                 <span>+ Register Vehicle</span>
               </button>
-            )}
+            ) : null}
           </div>
         ) : (
-          <table className="directory-table" style={{ minWidth: 1180 }}>
-            <thead>
-              <tr>
-                <th style={{ width: 48, textAlign: 'center' }}>#</th>
-                <th style={{ minWidth: 200 }}>Vendor ID & Name</th>
-                <th style={{ minWidth: 130 }}>Vehicle Number</th>
-                {/* Category & Body Type */}
-                <th style={{ minWidth: 140 }}>Vehicle Category</th>
-                <th style={{ minWidth: 120 }}>Body Type</th>
-                <th style={{ minWidth: 130 }}>Rated Capacity (MT)</th>
-                <th style={{ minWidth: 120 }}>Min Capacity (MT)</th>
-                <th style={{ minWidth: 100 }}>Ownership</th>
-                <th style={{ minWidth: 120 }}>Documents</th>
-                <th style={{ minWidth: 150 }}>Verification Status</th>
-                <th style={{ minWidth: 150 }}>Updated</th>
-                <th style={{ minWidth: 90, textAlign: 'right' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {vehicles.map((vehicle, idx) => {
-                const rowNum = (page - 1) * itemsPerPage + idx + 1;
+          <>
+            {/* Desktop / Tablet Scrollable Table View */}
+            <div className="directory-table-scroll-container hidden md:block">
+              <table className="directory-table" style={{ minWidth: 1220 }}>
+                <thead>
+                  <tr>
+                    {/* 1. Row # (Sticky Left 0) */}
+                    <th className="sticky-col-row" style={{ width: 56, minWidth: 56, textAlign: 'center' }}>
+                      #
+                    </th>
+
+                    {/* 2. Vehicle Number (Sticky Left 56) */}
+                    <th
+                      className="sticky-col-vehicle select-none cursor-pointer"
+                      style={{ width: 170, minWidth: 170 }}
+                      onClick={() => handleSort('registration_number')}
+                      title="Sort by vehicle number"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span>Vehicle Number</span>
+                        {sortBy === 'registration_number' ? (
+                          sortOrder === 'asc' ? <ChevronUp size={13} className="text-[#F05A22]" /> : <ChevronDown size={13} className="text-[#F05A22]" />
+                        ) : (
+                          <ArrowUpDown size={12} className="opacity-40" />
+                        )}
+                      </div>
+                    </th>
+
+                    {/* 3. Vendor ID & Name */}
+                    {visibleColumns.vendor && (
+                      <th style={{ width: 230, minWidth: 230 }}>
+                        <span>Vendor ID & Name</span>
+                      </th>
+                    )}
+
+                    {/* 4. Vehicle Category */}
+                    {visibleColumns.category && (
+                      <th
+                        className="select-none cursor-pointer"
+                        style={{ width: 150, minWidth: 150 }}
+                        onClick={() => handleSort('vehicle_type')}
+                        title="Sort by category"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span>Category</span>
+                          {sortBy === 'vehicle_type' ? (
+                            sortOrder === 'asc' ? <ChevronUp size={13} className="text-[#F05A22]" /> : <ChevronDown size={13} className="text-[#F05A22]" />
+                          ) : (
+                            <ArrowUpDown size={12} className="opacity-40" />
+                          )}
+                        </div>
+                      </th>
+                    )}
+
+                    {/* 5. Body Type */}
+                    {visibleColumns.bodyType && (
+                      <th style={{ width: 130, minWidth: 130 }}>Body Type</th>
+                    )}
+
+                    {/* 6. Rated Capacity */}
+                    {visibleColumns.ratedCapacity && (
+                      <th
+                        className="select-none cursor-pointer"
+                        style={{ width: 140, minWidth: 140, textAlign: 'right', paddingRight: '24px' }}
+                        onClick={() => handleSort('rated_capacity_mt')}
+                        title="Sort by rated capacity"
+                      >
+                        <div className="flex items-center justify-end gap-1.5">
+                          <span>Rated Cap (MT)</span>
+                          {sortBy === 'rated_capacity_mt' ? (
+                            sortOrder === 'asc' ? <ChevronUp size={13} className="text-[#F05A22]" /> : <ChevronDown size={13} className="text-[#F05A22]" />
+                          ) : (
+                            <ArrowUpDown size={12} className="opacity-40" />
+                          )}
+                        </div>
+                      </th>
+                    )}
+
+                    {/* 7. Minimum Capacity */}
+                    {visibleColumns.minCapacity && (
+                      <th style={{ width: 130, minWidth: 130, textAlign: 'right', paddingRight: '24px' }}>
+                        Min Cap (MT)
+                      </th>
+                    )}
+
+                    {/* 8. Ownership */}
+                    {visibleColumns.ownership && (
+                      <th style={{ width: 110, minWidth: 110 }}>Ownership</th>
+                    )}
+
+                    {/* 9. Documents */}
+                    {visibleColumns.documents && (
+                      <th style={{ width: 180, minWidth: 180 }}>Documents</th>
+                    )}
+
+                    {/* 10. Verification Status */}
+                    {visibleColumns.status && (
+                      <th
+                        className="select-none cursor-pointer"
+                        style={{ width: 170, minWidth: 170 }}
+                        onClick={() => handleSort('verification_status')}
+                        title="Sort by verification status"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span>Verification</span>
+                          {sortBy === 'verification_status' ? (
+                            sortOrder === 'asc' ? <ChevronUp size={13} className="text-[#F05A22]" /> : <ChevronDown size={13} className="text-[#F05A22]" />
+                          ) : (
+                            <ArrowUpDown size={12} className="opacity-40" />
+                          )}
+                        </div>
+                      </th>
+                    )}
+
+                    {/* 11. Updated At */}
+                    {visibleColumns.updatedAt && (
+                      <th
+                        className="select-none cursor-pointer"
+                        style={{ width: 180, minWidth: 180 }}
+                        onClick={() => handleSort('updated_at')}
+                        title="Sort by last updated"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span>Updated At</span>
+                          {sortBy === 'updated_at' ? (
+                            sortOrder === 'asc' ? <ChevronUp size={13} className="text-[#F05A22]" /> : <ChevronDown size={13} className="text-[#F05A22]" />
+                          ) : (
+                            <ArrowUpDown size={12} className="opacity-40" />
+                          )}
+                        </div>
+                      </th>
+                    )}
+
+                    {/* 12. Actions (Sticky Right 0) */}
+                    <th className="sticky-col-actions" style={{ width: 105, minWidth: 105, textAlign: 'right' }}>
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {vehicles.map((vehicle, idx) => {
+                    const rowNum = (page - 1) * itemsPerPage + idx + 1;
+                    const vendorMeta = transporterDetails[vehicle.id];
+                    const hasVendor = Boolean(vendorMeta && vendorMeta.vendorName);
+                    const vendorName = hasVendor ? vendorMeta.vendorName : null;
+                    const vendorCode = vendorMeta?.vendorCode || null;
+                    const avatar = getVendorAvatar(vendorName || 'V', vendorCode || vehicle.id);
+                    const ownership = vendorMeta?.ownership || (vehicle as any).ownership_type || 'Owned';
+                    const isMenuOpen = menuAnchor?.vehicle.id === vehicle.id;
+
+                    return (
+                      <tr
+                        key={vehicle.id}
+                        onClick={() => setFullViewVehicle(vehicle)}
+                        className="cursor-pointer hover:bg-slate-50 transition-colors"
+                      >
+                        {/* 1. Row # (Sticky Left 0) */}
+                        <td className="sticky-col-row" style={{ textAlign: 'center', color: '#64748B', fontWeight: 600 }}>
+                          {rowNum}
+                        </td>
+
+                        {/* 2. Vehicle Number (Sticky Left 56) */}
+                        <td className="sticky-col-vehicle" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center gap-1.5">
+                            <div
+                              className="vehicle-plate-badge cursor-pointer"
+                              onClick={() => setFullViewVehicle(vehicle)}
+                              title="Click to view vehicle details"
+                            >
+                              <span className="plate-ind">IND</span>
+                              <span className="plate-number">{vehicle.registration_number}</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(vehicle.registration_number);
+                                toast.success(`Vehicle number ${vehicle.registration_number} copied`);
+                              }}
+                              className="p-1 text-slate-400 hover:text-slate-700 rounded transition-colors"
+                              title="Copy vehicle number"
+                              aria-label="Copy vehicle number"
+                            >
+                              <Copy size={12} />
+                            </button>
+                          </div>
+                        </td>
+
+                        {/* 3. Vendor ID & Name */}
+                        {visibleColumns.vendor && (
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center gap-2.5">
+                              <div
+                                className="vendor-avatar-box"
+                                style={{ backgroundColor: avatar.bg }}
+                                title={vendorName || 'No Vendor'}
+                              >
+                                {avatar.initials}
+                              </div>
+                              <div style={{ minWidth: 0, overflow: 'hidden' }}>
+                                {hasVendor ? (
+                                  <>
+                                    {onNavigateToVendorProfile && vendorMeta.vendorId ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => onNavigateToVendorProfile(vendorMeta.vendorId)}
+                                        className="font-semibold text-slate-900 text-[13px] truncate max-w-[170px] hover:text-[#F05A22] hover:underline text-left block"
+                                        title={`View vendor profile: ${vendorName}`}
+                                      >
+                                        {vendorName}
+                                      </button>
+                                    ) : (
+                                      <div
+                                        className="font-semibold text-slate-900 text-[13px] truncate max-w-[170px]"
+                                        title={vendorName}
+                                      >
+                                        {vendorName}
+                                      </div>
+                                    )}
+                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                      <span className="font-mono text-slate-500 text-[11px] truncate max-w-[125px]" title={vendorCode}>
+                                        {vendorCode}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          navigator.clipboard.writeText(vendorCode);
+                                          toast.success('Vendor ID copied to clipboard');
+                                        }}
+                                        className="p-0.5 text-slate-400 hover:text-slate-700 rounded transition-colors"
+                                        title="Copy Vendor ID"
+                                        aria-label="Copy Vendor ID"
+                                      >
+                                        <Copy size={11} />
+                                      </button>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div className="text-slate-400 italic text-[12.5px] truncate max-w-[170px]">
+                                      Vendor name not provided
+                                    </div>
+                                    <div className="font-mono text-slate-400 text-[11px]">
+                                      —
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                        )}
+
+                        {/* 4. Vehicle Category */}
+                        {visibleColumns.category && (
+                          <td>
+                            <div className="flex items-center gap-1.5">
+                              <Truck size={15} className="text-slate-400 shrink-0" />
+                              <span className="font-semibold text-slate-800 text-[13px]" title={vehicle.vehicle_type}>
+                                {formatVehicleCategory(vehicle.vehicle_type)}
+                              </span>
+                            </div>
+                          </td>
+                        )}
+
+                        {/* 5. Body Type */}
+                        {visibleColumns.bodyType && (
+                          <td>
+                            <span className="inline-block px-2.5 py-0.5 rounded-md text-[12px] font-medium bg-slate-100 text-slate-700 border border-slate-200 whitespace-nowrap">
+                              {vehicle.body_type || 'Open Body'}
+                            </span>
+                          </td>
+                        )}
+
+                        {/* 6. Rated Capacity */}
+                        {visibleColumns.ratedCapacity && (
+                          <td className="font-mono font-bold text-slate-700 text-right pr-6 whitespace-nowrap">
+                            {vehicle.rated_capacity_mt != null ? `${Number(vehicle.rated_capacity_mt).toFixed(1)} MT` : '—'}
+                          </td>
+                        )}
+
+                        {/* 7. Minimum Capacity */}
+                        {visibleColumns.minCapacity && (
+                          <td className="font-mono text-slate-600 text-right pr-6 whitespace-nowrap">
+                            {vehicle.minimum_capacity_mt != null ? `${Number(vehicle.minimum_capacity_mt).toFixed(1)} MT` : '—'}
+                          </td>
+                        )}
+
+                        {/* 8. Ownership */}
+                        {visibleColumns.ownership && (
+                          <td>{renderOwnershipBadge(ownership)}</td>
+                        )}
+
+                        {/* 9. Documents */}
+                        {visibleColumns.documents && (
+                          <td>{renderDocumentSummary(vehicle)}</td>
+                        )}
+
+                        {/* 10. Verification Status */}
+                        {visibleColumns.status && (
+                          <td>{renderVerificationBadge(vehicle)}</td>
+                        )}
+
+                        {/* 11. Updated At (Single-line) */}
+                        {visibleColumns.updatedAt && (
+                          <td className="text-slate-600 text-[12px] whitespace-nowrap">
+                            <span title={`Full timestamp: ${vehicle.updated_at || vehicle.created_at}`}>
+                              {formatSingleLineDateTime(vehicle.updated_at || vehicle.created_at)}
+                            </span>
+                          </td>
+                        )}
+
+                        {/* 12. Actions (Sticky Right 0) */}
+                        <td className="sticky-col-actions" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1">
+                            {/* Primary Eye View Button */}
+                            <button
+                              onClick={() => setFullViewVehicle(vehicle)}
+                              className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors"
+                              title="View Vehicle Details"
+                              aria-label="View Vehicle Details"
+                            >
+                              <Eye size={15} />
+                            </button>
+
+                            {/* Floating Actions Menu Toggle */}
+                            <button
+                              onClick={(e) => handleToggleActionMenu(vehicle, e)}
+                              className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
+                                isMenuOpen
+                                  ? 'bg-orange-50 text-[#F05A22]'
+                                  : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+                              }`}
+                              title="More actions"
+                              aria-label="Actions menu"
+                              aria-expanded={isMenuOpen}
+                            >
+                              <MoreVertical size={15} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card-Based List (Shown on screens < 768px) */}
+            <div className="block md:hidden divide-y divide-slate-100 p-2">
+              {vehicles.map((vehicle) => {
                 const vendorMeta = transporterDetails[vehicle.id];
-                const vendorCode =
-                  vendorMeta?.vendorCode || formatDisplayId('VD', vehicle.id, vehicle.created_at);
-                const vendorName = vendorMeta?.vendorName || `Vendor ${vendorCode}`;
-                const avatar = getVendorAvatar(vendorName, vendorCode);
+                const hasVendor = Boolean(vendorMeta && vendorMeta.vendorName);
+                const vendorName = hasVendor ? vendorMeta.vendorName : 'Vendor name not provided';
+                const vendorCode = vendorMeta?.vendorCode || '—';
                 const ownership = vendorMeta?.ownership || (vehicle as any).ownership_type || 'Owned';
-                const isMenuOpen = menuAnchor?.vehicle.id === vehicle.id;
 
                 return (
-                  <tr
+                  <div
                     key={vehicle.id}
-                    onClick={() => setFullViewVehicle(vehicle)}
-                    style={{ cursor: 'pointer' }}
+                    className="p-3.5 space-y-2.5 bg-white hover:bg-slate-50 rounded-xl transition-all"
                   >
-                    {/* # Index */}
-                    <td style={{ textAlign: 'center', color: '#64748B', fontWeight: 600 }}>
-                      {rowNum}
-                    </td>
-
-                    {/* Vendor ID & Name */}
-                    <td>
-                      <div className="flex items-center gap-3">
-                        <div
-                          className="vendor-avatar-box"
-                          style={{ backgroundColor: avatar.bg }}
-                          title={vendorName}
-                        >
-                          {avatar.initials}
-                        </div>
-                        <div style={{ minWidth: 0, overflow: 'hidden' }}>
-                          <div
-                            className="font-medium text-slate-900 text-[13px] truncate max-w-[170px]"
-                            title={vendorName}
-                          >
-                            {vendorName}
-                          </div>
-                          <div className="font-mono text-slate-500 text-[11px] truncate">
-                            {vendorCode}
-                          </div>
-                        </div>
+                    <div className="flex items-center justify-between">
+                      <div className="vehicle-plate-badge">
+                        <span className="plate-ind">IND</span>
+                        <span className="plate-number">{vehicle.registration_number}</span>
                       </div>
-                    </td>
+                      <div>{renderVerificationBadge(vehicle)}</div>
+                    </div>
 
-                    {/* Vehicle Number */}
-                    <td>
-                      <span className="pill-badge blue font-mono font-bold">
-                        {vehicle.registration_number}
-                      </span>
-                    </td>
-
-                    {/* Vehicle Category */}
-                    <td>
-                      <div className="flex items-center gap-2">
-                        <div className="text-slate-400">
-                          <Truck size={16} />
-                        </div>
-                        <span className="font-semibold text-slate-800 text-[13px]">
-                          {vehicle.vehicle_type || 'Lorry'}
+                    <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100 space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-500">Vendor:</span>
+                        <span className="font-bold text-slate-800 truncate max-w-[180px]">{vendorName}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-500">Vendor ID:</span>
+                        <span className="font-mono text-slate-600">{vendorCode}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-500">Category & Type:</span>
+                        <span className="font-semibold text-slate-800">
+                          {formatVehicleCategory(vehicle.vehicle_type)} • {vehicle.body_type || 'Open Body'}
                         </span>
                       </div>
-                    </td>
-
-                    {/* Body Type */}
-                    <td>
-                      <span className="inline-block px-2.5 py-1 rounded-md text-[12px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                        {vehicle.body_type || 'Open Body'}
-                      </span>
-                    </td>
-
-                    {/* Rated Capacity */}
-                    <td>
-                      <span className="font-mono font-bold text-slate-700">
-                        {vehicle.rated_capacity_mt} MT
-                      </span>
-                    </td>
-
-                    {/* Min Capacity */}
-                    <td>
-                      <span className="font-mono text-slate-600">
-                        {vehicle.minimum_capacity_mt} MT
-                      </span>
-                    </td>
-
-                    {/* Ownership */}
-                    <td>{renderOwnershipBadge(ownership)}</td>
-
-                    {/* Documents: RC, Insurance, Fitness/Permit */}
-                    <td>
-                      <div className="doc-icons-group">
-                        {renderDocIcon(vehicle.rc_verification_status, `RC: ${vehicle.rc_verification_status || 'PENDING'}`)}
-                        {renderDocIcon(vehicle.insurance_verification_status, `Insurance: ${vehicle.insurance_verification_status || 'PENDING'}`)}
-                        {renderDocIcon(vehicle.fitness_verification_status || vehicle.permit_verification_status, `Fitness/Permit: ${vehicle.fitness_verification_status || 'PENDING'}`)}
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-500">Rated Capacity:</span>
+                        <span className="font-mono font-bold text-slate-700">
+                          {vehicle.rated_capacity_mt != null ? `${Number(vehicle.rated_capacity_mt).toFixed(1)} MT` : '—'}
+                        </span>
                       </div>
-                    </td>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-500">Ownership:</span>
+                        <span>{renderOwnershipBadge(ownership)}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-200">
+                        <span className="text-slate-500">Documents:</span>
+                        <div>{renderDocumentSummary(vehicle)}</div>
+                      </div>
+                    </div>
 
-                    {/* Verification Status */}
-                    <td>{renderVerificationBadge(vehicle)}</td>
-
-                    {/* Updated */}
-                    <td>
-                      <span className="text-slate-600 text-[12px]">
-                        {formatDateTime(vehicle.updated_at || vehicle.created_at)}
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="text-[11px] text-slate-400">
+                        Updated: {formatSingleLineDateTime(vehicle.updated_at || vehicle.created_at)}
                       </span>
-                    </td>
-
-                    {/* Actions */}
-                    <td style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
-                      <div className="action-menu-container relative inline-flex items-center gap-1">
-                        {/* Eye Button (Full View) */}
+                      <div className="flex items-center gap-2">
                         <button
                           onClick={() => setFullViewVehicle(vehicle)}
-                          className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors"
-                          title="View Details"
-                          aria-label="View Details"
+                          className="px-3 py-1.5 text-xs font-bold rounded-lg bg-orange-50 text-[#F05A22] hover:bg-orange-100"
                         >
-                          <Eye size={15} />
+                          View Details
                         </button>
-
-                        {/* Three Dots Menu Button */}
                         <button
                           onClick={(e) => handleToggleActionMenu(vehicle, e)}
-                          className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
-                            isMenuOpen
-                              ? 'bg-orange-50 text-[#F05A22]'
-                              : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
-                          }`}
+                          className="p-1.5 text-slate-500 hover:text-slate-800 rounded-lg border border-slate-200"
                           title="More actions"
-                          aria-label="Actions menu"
-                          aria-expanded={isMenuOpen}
                         >
-                          <MoreVertical size={15} />
+                          <MoreVertical size={14} />
                         </button>
                       </div>
-                    </td>
-                  </tr>
+                    </div>
+                  </div>
                 );
               })}
-            </tbody>
-          </table>
+            </div>
+          </>
         )}
 
         {/* 6. Pagination Row */}
@@ -1527,6 +2095,15 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
             </div>
 
             <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setPage(1)}
+                disabled={page === 1}
+                className="px-2.5 h-8 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="First page"
+              >
+                First
+              </button>
+
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page === 1}
@@ -1565,6 +2142,15 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                 <ChevronRight size={14} />
               </button>
 
+              <button
+                onClick={() => setPage(totalPages)}
+                disabled={page === totalPages}
+                className="px-2.5 h-8 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Last page"
+              >
+                Last
+              </button>
+
               <select
                 value={itemsPerPage}
                 onChange={(e) => {
@@ -1574,8 +2160,9 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                 className="ml-2 text-xs font-medium border border-slate-200 rounded-lg px-2 py-1.5 bg-white text-slate-700 outline-none"
               >
                 <option value={10}>10 / page</option>
-                <option value={20}>20 / page</option>
+                <option value={25}>25 / page</option>
                 <option value={50}>50 / page</option>
+                <option value={100}>100 / page</option>
               </select>
             </div>
           </div>

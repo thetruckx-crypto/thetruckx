@@ -14522,14 +14522,50 @@ body {
   color: #0F172A;
 }
 
-/* Table Card */
+/* Table Card & Responsive Scroll Container */
 .directory-table-card {
   background: #FFFFFF;
   border: 1px solid #E2E8F0;
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
-  overflow-x: auto;
   margin-bottom: 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+.directory-table-scroll-container {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 680px;
+  position: relative;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Enhanced Interactive Scrollbar */
+.directory-table-scroll-container::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+.directory-table-scroll-container::-webkit-scrollbar-track {
+  background: #F8FAFC;
+  border-radius: 4px;
+}
+
+.directory-table-scroll-container::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.directory-table-scroll-container:hover::-webkit-scrollbar-thumb {
+  background: #94A3B8;
+}
+
+.directory-table-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: #F05A22;
 }
 
 .directory-table {
@@ -14539,32 +14575,205 @@ body {
   font-size: 13px;
 }
 
+/* Sticky Headers */
 .directory-table th {
   background: #F8FAFC;
   color: #475569;
   font-weight: 600;
-  font-size: 12px;
+  font-size: 11.5px;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
-  padding: 14px 16px;
-  border-bottom: 1px solid #E2E8F0;
+  letter-spacing: 0.04em;
+  padding: 13px 14px;
+  border-bottom: 2px solid #E2E8F0;
   text-align: left;
   white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 20;
 }
 
 .directory-table td {
-  padding: 16px;
+  padding: 12px 14px;
   border-bottom: 1px solid #F1F5F9;
   color: #334155;
   vertical-align: middle;
 }
 
-.directory-table tbody tr:hover {
+.directory-table tbody tr:hover td {
   background: #F8FAFC;
 }
 
 .directory-table tbody tr:last-child td {
   border-bottom: none;
+}
+
+/* Fixed / Sticky Columns */
+.directory-table .sticky-col-row {
+  position: sticky;
+  left: 0;
+  width: 56px;
+  min-width: 56px;
+  max-width: 56px;
+  text-align: center;
+  background: #FFFFFF;
+}
+
+.directory-table th.sticky-col-row {
+  z-index: 30;
+  background: #F8FAFC;
+}
+
+.directory-table td.sticky-col-row {
+  z-index: 10;
+  font-weight: 600;
+  color: #64748B;
+}
+
+.directory-table .sticky-col-vehicle {
+  position: sticky;
+  left: 56px;
+  width: 160px;
+  min-width: 160px;
+  background: #FFFFFF;
+  border-right: 1px solid #E2E8F0;
+  box-shadow: 4px 0 8px -2px rgba(15, 23, 42, 0.05);
+}
+
+.directory-table th.sticky-col-vehicle {
+  z-index: 30;
+  background: #F8FAFC;
+}
+
+.directory-table td.sticky-col-vehicle {
+  z-index: 10;
+}
+
+.directory-table tbody tr:hover td.sticky-col-row,
+.directory-table tbody tr:hover td.sticky-col-vehicle,
+.directory-table tbody tr:hover td.sticky-col-actions {
+  background: #F8FAFC;
+}
+
+.directory-table .sticky-col-actions {
+  position: sticky;
+  right: 0;
+  width: 105px;
+  min-width: 105px;
+  text-align: right;
+  background: #FFFFFF;
+  border-left: 1px solid #E2E8F0;
+  box-shadow: -4px 0 8px -2px rgba(15, 23, 42, 0.05);
+}
+
+.directory-table th.sticky-col-actions {
+  z-index: 30;
+  background: #F8FAFC;
+}
+
+.directory-table td.sticky-col-actions {
+  z-index: 10;
+}
+
+/* Vehicle Registration Number Plate Badge */
+.vehicle-plate-badge {
+  display: inline-flex;
+  align-items: center;
+  border: 1.5px solid #1E293B;
+  border-radius: 6px;
+  background: #FFFFFF;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 800;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  white-space: nowrap;
+}
+
+.vehicle-plate-badge .plate-ind {
+  background: #1E3A8A;
+  color: #FFFFFF;
+  font-size: 8.5px;
+  font-weight: 900;
+  padding: 3px 5px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+
+.vehicle-plate-badge .plate-number {
+  padding: 3px 8px;
+  font-size: 12.5px;
+  color: #0F172A;
+  letter-spacing: 0.5px;
+}
+
+/* Document summary & chips */
+.doc-summary-badge-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.doc-count-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  width: fit-content;
+}
+
+.doc-count-pill.all-verified {
+  background: #ECFDF5;
+  color: #059669;
+  border: 1px solid #A7F3D0;
+}
+
+.doc-count-pill.has-pending {
+  background: #FFFBEB;
+  color: #D97706;
+  border: 1px solid #FDE68A;
+}
+
+.doc-count-pill.has-rejected {
+  background: #FEF2F2;
+  color: #DC2626;
+  border: 1px solid #FECACA;
+}
+
+.doc-chips-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.doc-chip {
+  font-size: 9.5px;
+  font-weight: 800;
+  padding: 1px 4px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.doc-chip.chip-ok {
+  background: #D1FAE5;
+  color: #065F46;
+}
+
+.doc-chip.chip-warn {
+  background: #FEF3C7;
+  color: #92400E;
+}
+
+.doc-chip.chip-err {
+  background: #FEE2E2;
+  color: #991B1B;
+}
+
+.doc-chip.chip-empty {
+  background: #F1F5F9;
+  color: #94A3B8;
 }
 
 /* Vendor initials avatar */
