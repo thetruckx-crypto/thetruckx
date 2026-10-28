@@ -317,17 +317,17 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
     return vendor?.vendor_name || (vendorId ? 'Verified Transporter' : 'Independent / Unattached');
   };
 
-  const getLicenceStatus = (driver: any) => {
-    if (!driver.licence_expiry_date) return { label: 'No Expiry', color: 'gray' };
+  const getLicenceStatus = (driver: any): { label: string; color: string; status: 'VALID' | 'EXPIRED' | 'EXPIRING_SOON' | 'NONE' } => {
+    if (!driver.licence_expiry_date) return { label: 'No Expiry', color: 'gray', status: 'NONE' };
     
     const today = new Date();
     const expiry = new Date(driver.licence_expiry_date);
     const daysLeft = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 3600 * 24));
 
-    if (daysLeft < 0) return { label: 'Expired', color: 'red' };
-    if (daysLeft < 7) return { label: `${daysLeft} days left`, color: 'red' };
-    if (daysLeft < 30) return { label: `${daysLeft} days left`, color: 'amber' };
-    return { label: 'Valid', color: 'green' };
+    if (daysLeft < 0) return { label: 'Expired', color: 'red', status: 'EXPIRED' };
+    if (daysLeft < 7) return { label: `${daysLeft} days left`, color: 'red', status: 'EXPIRED' };
+    if (daysLeft < 30) return { label: `${daysLeft} days left`, color: 'amber', status: 'EXPIRING_SOON' };
+    return { label: 'Valid', color: 'green', status: 'VALID' };
   };
 
   const handleExport = () => {
@@ -527,170 +527,190 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
         </div>
       )}
 
-      {/* Header Banner */}
+      {/* Header Banner matching Client Management */}
       <div className="client-header-hero">
-        <div className="client-header-truck-bg">
-          <div className="client-header-truck-overlay" />
-        </div>
-
-        <div className="client-header-info">
-          <div className="client-header-breadcrumbs">
-            <span>Drivers</span>
-            <ChevronRight size={13} className="breadcrumb-chevron" />
-            <span className="breadcrumb-current">Verification Queue</span>
+        <div className="client-header-text">
+          <div className="page-breadcrumb">
+            <span className="breadcrumb-link">Drivers</span>
+            <span className="breadcrumb-sep">›</span>
+            <span className="breadcrumb-current">Driver Verification Queue</span>
           </div>
-          <h1 className="client-directory-title">Driver Verification Queue</h1>
-          <p className="client-directory-desc">
-            Review and audit driver licence documents, identity credentials and regulatory compliance.
+          <h1 className="page-title">Driver Verification Queue</h1>
+          <p className="page-subtitle">
+            Review driver identity documents, driving licences, and verification requirements.
           </p>
         </div>
 
-        <div className="client-header-actions" style={{ display: 'flex', gap: '10px' }}>
+        <div className="client-mgmt-header-actions">
+          <button
+            className="btn-header-secondary"
+            onClick={() => loadDrivers()}
+            disabled={loading}
+            title="Refresh driver verification queue"
+            id="btn-refresh-drivers"
+          >
+            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+            <span>Refresh Queue</span>
+          </button>
+
+          <button
+            className="btn-header-secondary"
+            onClick={handleExport}
+            title="Export drivers to CSV"
+            id="btn-export-drivers"
+          >
+            <Download size={15} />
+            <span>Export</span>
+          </button>
+
           <button
             id="btn-create-driver"
-            className="btn-create-orange"
+            className="btn-header-primary-orange"
             onClick={() => setIsCreateModalOpen(true)}
+            title="Create driver account"
           >
-            <Plus size={15} />
+            <Plus size={16} />
             <span>+ Create Driver Account</span>
-          </button>
-          <button
-            className="btn-create-orange"
-            style={{ background: '#FFFFFF', color: '#172B4D', border: '1px solid #CBD5E1' }}
-            onClick={() => loadDrivers()}
-          >
-            <RefreshCw size={15} className={loading ? 'spin' : ''} />
-            <span>Refresh Queue</span>
           </button>
         </div>
       </div>
 
-      {/* 4 Equal-Width KPI Cards */}
-      <div className="client-kpi-bar">
+      {/* 4 Summary KPI Cards matching Client Management */}
+      <div className="client-kpi-bar" role="region" aria-label="Driver statistics summary">
+        {/* Total Drivers */}
+        <div
+          className={`kpi-stat-card ${activeTab === 'all' ? 'card-highlighted' : ''}`}
+          onClick={() => { setActiveTab('all'); setCurrentPage(1); }}
+          role="button"
+          tabIndex={0}
+          title="Click to view all drivers"
+        >
+          <div className="kpi-stat-icon" style={{ background: '#FFF1E8' }}>
+            <Users size={20} color="#F05A22" />
+          </div>
+          <div className="kpi-stat-content">
+            <div className="kpi-stat-header">
+              <span className="kpi-stat-label">Total Drivers</span>
+              <span className="kpi-stat-arrow"><ChevronRight size={14} /></span>
+            </div>
+            <div className="kpi-stat-value">{kpis.total}</div>
+          </div>
+        </div>
+
         {/* Pending Review */}
         <div
-          className={`kpi-stat-card ${activeTab === 'pending' ? 'active-border' : ''}`}
+          className={`kpi-stat-card ${activeTab === 'pending' ? 'card-highlighted' : ''}`}
           onClick={() => { setActiveTab('pending'); setCurrentPage(1); }}
+          role="button"
+          tabIndex={0}
+          title="Click to view drivers pending approval"
         >
-          <div className="kpi-avatar-squircle orange">
-            <Clock size={20} />
+          <div className="kpi-stat-icon" style={{ background: '#FEF3C7' }}>
+            <Clock size={20} color="#D97706" />
           </div>
-          <div className="kpi-body">
-            <div className="kpi-header-row">
-              <span className="kpi-title">Pending Review</span>
-              <ChevronRight size={14} className="kpi-chevron" />
+          <div className="kpi-stat-content">
+            <div className="kpi-stat-header">
+              <span className="kpi-stat-label">Pending Approval</span>
+              <span className="kpi-stat-arrow"><ChevronRight size={14} /></span>
             </div>
-            <div className="kpi-value">
-              {loading ? <div className="kpi-bar-skeleton" /> : kpis.pending}
-            </div>
+            <div className="kpi-stat-value" style={{ color: '#D97706' }}>{kpis.pending}</div>
           </div>
         </div>
 
         {/* Verified Drivers */}
         <div
-          className={`kpi-stat-card ${activeTab === 'approved' ? 'active-border' : ''}`}
+          className={`kpi-stat-card ${activeTab === 'approved' ? 'card-highlighted' : ''}`}
           onClick={() => { setActiveTab('approved'); setCurrentPage(1); }}
+          role="button"
+          tabIndex={0}
+          title="Click to view verified drivers"
         >
-          <div className="kpi-avatar-squircle green">
-            <CheckCircle2 size={20} />
+          <div className="kpi-stat-icon" style={{ background: '#ECFDF5' }}>
+            <CheckCircle2 size={20} color="#10B981" />
           </div>
-          <div className="kpi-body">
-            <div className="kpi-header-row">
-              <span className="kpi-title">Verified Drivers</span>
-              <ChevronRight size={14} className="kpi-chevron" />
+          <div className="kpi-stat-content">
+            <div className="kpi-stat-header">
+              <span className="kpi-stat-label">Verified Drivers</span>
+              <span className="kpi-stat-arrow"><ChevronRight size={14} /></span>
             </div>
-            <div className="kpi-value">
-              {loading ? <div className="kpi-bar-skeleton" /> : kpis.approved}
-            </div>
+            <div className="kpi-stat-value" style={{ color: '#10B981' }}>{kpis.approved}</div>
           </div>
         </div>
 
-        {/* Rejected Drivers */}
+        {/* Expired Licence / Rejected */}
         <div
-          className={`kpi-stat-card ${activeTab === 'rejected' ? 'active-border' : ''}`}
-          onClick={() => { setActiveTab('rejected'); setCurrentPage(1); }}
-        >
-          <div className="kpi-avatar-squircle red">
-            <XCircle size={20} />
-          </div>
-          <div className="kpi-body">
-            <div className="kpi-header-row">
-              <span className="kpi-title">Rejected Drivers</span>
-              <ChevronRight size={14} className="kpi-chevron" />
-            </div>
-            <div className="kpi-value">
-              {loading ? <div className="kpi-bar-skeleton" /> : kpis.rejected}
-            </div>
-          </div>
-        </div>
-
-        {/* Expired Licence */}
-        <div
-          className={`kpi-stat-card ${activeTab === 'expired' ? 'active-border' : ''}`}
+          className={`kpi-stat-card ${activeTab === 'expired' ? 'card-highlighted' : ''}`}
           onClick={() => { setActiveTab('expired'); setCurrentPage(1); }}
+          role="button"
+          tabIndex={0}
+          title="Click to view expired licence or rejected drivers"
         >
-          <div className="kpi-avatar-squircle amber">
-            <AlertTriangle size={20} />
+          <div className="kpi-stat-icon" style={{ background: '#FEF2F2' }}>
+            <AlertTriangle size={20} color="#EF4444" />
           </div>
-          <div className="kpi-body">
-            <div className="kpi-header-row">
-              <span className="kpi-title">Expired Licence</span>
-              <ChevronRight size={14} className="kpi-chevron" />
+          <div className="kpi-stat-content">
+            <div className="kpi-stat-header">
+              <span className="kpi-stat-label">Expired Licences</span>
+              <span className="kpi-stat-arrow"><ChevronRight size={14} /></span>
             </div>
-            <div className="kpi-value">
-              {loading ? <div className="kpi-bar-skeleton" /> : kpis.expired}
-            </div>
+            <div className="kpi-stat-value" style={{ color: '#EF4444' }}>{kpis.expired}</div>
           </div>
         </div>
       </div>
 
-      {/* Filters Bar Card */}
+      {/* Filters Bar Card matching Client Management */}
       <div className="filters-bar-card">
-        <div className="filter-input-wrap">
-          <Search size={16} className="filter-search-icon" />
+        <div className="search-input-wrap">
+          <Search size={15} className="search-icon-abs" />
           <input
             type="text"
             placeholder="Search by driver name, mobile, licence..."
             value={searchQuery}
             onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-            className="filter-input"
+            className="client-search-input"
+            aria-label="Search drivers"
           />
+          {searchQuery && (
+            <button
+              className="clear-search-btn"
+              onClick={() => { setSearchQuery(''); setCurrentPage(1); }}
+              aria-label="Clear search"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
 
-        <div className="filter-dropdown-wrap">
-          <select
-            value={statusFilter}
-            onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-            className="filter-dropdown"
-          >
-            <option value="all">All Status</option>
-            <option value="pending">Pending</option>
-            <option value="approved">Verified</option>
-            <option value="rejected">Rejected</option>
-          </select>
-          <ChevronDown size={14} className="dropdown-arrow-icon" />
-        </div>
+        <select
+          value={statusFilter}
+          onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
+          className="filter-select"
+          aria-label="Filter by Status"
+        >
+          <option value="all">All Status</option>
+          <option value="pending">Pending</option>
+          <option value="approved">Verified</option>
+          <option value="rejected">Rejected</option>
+        </select>
 
-        <div className="filter-dropdown-wrap">
-          <select
-            value={vendorFilter}
-            onChange={(e) => { setVendorFilter(e.target.value); setCurrentPage(1); }}
-            className="filter-dropdown"
-          >
-            <option value="all">All Vendors</option>
-            {vendors.map(v => (
-              <option key={v.id} value={v.id}>{v.vendor_name}</option>
-            ))}
-          </select>
-          <ChevronDown size={14} className="dropdown-arrow-icon" />
-        </div>
+        <select
+          value={vendorFilter}
+          onChange={(e) => { setVendorFilter(e.target.value); setCurrentPage(1); }}
+          className="filter-select"
+          aria-label="Filter by Vendor"
+        >
+          <option value="all">All Vendors</option>
+          {vendors.map(v => (
+            <option key={v.id} value={v.id}>{v.vendor_name}</option>
+          ))}
+        </select>
 
         <button className="btn-filter-reset" onClick={handleReset} title="Reset filters">
           <RotateCcw size={14} />
-          <span>Reset</span>
+          <span>Reset Filters</span>
         </button>
 
-        <button className="btn-filter-search" onClick={() => setCurrentPage(1)}>
+        <button className="btn-filter-search" onClick={() => setCurrentPage(1)} title="Search">
           <Search size={14} />
           <span>Search</span>
         </button>
@@ -698,41 +718,54 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
 
       {/* Sub-bar: Status Tabs & Export */}
       <div className="table-sub-bar">
-        <div className="status-tabs-group">
+        <div className="status-tabs-list" role="tablist">
           <button
-            className={`status-tab-btn ${activeTab === 'pending' ? 'active' : ''}`}
+            role="tab"
+            aria-selected={activeTab === 'pending'}
+            className={`status-tab-btn ${activeTab === 'pending' ? 'active-tab' : ''}`}
             onClick={() => { setActiveTab('pending'); setCurrentPage(1); }}
           >
-            Pending Review
+            Pending Review ({kpis.pending})
           </button>
           <button
-            className={`status-tab-btn ${activeTab === 'approved' ? 'active' : ''}`}
+            role="tab"
+            aria-selected={activeTab === 'approved'}
+            className={`status-tab-btn ${activeTab === 'approved' ? 'active-tab' : ''}`}
             onClick={() => { setActiveTab('approved'); setCurrentPage(1); }}
           >
-            Verified
+            Verified ({kpis.approved})
           </button>
           <button
-            className={`status-tab-btn ${activeTab === 'rejected' ? 'active' : ''}`}
+            role="tab"
+            aria-selected={activeTab === 'rejected'}
+            className={`status-tab-btn ${activeTab === 'rejected' ? 'active-tab' : ''}`}
             onClick={() => { setActiveTab('rejected'); setCurrentPage(1); }}
           >
-            Rejected
+            Rejected ({kpis.rejected})
           </button>
           <button
-            className={`status-tab-btn ${activeTab === 'expired' ? 'active' : ''}`}
+            role="tab"
+            aria-selected={activeTab === 'expired'}
+            className={`status-tab-btn ${activeTab === 'expired' ? 'active-tab' : ''}`}
             onClick={() => { setActiveTab('expired'); setCurrentPage(1); }}
           >
-            Expired Licence
+            Expired Licence ({kpis.expired})
           </button>
           <button
-            className={`status-tab-btn ${activeTab === 'all' ? 'active' : ''}`}
+            role="tab"
+            aria-selected={activeTab === 'all'}
+            className={`status-tab-btn ${activeTab === 'all' ? 'active-tab' : ''}`}
             onClick={() => { setActiveTab('all'); setCurrentPage(1); }}
           >
-            All Drivers
+            All Drivers ({kpis.total})
           </button>
         </div>
 
-        <div className="table-actions-group">
-          <button className="btn-action-outline" onClick={handleExport}>
+        <div className="table-actions-group" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: '#64748B' }}>
+            Total: <strong style={{ color: '#0F172A' }}>{filteredDrivers.length}</strong>
+          </span>
+          <button className="btn-action-outline" onClick={handleExport} title="Export to CSV">
             <Download size={14} />
             <span>Export</span>
           </button>
@@ -741,25 +774,25 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
 
       {/* Table Card */}
       <div className="client-table-card">
-        <div className="table-wrapper">
-          <table className="client-table">
+        <div className="vendor-table-scroll" style={{ overflowX: 'auto', overflowY: 'hidden', width: '100%' }}>
+          <table className="client-table" style={{ minWidth: 1200 }}>
             <thead>
               <tr>
                 <th style={{ width: '40px' }}>
                   <input type="checkbox" className="custom-table-checkbox" />
                 </th>
-                <th>Driver Name ⇅</th>
-                <th>Driver ID ⇅</th>
-                <th>Mobile ⇅</th>
-                <th>Date of Birth ⇅</th>
-                <th>Vendor ⇅</th>
-                <th>Submission Date ⇅</th>
-                <th>Status ⇅</th>
-                <th style={{ textAlign: 'right' }}>Actions</th>
+                <th style={{ minWidth: 180 }}>Driver Name & ID</th>
+                <th style={{ minWidth: 120 }}>Mobile Number</th>
+                <th style={{ minWidth: 110 }}>Date of Birth</th>
+                <th style={{ minWidth: 150 }}>Vendor Association</th>
+                <th style={{ minWidth: 120 }}>Submission Date</th>
+                <th style={{ minWidth: 120 }}>Licence Status</th>
+                <th style={{ minWidth: 130 }}>Verification Status</th>
+                <th style={{ width: 100, minWidth: 100, textAlign: 'center' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {loading && drivers.length === 0 ? (
                 Array.from({ length: 6 }).map((_, i) => (
                   <tr key={`skel-${i}`} className="table-skeleton-row">
                     <td><div className="table-skeleton-cell" style={{ width: '16px', height: '16px' }} /></td>
@@ -769,14 +802,14 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
                         <div className="table-skeleton-cell" style={{ width: `${120 + (i % 3) * 30}px`, height: '14px' }} />
                       </div>
                     </td>
-                    <td><div className="table-skeleton-cell" style={{ width: '80px', height: '12px' }} /></td>
                     <td><div className="table-skeleton-cell" style={{ width: '100px', height: '12px' }} /></td>
-                    <td><div className="table-skeleton-cell" style={{ width: '120px', height: '12px' }} /></td>
-                    <td><div className="table-skeleton-cell" style={{ width: '85px', height: '12px' }} /></td>
                     <td><div className="table-skeleton-cell" style={{ width: '90px', height: '12px' }} /></td>
-                    <td><div className="table-skeleton-cell" style={{ width: '60px', height: '22px', borderRadius: '12px' }} /></td>
-                    <td style={{ textAlign: 'right' }}>
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
+                    <td><div className="table-skeleton-cell" style={{ width: '110px', height: '12px' }} /></td>
+                    <td><div className="table-skeleton-cell" style={{ width: '85px', height: '12px' }} /></td>
+                    <td><div className="table-skeleton-cell" style={{ width: '75px', height: '22px', borderRadius: '12px' }} /></td>
+                    <td><div className="table-skeleton-cell" style={{ width: '85px', height: '22px', borderRadius: '12px' }} /></td>
+                    <td style={{ textAlign: 'center' }}>
+                      <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
                         <div className="table-skeleton-cell" style={{ width: '28px', height: '28px', borderRadius: '50%' }} />
                         <div className="table-skeleton-cell" style={{ width: '28px', height: '28px', borderRadius: '50%' }} />
                       </div>
@@ -824,9 +857,6 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
                           </div>
                         </div>
                       </td>
-                      <td>
-                        <span className="mono-code">{formatDisplayId('DR', driver.driver_code || driver.id, driver.created_at)}</span>
-                      </td>
                       <td>{driver.mobile || driver.phone}</td>
                       <td>
                         {driver.date_of_birth || driver.dob
@@ -840,6 +870,13 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
                         {driver.created_at
                           ? new Date(driver.created_at).toLocaleDateString('en-IN')
                           : '—'}
+                      </td>
+                      <td>
+                        <span className={`status-badge-pastel ${
+                          licenceStatus.status === 'VALID' ? 'active' : licenceStatus.status === 'EXPIRED' ? 'inactive' : 'pending'
+                        }`}>
+                          {licenceStatus.label}
+                        </span>
                       </td>
                       <td>
                         <span className={`status-badge-pastel ${

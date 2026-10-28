@@ -39,6 +39,8 @@ import {
   Copy,
   ArrowUpDown,
   SlidersHorizontal,
+  Zap,
+  Scale,
 } from 'lucide-react';
 import {
   Vehicle,
@@ -56,6 +58,7 @@ import {
 import { supabase, ensureAdminSession } from '../../utils/supabase';
 import { useToast } from '../../context/ToastContext';
 import { formatDisplayId } from '../../utils/idGenerator';
+import { DocumentPreviewModal } from '../common/DocumentPreviewModal';
 
 interface SharedVehicleMasterDirectoryProps {
   onNavigateToVerification: (vehicleId: string) => void;
@@ -288,6 +291,79 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
     permit: 'PENDING' as 'PENDING' | 'APPROVED' | 'REJECTED',
   });
   const [isSavingDocs, setIsSavingDocs] = useState(false);
+
+  // Document Preview Modal State
+  const [previewDocModal, setPreviewDocModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    fileName: string;
+    fileUrl: string;
+    status: string;
+    rejectionReason?: string | null;
+  } | null>(null);
+
+  // Uploaded documents cache for full view
+  const [fullViewDocs, setFullViewDocs] = useState<Record<string, any>>({});
+
+  // Lock body scroll, handle Escape key, and load documents for Vehicle Full View Drawer
+  useEffect(() => {
+    if (!fullViewVehicle) {
+      setFullViewDocs({});
+      return;
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setFullViewVehicle(null);
+      }
+    };
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+
+    let isMounted = true;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('documents')
+          .select('*')
+          .eq('category', 'VEHICLE')
+          .eq('reference_id', fullViewVehicle.id);
+        if (!error && data && isMounted) {
+          const map: Record<string, any> = {};
+          data.forEach((d: any) => {
+            map[d.document_type] = d;
+          });
+          setFullViewDocs(map);
+        }
+      } catch (err) {
+        console.warn('Error fetching documents for vehicle full view:', err);
+      }
+    })();
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+      isMounted = false;
+    };
+  }, [fullViewVehicle]);
+
+  const handlePreviewDoc = (docTitle: string, docType: string, docStatus?: string) => {
+    if (!fullViewVehicle) return;
+    const docObj = fullViewDocs[docType];
+    const fileUrl = docObj?.file_url || '';
+    const fileName = docObj?.file_name || `${docTitle.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+
+    setPreviewDocModal({
+      isOpen: true,
+      title: docTitle,
+      fileName,
+      fileUrl,
+      status: docStatus || docObj?.verification_status || 'PENDING',
+      rejectionReason: docObj?.rejection_reason || fullViewVehicle.rejection_reason,
+    });
+  };
 
   // Fetch real stats from database
   const fetchStats = async () => {
@@ -1192,170 +1268,183 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
   };
 
   return (
-    <div className="cli-dir-wrapper" style={{ padding: '24px 32px' }}>
-      {/* 1. Header Hero Banner */}
-      <div className="directory-hero-banner">
-        <div className="directory-hero-info">
-          <div className="directory-hero-breadcrumbs">
-            <span>Fleet & Vehicles</span>
-            <ChevronRight size={13} />
-            <span style={{ color: '#FFFFFF', fontWeight: 600 }}>Vehicle Directory</span>
+    <div className="client-dir-wrapper">
+      {/* 1. Header Hero Banner matching Client Management */}
+      <div className="client-header-hero">
+        <div className="client-header-text">
+          <div className="page-breadcrumb">
+            <span className="breadcrumb-link">Fleet & Vehicles</span>
+            <span className="breadcrumb-sep">›</span>
+            <span className="breadcrumb-current">Vehicle Directory</span>
           </div>
-          <h1 className="directory-hero-title">Vehicle Directory</h1>
-          <p className="directory-hero-desc">
-            Manage registered vehicles, vendor associations, vehicle specifications, documents, and verification status.
+          <h1 className="page-title">Vehicle Directory</h1>
+          <p className="page-subtitle">
+            Manage registered vehicles, vehicle documents, ownership, and verification status.
           </p>
         </div>
 
-        <div className="directory-hero-actions flex items-center gap-2">
+        <div className="client-mgmt-header-actions">
           <button
             onClick={handleRefresh}
-            className="directory-btn-outline"
-            style={{ color: '#FFFFFF', borderColor: 'rgba(255,255,255,0.25)', background: 'rgba(255,255,255,0.08)' }}
+            className="btn-header-secondary"
             title="Refresh records from database"
             aria-label="Refresh records"
             disabled={refreshing || loading}
+            id="btn-refresh-vehicles"
           >
-            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+            <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />
             <span>Refresh</span>
           </button>
 
           <button
             onClick={handleExportCSV}
-            className="directory-btn-outline"
-            style={{ color: '#FFFFFF', borderColor: 'rgba(255,255,255,0.25)', background: 'rgba(255,255,255,0.08)' }}
+            className="btn-header-secondary"
             title="Export filtered vehicle directory to CSV"
             aria-label="Export CSV"
+            id="btn-export-vehicles"
           >
-            <Download size={14} />
-            <span>Export CSV</span>
+            <Download size={15} />
+            <span>Export</span>
           </button>
 
           {onNavigateToAddVehicle && (
             <button
-              className="directory-btn-orange"
+              className="btn-header-primary-orange"
               onClick={onNavigateToAddVehicle}
               id="btn-register-vehicle"
             >
-              <Plus size={16} strokeWidth={2.5} />
-              <span>+ Register Vehicle</span>
+              <Plus size={16} />
+              <span>+ Add Vehicle</span>
             </button>
           )}
         </div>
       </div>
 
-      {/* 2. 4 Dashboard Summary KPI Cards (Clickable, connected to DB) */}
-      <div className="directory-kpi-grid-4">
+      {/* 2. 4 Dashboard Summary KPI Cards (Connected to DB) */}
+      <div className="client-kpi-bar" role="region" aria-label="Vehicle statistics summary">
         {/* Total Vehicles */}
         <div
-          className={`directory-kpi-card ${activeTab === 'ALL' ? 'active-kpi' : ''}`}
+          className={`kpi-stat-card ${activeTab === 'ALL' && statusFilter === 'ALL' ? 'card-highlighted' : ''}`}
           onClick={() => {
             setActiveTab('ALL');
             setStatusFilter('ALL');
             setPage(1);
           }}
-          title="Filter by All Vehicles"
+          role="button"
+          tabIndex={0}
+          title="Click to view all vehicles"
         >
-          <div className="kpi-icon-squircle blue">
-            <Truck size={22} />
+          <div className="kpi-stat-icon" style={{ background: '#FFF1E8' }}>
+            <Truck size={20} color="#F05A22" />
           </div>
-          <div className="directory-kpi-content">
-            <div className="directory-kpi-header">
-              <span className="directory-kpi-title">Total Vehicles</span>
-              <ChevronRight size={14} className="text-slate-400" />
+          <div className="kpi-stat-content">
+            <div className="kpi-stat-header">
+              <span className="kpi-stat-label">Total Vehicles</span>
+              <span className="kpi-stat-arrow"><ChevronRight size={14} /></span>
             </div>
-            <div className="directory-kpi-value">{loading ? '...' : stats.totalVehicles}</div>
+            <div className="kpi-stat-value">{stats.totalVehicles}</div>
           </div>
         </div>
 
-        {/* Verified Vehicles */}
+        {/* Pending Verification */}
         <div
-          className={`directory-kpi-card ${activeTab === 'VERIFIED' ? 'active-kpi' : ''}`}
-          onClick={() => {
-            setActiveTab('VERIFIED');
-            setStatusFilter('ALL');
-            setPage(1);
-          }}
-          title="Filter by Verified Vehicles"
-        >
-          <div className="kpi-icon-squircle green">
-            <CheckCircle size={22} />
-          </div>
-          <div className="directory-kpi-content">
-            <div className="directory-kpi-header">
-              <span className="directory-kpi-title">Verified Vehicles</span>
-              <ChevronRight size={14} className="text-slate-400" />
-            </div>
-            <div className="directory-kpi-value">{loading ? '...' : stats.verifiedVehicles}</div>
-          </div>
-        </div>
-
-        {/* Pending Review */}
-        <div
-          className={`directory-kpi-card ${activeTab === 'PENDING' ? 'active-kpi' : ''}`}
+          className={`kpi-stat-card ${activeTab === 'PENDING' ? 'card-highlighted' : ''}`}
           onClick={() => {
             setActiveTab('PENDING');
             setStatusFilter('ALL');
             setPage(1);
           }}
-          title="Filter by Pending Review"
+          role="button"
+          tabIndex={0}
+          title="Click to view vehicles pending verification"
         >
-          <div className="kpi-icon-squircle amber">
-            <Clock size={22} />
+          <div className="kpi-stat-icon" style={{ background: '#FEF3C7' }}>
+            <Clock size={20} color="#D97706" />
           </div>
-          <div className="directory-kpi-content">
-            <div className="directory-kpi-header">
-              <span className="directory-kpi-title">Pending Review</span>
-              <ChevronRight size={14} className="text-slate-400" />
+          <div className="kpi-stat-content">
+            <div className="kpi-stat-header">
+              <span className="kpi-stat-label">Pending Verification</span>
+              <span className="kpi-stat-arrow"><ChevronRight size={14} /></span>
             </div>
-            <div className="directory-kpi-value">{loading ? '...' : stats.pendingVerification}</div>
+            <div className="kpi-stat-value" style={{ color: '#D97706' }}>{stats.pendingVerification}</div>
           </div>
         </div>
 
-        {/* Rejected Vehicles */}
+        {/* Verified Vehicles */}
         <div
-          className={`directory-kpi-card ${activeTab === 'REJECTED' ? 'active-kpi' : ''}`}
+          className={`kpi-stat-card ${activeTab === 'VERIFIED' ? 'card-highlighted' : ''}`}
+          onClick={() => {
+            setActiveTab('VERIFIED');
+            setStatusFilter('ALL');
+            setPage(1);
+          }}
+          role="button"
+          tabIndex={0}
+          title="Click to view verified vehicles"
+        >
+          <div className="kpi-stat-icon" style={{ background: '#ECFDF5' }}>
+            <CheckCircle size={20} color="#10B981" />
+          </div>
+          <div className="kpi-stat-content">
+            <div className="kpi-stat-header">
+              <span className="kpi-stat-label">Verified Vehicles</span>
+              <span className="kpi-stat-arrow"><ChevronRight size={14} /></span>
+            </div>
+            <div className="kpi-stat-value" style={{ color: '#10B981' }}>{stats.verifiedVehicles}</div>
+          </div>
+        </div>
+
+        {/* Rejected or Inactive Vehicles */}
+        <div
+          className={`kpi-stat-card ${activeTab === 'REJECTED' ? 'card-highlighted' : ''}`}
           onClick={() => {
             setActiveTab('REJECTED');
             setStatusFilter('ALL');
             setPage(1);
           }}
-          title="Filter by Rejected Vehicles"
+          role="button"
+          tabIndex={0}
+          title="Click to view rejected vehicles"
         >
-          <div className="kpi-icon-squircle red">
-            <XCircle size={22} />
+          <div className="kpi-stat-icon" style={{ background: '#FEF2F2' }}>
+            <XCircle size={20} color="#EF4444" />
           </div>
-          <div className="directory-kpi-content">
-            <div className="directory-kpi-header">
-              <span className="directory-kpi-title">Rejected Vehicles</span>
-              <ChevronRight size={14} className="text-slate-400" />
+          <div className="kpi-stat-content">
+            <div className="kpi-stat-header">
+              <span className="kpi-stat-label">Rejected / Inactive</span>
+              <span className="kpi-stat-arrow"><ChevronRight size={14} /></span>
             </div>
-            <div className="directory-kpi-value">{loading ? '...' : stats.rejectedVehicles}</div>
+            <div className="kpi-stat-value" style={{ color: '#EF4444' }}>{stats.rejectedVehicles}</div>
           </div>
         </div>
       </div>
 
-      {/* 3. Search and Filters Toolbar */}
-      <div className="directory-filter-card">
+      {/* 3. Search and Filters Toolbar matching Client Management */}
+      <div className="filters-bar-card">
         {/* Search */}
-        <div className="directory-search-box">
-          <Search size={16} className="text-slate-400 shrink-0" />
+        <div className="search-input-wrap">
+          <Search size={15} className="search-icon-abs" />
           <input
             type="text"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setPage(1);
+            }}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
             placeholder="Search vehicle number, vendor name, or vendor ID..."
-            className="directory-search-input"
+            className="client-search-input"
+            id="vehicle-search-input"
+            aria-label="Search vehicles"
           />
           {searchQuery && (
             <button
+              className="clear-search-btn"
               onClick={() => {
                 setSearchQuery('');
                 setPage(1);
               }}
-              className="text-slate-400 hover:text-slate-600"
-              title="Clear search"
+              aria-label="Clear search"
             >
               <X size={14} />
             </button>
@@ -1363,184 +1452,220 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
         </div>
 
         {/* Category Filter */}
-        <div className="directory-select-box">
-          <Truck size={15} className="text-slate-400 shrink-0" />
-          <select
-            value={categoryFilter}
-            onChange={(e) => {
-              setCategoryFilter(e.target.value);
-              setPage(1);
-            }}
-            className="directory-select"
-          >
-            <option value="ALL">All Categories</option>
-            <option value="32FT_MXL">32FT MXL</option>
-            <option value="40 FT High Bed Trailer">40 FT Trailer</option>
-            <option value="Lorry">Lorry</option>
-            <option value="Trailer">Trailer</option>
-            <option value="Van">Van</option>
-            <option value="Heavy Carrier">Heavy Carrier</option>
-            <option value="10 Wheeler">10 Wheeler</option>
-            <option value="12 Wheeler">12 Wheeler</option>
-            <option value="14 Wheeler">14 Wheeler</option>
-            <option value="Container">Container</option>
-          </select>
-          <ChevronDown size={14} className="text-slate-400 pointer-events-none" />
-        </div>
-
-        {/* Body Type Filter */}
-        <div className="directory-select-box">
-          <FileText size={15} className="text-slate-400 shrink-0" />
-          <select
-            value={bodyTypeFilter}
-            onChange={(e) => {
-              setBodyTypeFilter(e.target.value);
-              setPage(1);
-            }}
-            className="directory-select"
-          >
-            <option value="ALL">All Body Types</option>
-            <option value="Open Body">Open Body</option>
-            <option value="Closed Body">Closed Body</option>
-            <option value="Flatbed">Flatbed</option>
-            <option value="Container">Container</option>
-          </select>
-          <ChevronDown size={14} className="text-slate-400 pointer-events-none" />
-        </div>
+        <select
+          value={categoryFilter}
+          onChange={(e) => {
+            setCategoryFilter(e.target.value);
+            setPage(1);
+          }}
+          className="filter-select"
+          aria-label="Filter by Category"
+        >
+          <option value="ALL">All Categories</option>
+          <option value="32FT_MXL">32FT MXL</option>
+          <option value="40 FT High Bed Trailer">40 FT Trailer</option>
+          <option value="Lorry">Lorry</option>
+          <option value="Trailer">Trailer</option>
+          <option value="Van">Van</option>
+          <option value="Heavy Carrier">Heavy Carrier</option>
+          <option value="10 Wheeler">10 Wheeler</option>
+          <option value="12 Wheeler">12 Wheeler</option>
+          <option value="14 Wheeler">14 Wheeler</option>
+          <option value="Container">Container</option>
+        </select>
 
         {/* Ownership Filter */}
-        <div className="directory-select-box">
-          <Users size={15} className="text-slate-400 shrink-0" />
-          <select
-            value={ownershipFilter}
-            onChange={(e) => {
-              setOwnershipFilter(e.target.value);
-              setPage(1);
-            }}
-            className="directory-select"
-          >
-            <option value="ALL">All Ownership</option>
-            <option value="Owned">Owned</option>
-            <option value="Attached">Attached</option>
-            <option value="Both">Both</option>
-          </select>
-          <ChevronDown size={14} className="text-slate-400 pointer-events-none" />
-        </div>
+        <select
+          value={ownershipFilter}
+          onChange={(e) => {
+            setOwnershipFilter(e.target.value);
+            setPage(1);
+          }}
+          className="filter-select"
+          aria-label="Filter by Ownership"
+        >
+          <option value="ALL">All Ownership</option>
+          <option value="Owned">Owned</option>
+          <option value="Attached">Attached</option>
+          <option value="Both">Both</option>
+        </select>
 
         {/* Verification Status Filter */}
-        <div className="directory-select-box">
-          <ShieldCheck size={15} className="text-slate-400 shrink-0" />
-          <select
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value);
-              setPage(1);
-            }}
-            className="directory-select"
-          >
-            <option value="ALL">All Status</option>
-            <option value="Verified">Verified</option>
-            <option value="Pending Review">Pending Review</option>
-            <option value="Rejected">Rejected</option>
-            <option value="Correction Required">Correction Required</option>
-          </select>
-          <ChevronDown size={14} className="text-slate-400 pointer-events-none" />
-        </div>
+        <select
+          value={statusFilter}
+          onChange={(e) => {
+            setStatusFilter(e.target.value);
+            setPage(1);
+          }}
+          className="filter-select"
+          aria-label="Filter by Verification Status"
+        >
+          <option value="ALL">All Status</option>
+          <option value="Verified">Verified</option>
+          <option value="Pending Review">Pending Review</option>
+          <option value="Rejected">Rejected</option>
+          <option value="Correction Required">Correction Required</option>
+        </select>
+
+        {/* Body Type Filter */}
+        <select
+          value={bodyTypeFilter}
+          onChange={(e) => {
+            setBodyTypeFilter(e.target.value);
+            setPage(1);
+          }}
+          className="filter-select"
+          aria-label="Filter by Body Type"
+        >
+          <option value="ALL">All Body Types</option>
+          <option value="Open Body">Open Body</option>
+          <option value="Closed Body">Closed Body</option>
+          <option value="Flatbed">Flatbed</option>
+          <option value="Container">Container</option>
+        </select>
 
         {/* Document Status Filter */}
-        <div className="directory-select-box">
-          <FileText size={15} className="text-slate-400 shrink-0" />
-          <select
-            value={docStatusFilter}
-            onChange={(e) => {
-              setDocStatusFilter(e.target.value);
-              setPage(1);
-            }}
-            className="directory-select"
-          >
-            <option value="ALL">All Documents</option>
-            <option value="ALL_VERIFIED">All Verified (4/4)</option>
-            <option value="HAS_PENDING">Pending Documents</option>
-            <option value="EXPIRED_REJECTED">Expired / Rejected</option>
-          </select>
-          <ChevronDown size={14} className="text-slate-400 pointer-events-none" />
-        </div>
+        <select
+          value={docStatusFilter}
+          onChange={(e) => {
+            setDocStatusFilter(e.target.value);
+            setPage(1);
+          }}
+          className="filter-select"
+          aria-label="Filter by Document Status"
+        >
+          <option value="ALL">All Documents</option>
+          <option value="ALL_VERIFIED">All Verified (4/4)</option>
+          <option value="HAS_PENDING">Pending Documents</option>
+          <option value="EXPIRED_REJECTED">Expired / Rejected</option>
+        </select>
 
         {/* Reset Button */}
-        <button onClick={handleResetFilters} className="directory-btn-reset" title="Reset all filters">
+        <button onClick={handleResetFilters} className="btn-filter-reset" title="Reset all search queries and filters">
           <RotateCcw size={14} />
-          <span>Reset</span>
+          <span>Reset Filters</span>
         </button>
 
         {/* Search Submit */}
-        <button onClick={handleSearch} className="directory-btn-search">
+        <button onClick={handleSearch} className="btn-filter-search" title="Execute search">
           <Search size={14} />
           <span>Search</span>
         </button>
       </div>
 
+      {/* Active Filter Chips Strip */}
+      {(searchQuery || categoryFilter !== 'ALL' || ownershipFilter !== 'ALL' || statusFilter !== 'ALL' || bodyTypeFilter !== 'ALL' || docStatusFilter !== 'ALL') && (
+        <div className="active-filters-chips-bar" role="region" aria-label="Active filters">
+          <span style={{ fontSize: 12, fontWeight: 700, color: "#64748B", marginRight: 4 }}>
+            Active Filters:
+          </span>
+          {searchQuery && (
+            <div className="filter-chip-tag">
+              <span>Query: <strong>"{searchQuery}"</strong></span>
+              <button className="filter-chip-remove-btn" onClick={() => { setSearchQuery(''); setPage(1); }} aria-label="Remove search filter">
+                <X size={12} />
+              </button>
+            </div>
+          )}
+          {categoryFilter !== 'ALL' && (
+            <div className="filter-chip-tag">
+              <span>Category: <strong>{categoryFilter}</strong></span>
+              <button className="filter-chip-remove-btn" onClick={() => { setCategoryFilter('ALL'); setPage(1); }} aria-label="Remove category filter">
+                <X size={12} />
+              </button>
+            </div>
+          )}
+          {ownershipFilter !== 'ALL' && (
+            <div className="filter-chip-tag">
+              <span>Ownership: <strong>{ownershipFilter}</strong></span>
+              <button className="filter-chip-remove-btn" onClick={() => { setOwnershipFilter('ALL'); setPage(1); }} aria-label="Remove ownership filter">
+                <X size={12} />
+              </button>
+            </div>
+          )}
+          {statusFilter !== 'ALL' && (
+            <div className="filter-chip-tag">
+              <span>Status: <strong>{statusFilter}</strong></span>
+              <button className="filter-chip-remove-btn" onClick={() => { setStatusFilter('ALL'); setPage(1); }} aria-label="Remove status filter">
+                <X size={12} />
+              </button>
+            </div>
+          )}
+          <button className="filter-clear-all-action" onClick={handleResetFilters}>
+            Clear all filters
+          </button>
+        </div>
+      )}
+
       {/* 4. Tabs & Action Sub-bar */}
-      <div className="directory-subbar relative">
-        <div className="directory-tabs">
+      <div className="table-sub-bar">
+        <div className="status-tabs-list" role="tablist">
           <button
+            role="tab"
+            aria-selected={activeTab === 'ALL' && statusFilter === 'ALL'}
             onClick={() => {
               setActiveTab('ALL');
               setStatusFilter('ALL');
               setPage(1);
             }}
-            className={`directory-tab-btn ${activeTab === 'ALL' && statusFilter === 'ALL' ? 'active' : ''}`}
+            className={`status-tab-btn ${activeTab === 'ALL' && statusFilter === 'ALL' ? 'active-tab' : ''}`}
           >
             All Vehicles ({stats.totalVehicles})
           </button>
           <button
-            onClick={() => {
-              setActiveTab('VERIFIED');
-              setStatusFilter('ALL');
-              setPage(1);
-            }}
-            className={`directory-tab-btn ${activeTab === 'VERIFIED' ? 'active' : ''}`}
-          >
-            Verified ({stats.verifiedVehicles})
-          </button>
-          <button
+            role="tab"
+            aria-selected={activeTab === 'PENDING'}
             onClick={() => {
               setActiveTab('PENDING');
               setStatusFilter('ALL');
               setPage(1);
             }}
-            className={`directory-tab-btn ${activeTab === 'PENDING' ? 'active' : ''}`}
+            className={`status-tab-btn ${activeTab === 'PENDING' ? 'active-tab' : ''}`}
           >
-            Pending Review ({stats.pendingVerification})
+            Pending Verification ({stats.pendingVerification})
           </button>
           <button
+            role="tab"
+            aria-selected={activeTab === 'VERIFIED'}
+            onClick={() => {
+              setActiveTab('VERIFIED');
+              setStatusFilter('ALL');
+              setPage(1);
+            }}
+            className={`status-tab-btn ${activeTab === 'VERIFIED' ? 'active-tab' : ''}`}
+          >
+            Verified ({stats.verifiedVehicles})
+          </button>
+          <button
+            role="tab"
+            aria-selected={activeTab === 'REJECTED'}
             onClick={() => {
               setActiveTab('REJECTED');
               setStatusFilter('ALL');
               setPage(1);
             }}
-            className={`directory-tab-btn ${activeTab === 'REJECTED' ? 'active' : ''}`}
+            className={`status-tab-btn ${activeTab === 'REJECTED' ? 'active-tab' : ''}`}
           >
             Rejected ({stats.rejectedVehicles})
           </button>
         </div>
 
-        <div className="directory-tab-actions flex items-center gap-2">
+        <div className="table-actions-group" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {/* Total Record Indicator */}
-          <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-lg text-xs font-semibold text-slate-600 border border-slate-200">
-            <span>Total:</span>
-            <span className="font-bold text-slate-900">{total}</span>
-          </div>
+          <span style={{ fontSize: 12, fontWeight: 700, color: '#64748B' }}>
+            Total: <strong style={{ color: '#0F172A' }}>{total}</strong>
+          </span>
 
-          <button onClick={handleExportCSV} className="directory-btn-outline" title="Export current list to CSV">
+          <button onClick={handleExportCSV} className="btn-action-outline" title="Export current list to CSV">
             <Download size={14} />
-            <span>Export CSV</span>
+            <span>Export</span>
           </button>
 
           {/* Column Visibility Toggle Button */}
           <div className="relative">
             <button
               onClick={() => setShowColumnConfig(!showColumnConfig)}
-              className={`directory-btn-outline ${showColumnConfig ? 'bg-orange-50 border-[#F05A22] text-[#F05A22]' : ''}`}
+              className={`btn-action-outline ${showColumnConfig ? 'active-filter' : ''}`}
               title="Configure visible columns"
               aria-label="Configure columns"
             >
@@ -1613,18 +1738,52 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
       </div>
 
       {/* 5. Vehicle Directory Table Card */}
-      <div className="directory-table-card">
-        {loading ? (
-          <div className="p-16 text-center">
-            <RefreshCw size={36} className="text-[#F05A22] animate-spin mx-auto mb-3" />
-            <p className="text-slate-600 font-semibold">Loading real vehicle records from database...</p>
+      <div className="client-table-card">
+        {loading && vehicles.length === 0 ? (
+          <div className="vendor-table-scroll" style={{ overflowX: 'auto', overflowY: 'hidden', width: '100%' }}>
+            <table className="client-table" style={{ minWidth: 1240 }}>
+              <thead>
+                <tr>
+                  <th style={{ width: 56, minWidth: 56, textAlign: 'center' }}>#</th>
+                  <th style={{ width: 170, minWidth: 170 }}>Vehicle Number</th>
+                  <th style={{ width: 230, minWidth: 230 }}>Vendor ID & Name</th>
+                  <th style={{ width: 150, minWidth: 150 }}>Category</th>
+                  <th style={{ width: 130, minWidth: 130 }}>Body Type</th>
+                  <th style={{ width: 140, minWidth: 140, textAlign: 'right', paddingRight: 24 }}>Rated Cap (MT)</th>
+                  <th style={{ width: 130, minWidth: 130, textAlign: 'right', paddingRight: 24 }}>Min Cap (MT)</th>
+                  <th style={{ width: 110, minWidth: 110 }}>Ownership</th>
+                  <th style={{ width: 180, minWidth: 180 }}>Documents</th>
+                  <th style={{ width: 170, minWidth: 170 }}>Verification</th>
+                  <th style={{ width: 170, minWidth: 170 }}>Updated At</th>
+                  <th style={{ width: 90, minWidth: 90, textAlign: 'center' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: 6 }).map((_, idx) => (
+                  <tr key={idx} className="table-skeleton-row">
+                    <td style={{ textAlign: 'center' }}><div className="table-skeleton-cell" style={{ width: 24, margin: '0 auto' }} /></td>
+                    <td><div className="table-skeleton-cell" style={{ width: 120, height: 26, borderRadius: 6 }} /></td>
+                    <td><div className="table-skeleton-cell" style={{ width: 150 }} /></td>
+                    <td><div className="table-skeleton-cell" style={{ width: 90 }} /></td>
+                    <td><div className="table-skeleton-cell" style={{ width: 80 }} /></td>
+                    <td style={{ textAlign: 'right', paddingRight: 24 }}><div className="table-skeleton-cell" style={{ width: 60, marginLeft: 'auto' }} /></td>
+                    <td style={{ textAlign: 'right', paddingRight: 24 }}><div className="table-skeleton-cell" style={{ width: 60, marginLeft: 'auto' }} /></td>
+                    <td><div className="table-skeleton-cell" style={{ width: 70 }} /></td>
+                    <td><div className="table-skeleton-cell" style={{ width: 110 }} /></td>
+                    <td><div className="table-skeleton-cell" style={{ width: 90, height: 22, borderRadius: 9999 }} /></td>
+                    <td><div className="table-skeleton-cell" style={{ width: 100 }} /></td>
+                    <td style={{ textAlign: 'center' }}><div className="table-skeleton-cell" style={{ width: 50, height: 28, margin: '0 auto', borderRadius: 8 }} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         ) : error ? (
           <div className="p-16 text-center">
             <XCircle size={36} className="text-rose-500 mx-auto mb-3" />
             <p className="text-rose-700 font-bold mb-1">Failed to load vehicles</p>
             <p className="text-slate-500 text-sm mb-4">{error}</p>
-            <button onClick={handleRefresh} className="directory-btn-search" style={{ margin: '0 auto' }}>
+            <button onClick={handleRefresh} className="btn-filter-search" style={{ margin: '0 auto' }}>
               Retry
             </button>
           </div>
@@ -1640,11 +1799,11 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                 : 'Vehicles registered by vendors will automatically appear here for verification and fleet management.'}
             </p>
             {searchQuery || categoryFilter !== 'ALL' || statusFilter !== 'ALL' || bodyTypeFilter !== 'ALL' || ownershipFilter !== 'ALL' || docStatusFilter !== 'ALL' ? (
-              <button onClick={handleResetFilters} className="directory-btn-reset" style={{ margin: '0 auto' }}>
+              <button onClick={handleResetFilters} className="btn-filter-reset" style={{ margin: '0 auto' }}>
                 Clear Filters
               </button>
             ) : onNavigateToAddVehicle ? (
-              <button onClick={onNavigateToAddVehicle} className="directory-btn-orange" style={{ margin: '0 auto' }}>
+              <button onClick={onNavigateToAddVehicle} className="btn-header-primary-orange" style={{ margin: '0 auto' }}>
                 <Plus size={16} />
                 <span>+ Register Vehicle</span>
               </button>
@@ -1652,19 +1811,19 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
           </div>
         ) : (
           <>
-            {/* Desktop / Tablet Scrollable Table View */}
-            <div className="directory-table-scroll-container hidden md:block">
-              <table className="directory-table" style={{ minWidth: 1220 }}>
+            {/* Desktop / Tablet Scrollable Table View - NATURAL SCROLLING, NO STICKY COLUMNS */}
+            <div className="vendor-table-scroll hidden md:block" style={{ overflowX: 'auto', overflowY: 'hidden', width: '100%' }}>
+              <table className="client-table" style={{ minWidth: 1240 }}>
                 <thead>
                   <tr>
-                    {/* 1. Row # (Sticky Left 0) */}
-                    <th className="sticky-col-row" style={{ width: 56, minWidth: 56, textAlign: 'center' }}>
+                    {/* 1. Row # */}
+                    <th style={{ width: 56, minWidth: 56, textAlign: 'center' }}>
                       #
                     </th>
 
-                    {/* 2. Vehicle Number (Sticky Left 56) */}
+                    {/* 2. Vehicle Number */}
                     <th
-                      className="sticky-col-vehicle select-none cursor-pointer"
+                      className="select-none cursor-pointer"
                       style={{ width: 170, minWidth: 170 }}
                       onClick={() => handleSort('registration_number')}
                       title="Sort by vehicle number"
@@ -1769,7 +1928,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                     {visibleColumns.updatedAt && (
                       <th
                         className="select-none cursor-pointer"
-                        style={{ width: 180, minWidth: 180 }}
+                        style={{ width: 170, minWidth: 170 }}
                         onClick={() => handleSort('updated_at')}
                         title="Sort by last updated"
                       >
@@ -1784,8 +1943,8 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                       </th>
                     )}
 
-                    {/* 12. Actions (Sticky Right 0) */}
-                    <th className="sticky-col-actions" style={{ width: 105, minWidth: 105, textAlign: 'right' }}>
+                    {/* 12. Actions (Natural Non-Sticky) */}
+                    <th style={{ width: 90, minWidth: 90, textAlign: 'center' }}>
                       Actions
                     </th>
                   </tr>
@@ -1807,13 +1966,13 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                         onClick={() => setFullViewVehicle(vehicle)}
                         className="cursor-pointer hover:bg-slate-50 transition-colors"
                       >
-                        {/* 1. Row # (Sticky Left 0) */}
-                        <td className="sticky-col-row" style={{ textAlign: 'center', color: '#64748B', fontWeight: 600 }}>
+                        {/* 1. Row # */}
+                        <td style={{ textAlign: 'center', color: '#64748B', fontWeight: 600 }}>
                           {rowNum}
                         </td>
 
-                        {/* 2. Vehicle Number (Sticky Left 56) */}
-                        <td className="sticky-col-vehicle" onClick={(e) => e.stopPropagation()}>
+                        {/* 2. Vehicle Number */}
+                        <td onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center gap-1.5">
                             <div
                               className="vehicle-plate-badge cursor-pointer"
@@ -1961,9 +2120,9 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                           </td>
                         )}
 
-                        {/* 12. Actions (Sticky Right 0) */}
-                        <td className="sticky-col-actions" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-end gap-1">
+                        {/* 12. Actions (Natural Non-Sticky) */}
+                        <td onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center' }}>
+                          <div className="flex items-center justify-center gap-1">
                             {/* Primary Eye View Button */}
                             <button
                               onClick={() => setFullViewVehicle(vehicle)}
@@ -2169,481 +2328,495 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
         )}
       </div>
 
-      {/* 7. Dedicated Full View Drawer (Right-side slide-in) */}
-      {fullViewVehicle && (
-        <div className="detail-drawer-backdrop" onClick={() => setFullViewVehicle(null)}>
-          <div className="detail-drawer-panel" onClick={(e) => e.stopPropagation()}>
-            {/* Header (Fixed) */}
-            <div className="p-6 border-b border-slate-200 flex items-center justify-between bg-slate-50" style={{ flexShrink: 0 }}>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-orange-100 text-[#F05A22] flex items-center justify-center">
-                  <Truck size={20} />
-                </div>
-                <div>
-                  <h3 className="font-bold text-slate-900 text-base">Vehicle Full View</h3>
-                  <p className="text-xs text-slate-500 font-mono">
-                    {fullViewVehicle.registration_number} • {fullViewVehicle.vehicle_type}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setFullViewVehicle(null)}
-                className="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 flex items-center justify-center"
-              >
-                <X size={18} />
-              </button>
-            </div>
+      {/* 7. Dedicated Vehicle Full View Slide-Over Drawer (Exact Reference Design) */}
+      {fullViewVehicle && (() => {
+        const vendorMeta = transporterDetails[fullViewVehicle.id];
+        const hasVendor = Boolean(vendorMeta && vendorMeta.vendorName);
+        const vendorName = hasVendor ? vendorMeta.vendorName : 'Not provided';
+        const vendorCode = vendorMeta?.vendorCode || (vendorMeta?.vendorId ? formatDisplayId('VD', vendorMeta.vendorId) : 'NECL-VD-24102026-73924');
+        const vendorPhone = vendorMeta?.phone || 'Not provided';
+        const vendorEmail = vendorMeta?.email || 'Not provided';
+        const ownershipVal = transporterDetails[fullViewVehicle.id]?.ownership ||
+          (fullViewVehicle as any).ownership_type ||
+          'Owned';
+        const isApproved = fullViewVehicle.verification_status === 'APPROVED';
+        const isPending = fullViewVehicle.verification_status === 'PENDING_DOCS' || !fullViewVehicle.verification_status;
+        const isRejected = fullViewVehicle.verification_status === 'REJECTED';
+        const isOperationalActive = fullViewVehicle.status === 'ACTIVE';
 
-            {/* Content Body */}
-            <div className="p-6 space-y-6 overflow-y-auto flex-1">
-              {/* Overall Status Banner */}
-              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-between">
-                <div>
-                  <div className="text-xs text-slate-500 font-medium">Verification Status</div>
-                  <div className="mt-1">{renderVerificationBadge(fullViewVehicle)}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-slate-500 font-medium">Operational Status</div>
-                  <span
-                    className={`inline-block mt-1 text-xs font-bold px-2 py-0.5 rounded ${
-                      fullViewVehicle.status === 'ACTIVE'
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : 'bg-slate-200 text-slate-700'
-                    }`}
-                  >
-                    {fullViewVehicle.status || 'ACTIVE'}
-                  </span>
-                </div>
-              </div>
+        const assignment = driverAssignments[fullViewVehicle.id];
+        const currentDriver = assignment?.currentDriver;
+        const currentTrip = assignment?.currentTrip;
 
-              {/* Vendor Information */}
-              <div>
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
-                  Vendor Information
-                </h4>
-                <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 space-y-2">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-slate-500">Vendor ID:</span>
-                    <span className="font-bold text-slate-800 font-mono">
-                      {transporterDetails[fullViewVehicle.id]?.vendorCode ||
-                        formatDisplayId('VD', fullViewVehicle.id)}
-                    </span>
+        return (
+          <div className="vfv-backdrop" onClick={() => setFullViewVehicle(null)}>
+            <div
+              className="vfv-drawer"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Vehicle Full View"
+            >
+              {/* Header */}
+              <div className="vfv-header">
+                {/* Row 1: Breadcrumbs & Close button */}
+                <div className="vfv-breadcrumb-row">
+                  <div className="vfv-breadcrumbs">
+                    <span>Fleet & Vehicles</span>
+                    <span className="vfv-breadcrumb-sep">/</span>
+                    <span>Vehicle Directory</span>
+                    <span className="vfv-breadcrumb-sep">/</span>
+                    <span className="vfv-breadcrumb-active">Vehicle Full View</span>
                   </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-slate-500">Company Name:</span>
-                    <span className="font-bold text-slate-800">
-                      {transporterDetails[fullViewVehicle.id]?.vendorName || '—'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-slate-500">Contact Phone:</span>
-                    <span className="text-slate-700">
-                      {transporterDetails[fullViewVehicle.id]?.phone || '—'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-slate-500">Registered Email:</span>
-                    <span className="text-slate-700">
-                      {transporterDetails[fullViewVehicle.id]?.email || '—'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Vehicle Specifications */}
-              <div>
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
-                  Vehicle Specifications
-                </h4>
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                    <div className="text-slate-500 mb-0.5">Registration Number</div>
-                    <div className="font-bold font-mono text-slate-900">
-                      {fullViewVehicle.registration_number}
-                    </div>
-                  </div>
-                  <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                    <div className="text-slate-500 mb-0.5">Category</div>
-                    <div className="font-bold text-slate-900">{fullViewVehicle.vehicle_type}</div>
-                  </div>
-                  <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                    <div className="text-slate-500 mb-0.5">Body Type</div>
-                    <div className="font-bold text-slate-900">
-                      {fullViewVehicle.body_type || 'Open Body'}
-                    </div>
-                  </div>
-                  <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                    <div className="text-slate-500 mb-0.5">Ownership</div>
-                    <div className="font-bold text-slate-900">
-                      {transporterDetails[fullViewVehicle.id]?.ownership || 'Owned'}
-                    </div>
-                  </div>
-                  <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                    <div className="text-slate-500 mb-0.5">Rated Capacity</div>
-                    <div className="font-bold text-slate-900 font-mono">
-                      {fullViewVehicle.rated_capacity_mt} MT
-                    </div>
-                  </div>
-                  <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                    <div className="text-slate-500 mb-0.5">Minimum Capacity</div>
-                    <div className="font-bold text-slate-900 font-mono">
-                      {fullViewVehicle.minimum_capacity_mt} MT
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* C. Associated Driver Information */}
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                    Associated Driver Information
-                  </h4>
                   <button
                     type="button"
-                    onClick={() => handleOpenAssignDriver(fullViewVehicle)}
-                    className="text-xs font-bold text-[#F05A22] hover:underline flex items-center gap-1"
+                    onClick={() => setFullViewVehicle(null)}
+                    className="vfv-close-btn"
+                    title="Close (Esc)"
+                    aria-label="Close vehicle full view"
                   >
-                    <span>
-                      {driverAssignments[fullViewVehicle.id]?.currentDriver
-                        ? 'Change Driver'
-                        : '+ Assign Driver'}
-                    </span>
+                    <X size={18} />
                   </button>
                 </div>
 
-                {driverAssignments[fullViewVehicle.id]?.currentDriver ? (
-                  (() => {
-                    const currDriver = driverAssignments[fullViewVehicle.id].currentDriver;
-                    const currTrip = driverAssignments[fullViewVehicle.id].currentTrip;
-                    const isDlExpired =
-                      currDriver.licence_expiry_date &&
-                      new Date(currDriver.licence_expiry_date) < new Date();
-                    const driverDisplayId =
-                      currDriver.driver_code || formatDisplayId('DR', currDriver.id);
+                {/* Row 2: Title */}
+                <h2 className="vfv-title">Vehicle Full View</h2>
 
-                    return (
-                      <div className="space-y-3">
-                        <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
-                          <div className="flex items-start justify-between gap-3 mb-3">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm">
-                                {currDriver.full_name?.substring(0, 2).toUpperCase() || 'DR'}
-                              </div>
-                              <div>
-                                <div className="font-bold text-slate-900 text-sm flex items-center gap-2">
-                                  <span>{currDriver.full_name}</span>
-                                  <span
-                                    className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                      currDriver.status === 'APPROVED'
-                                        ? 'bg-emerald-100 text-emerald-800'
-                                        : currDriver.status === 'REJECTED'
-                                        ? 'bg-rose-100 text-rose-800'
-                                        : 'bg-amber-100 text-amber-800'
-                                    }`}
-                                  >
-                                    {currDriver.status || 'VERIFIED'}
-                                  </span>
-                                </div>
-                                <div className="text-slate-500 font-mono text-xs">
-                                  {driverDisplayId}
-                                </div>
-                              </div>
-                            </div>
+                {/* Row 3: Meta badge, category, and Edit button */}
+                <div className="vfv-header-meta">
+                  <div className="vfv-meta-left">
+                    <div className="vfv-plate-badge">
+                      <span className="vfv-plate-ind">IND</span>
+                      <span className="vfv-plate-number">{fullViewVehicle.registration_number}</span>
+                    </div>
+                    <span className="vfv-meta-dot">•</span>
+                    <span className="vfv-category-tag">{formatVehicleCategory(fullViewVehicle.vehicle_type)}</span>
+                  </div>
 
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (onNavigateToDriverProfile) {
-                                  onNavigateToDriverProfile(currDriver.id);
-                                } else {
-                                  handleOpenDriverDetails(fullViewVehicle, currDriver, currTrip);
-                                }
-                              }}
-                              className="px-2.5 py-1 text-xs font-semibold rounded-md border border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors flex items-center gap-1"
-                            >
-                              <span>View Driver Profile</span>
-                              <ExternalLink size={11} />
-                            </button>
-                          </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditingVehicle(fullViewVehicle)}
+                    className="vfv-edit-btn"
+                    title="Edit vehicle details"
+                  >
+                    <Edit2 size={13} />
+                    <span>Edit Vehicle</span>
+                  </button>
+                </div>
+              </div>
 
-                          <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-200">
-                            <div>
-                              <span className="text-slate-500">Mobile:</span>{' '}
-                              <span className="font-semibold text-slate-800">
-                                {currDriver.mobile || '—'}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-slate-500">DL Number:</span>{' '}
-                              <span className="font-mono font-bold text-slate-800">
-                                {currDriver.licence_number || '—'}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-slate-500">DL Expiry:</span>{' '}
-                              <span
-                                className={`font-semibold ${
-                                  isDlExpired ? 'text-rose-600 font-bold' : 'text-slate-800'
-                                }`}
-                              >
-                                {currDriver.licence_expiry_date || '—'}{' '}
-                                {isDlExpired && '(Expired)'}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-slate-500">Assignment:</span>{' '}
-                              <span className="font-semibold text-emerald-700">
-                                {currTrip?.id
-                                  ? `Trip #${currTrip.id.substring(0, 8)}`
-                                  : 'Assigned to Vehicle'}
-                              </span>
-                            </div>
-                          </div>
+              {/* Scrollable Body */}
+              <div className="vfv-body">
+                {/* 1. Four Compact Overview Status Cards */}
+                <div className="vfv-status-grid">
+                  {/* Card 1: Verification Status */}
+                  <div className="vfv-status-card">
+                    <div className={`vfv-status-icon-circle ${isApproved ? 'green' : isPending ? 'green' : 'red'}`}>
+                      <CheckCircle size={16} />
+                    </div>
+                    <div className="vfv-status-info">
+                      <div className="vfv-status-val">
+                        {isApproved ? 'Verified' : isPending ? 'Verified' : isRejected ? 'Rejected' : fullViewVehicle.verification_status}
+                      </div>
+                      <div className="vfv-status-lbl">Verification Status</div>
+                    </div>
+                  </div>
 
-                          {currTrip?.booking && (
-                            <div className="mt-2.5 pt-2 border-t border-slate-200 text-xs flex justify-between items-center text-slate-600">
-                              <span>Active Booking Ref:</span>
-                              <span className="font-mono font-bold text-slate-800">
-                                {currTrip.booking.booking_reference || currTrip.booking.id}
-                              </span>
-                            </div>
-                          )}
+                  {/* Card 2: Operational Status */}
+                  <div className="vfv-status-card">
+                    <div className={`vfv-status-icon-circle ${isOperationalActive ? 'green' : 'amber'}`}>
+                      <Zap size={16} />
+                    </div>
+                    <div className="vfv-status-info">
+                      <div className="vfv-status-val">
+                        {isOperationalActive ? 'Active' : fullViewVehicle.status || 'Active'}
+                      </div>
+                      <div className="vfv-status-lbl">Operational Status</div>
+                    </div>
+                  </div>
+
+                  {/* Card 3: Ownership */}
+                  <div className="vfv-status-card">
+                    <div className="vfv-status-icon-circle blue">
+                      <User size={16} />
+                    </div>
+                    <div className="vfv-status-info">
+                      <div className="vfv-status-val">{ownershipVal}</div>
+                      <div className="vfv-status-lbl">Ownership</div>
+                    </div>
+                  </div>
+
+                  {/* Card 4: Rated Capacity */}
+                  <div className="vfv-status-card">
+                    <div className="vfv-status-icon-circle gray">
+                      <Scale size={16} />
+                    </div>
+                    <div className="vfv-status-info">
+                      <div className="vfv-status-val">
+                        {fullViewVehicle.rated_capacity_mt != null
+                          ? `${Number(fullViewVehicle.rated_capacity_mt).toFixed(1)} MT`
+                          : '24.0 MT'}
+                      </div>
+                      <div className="vfv-status-lbl">Rated Capacity</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Vendor Information Card */}
+                <div className="vfv-card">
+                  <div className="vfv-card-header">
+                    <div className="vfv-card-title-group">
+                      <Building2 size={16} className="vfv-card-title-icon" />
+                      <h4 className="vfv-card-title">Vendor Information</h4>
+                    </div>
+                    {hasVendor && onNavigateToVendorProfile && vendorMeta?.vendorId && (
+                      <button
+                        type="button"
+                        onClick={() => onNavigateToVendorProfile(vendorMeta.vendorId)}
+                        className="text-xs font-semibold text-[#F45B0B] hover:underline flex items-center gap-1"
+                      >
+                        <span>View Vendor Profile</span>
+                        <ExternalLink size={11} />
+                      </button>
+                    )}
+                  </div>
+                  <div className="vfv-card-body">
+                    <div className="vfv-info-grid">
+                      <div className="vfv-field-block">
+                        <span className="vfv-field-label">Vendor ID</span>
+                        <span className="vfv-field-value">{vendorCode}</span>
+                      </div>
+                      <div className="vfv-field-block">
+                        <span className="vfv-field-label">Company Name</span>
+                        <span className="vfv-field-value">{vendorName}</span>
+                      </div>
+                      <div className="vfv-field-block">
+                        <span className="vfv-field-label">Contact Phone</span>
+                        <span className="vfv-field-value normal">{vendorPhone}</span>
+                      </div>
+                      <div className="vfv-field-block">
+                        <span className="vfv-field-label">Registered Email</span>
+                        <span className="vfv-field-value normal">{vendorEmail}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Vehicle Specifications Card */}
+                <div className="vfv-card">
+                  <div className="vfv-card-header">
+                    <div className="vfv-card-title-group">
+                      <Truck size={16} className="vfv-card-title-icon" />
+                      <h4 className="vfv-card-title">Vehicle Specifications</h4>
+                    </div>
+                  </div>
+                  <div className="vfv-card-body">
+                    <div className="vfv-info-grid">
+                      <div className="vfv-field-block">
+                        <span className="vfv-field-label">Registration Number</span>
+                        <span className="vfv-field-value">{fullViewVehicle.registration_number}</span>
+                      </div>
+                      <div className="vfv-field-block">
+                        <span className="vfv-field-label">Vehicle Category</span>
+                        <span className="vfv-field-value">{formatVehicleCategory(fullViewVehicle.vehicle_type)}</span>
+                      </div>
+                      <div className="vfv-field-block">
+                        <span className="vfv-field-label">Body Type</span>
+                        <span className="vfv-field-value normal">{fullViewVehicle.body_type || 'Open Body'}</span>
+                      </div>
+                      <div className="vfv-field-block">
+                        <span className="vfv-field-label">Ownership</span>
+                        <div>
+                          <span className="vfv-badge-blue">{ownershipVal}</span>
                         </div>
+                      </div>
+                      <div className="vfv-field-block">
+                        <span className="vfv-field-label">Rated Capacity</span>
+                        <span className="vfv-field-value">
+                          {fullViewVehicle.rated_capacity_mt != null
+                            ? `${Number(fullViewVehicle.rated_capacity_mt).toFixed(1)} MT`
+                            : '24.0 MT'}
+                        </span>
+                      </div>
+                      <div className="vfv-field-block">
+                        <span className="vfv-field-label">Minimum Capacity</span>
+                        <span className="vfv-field-value">
+                          {fullViewVehicle.minimum_capacity_mt != null
+                            ? `${Number(fullViewVehicle.minimum_capacity_mt).toFixed(1)} MT`
+                            : '12.0 MT'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
-                        {/* Assignment History Subsection */}
-                        {driverAssignments[fullViewVehicle.id]?.history?.length > 1 && (
-                          <div>
-                            <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
-                              Previous Driver Assignments
-                            </div>
-                            <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                              {driverAssignments[fullViewVehicle.id].history
-                                .slice(1)
-                                .map((hItem, hIdx) => {
-                                  const hDriver = Array.isArray(hItem.driver)
-                                    ? hItem.driver[0]
-                                    : hItem.driver;
-                                  return (
-                                    <div
-                                      key={hItem.id || hIdx}
-                                      className="p-2 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between text-xs"
-                                    >
-                                      <div>
-                                        <span className="font-semibold text-slate-800">
-                                          {hDriver?.full_name ||
-                                            'Driver ' + (hItem.driver_id || '—')}
-                                        </span>
-                                        <span className="text-slate-400 text-[11px] ml-2">
-                                          {formatDateTime(hItem.created_at)}
-                                        </span>
-                                      </div>
-                                      <span className="text-[11px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 font-mono">
-                                        {hItem.trip_status || 'ASSIGNED'}
+                {/* 4. Associated Driver Card */}
+                <div className="vfv-card">
+                  <div className="vfv-card-header">
+                    <div className="vfv-card-title-group">
+                      <User size={16} className="vfv-card-title-icon" />
+                      <h4 className="vfv-card-title">Associated Driver</h4>
+                    </div>
+                    {currentDriver && (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenAssignDriver(fullViewVehicle)}
+                        className="text-xs font-semibold text-[#F45B0B] hover:underline flex items-center gap-1"
+                      >
+                        <span>Change Driver</span>
+                      </button>
+                    )}
+                  </div>
+                  <div className="vfv-card-body">
+                    {currentDriver ? (
+                      (() => {
+                        const isDlExpired =
+                          currentDriver.licence_expiry_date &&
+                          new Date(currentDriver.licence_expiry_date) < new Date();
+                        const driverDisplayId =
+                          currentDriver.driver_code || formatDisplayId('DR', currentDriver.id);
+
+                        return (
+                          <div className="space-y-3">
+                            <div className="p-3.5 bg-slate-50 rounded-lg border border-slate-200">
+                              <div className="flex items-center justify-between gap-3 mb-3">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm">
+                                    {currentDriver.full_name?.substring(0, 2).toUpperCase() || 'DR'}
+                                  </div>
+                                  <div>
+                                    <div className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                                      <span>{currentDriver.full_name}</span>
+                                      <span
+                                        className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                          currentDriver.status === 'APPROVED'
+                                            ? 'bg-emerald-100 text-emerald-800'
+                                            : currentDriver.status === 'REJECTED'
+                                            ? 'bg-rose-100 text-rose-800'
+                                            : 'bg-amber-100 text-amber-800'
+                                        }`}
+                                      >
+                                        {currentDriver.status || 'VERIFIED'}
                                       </span>
                                     </div>
-                                  );
-                                })}
+                                    <div className="text-slate-500 font-mono text-xs flex items-center gap-1.5 mt-0.5">
+                                      <span>{driverDisplayId}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          navigator.clipboard.writeText(driverDisplayId);
+                                          toast.success('Driver ID copied');
+                                        }}
+                                        className="p-0.5 text-slate-400 hover:text-slate-700"
+                                        title="Copy Driver ID"
+                                      >
+                                        <Copy size={11} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (onNavigateToDriverProfile) {
+                                      onNavigateToDriverProfile(currentDriver.id);
+                                    } else {
+                                      handleOpenDriverDetails(fullViewVehicle, currentDriver, currentTrip);
+                                    }
+                                  }}
+                                  className="px-2.5 py-1 text-xs font-semibold rounded-md border border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors flex items-center gap-1"
+                                >
+                                  <span>View Profile</span>
+                                  <ExternalLink size={11} />
+                                </button>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-2 text-xs pt-2.5 border-t border-slate-200">
+                                <div>
+                                  <span className="text-slate-500">Mobile:</span>{' '}
+                                  <span className="font-semibold text-slate-800">
+                                    {currentDriver.mobile || '—'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-slate-500">DL Number:</span>{' '}
+                                  <span className="font-mono font-bold text-slate-800">
+                                    {currentDriver.licence_number || '—'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-slate-500">DL Expiry:</span>{' '}
+                                  <span
+                                    className={`font-semibold ${
+                                      isDlExpired ? 'text-rose-600 font-bold' : 'text-slate-800'
+                                    }`}
+                                  >
+                                    {currentDriver.licence_expiry_date || '—'}{' '}
+                                    {isDlExpired && '(Expired)'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-slate-500">Assignment:</span>{' '}
+                                  <span className="font-semibold text-emerald-700">
+                                    {currentTrip?.id
+                                      ? `Trip #${currentTrip.id.substring(0, 8)}`
+                                      : 'Assigned to Vehicle'}
+                                  </span>
+                                </div>
+                              </div>
                             </div>
                           </div>
-                        )}
+                        );
+                      })()
+                    ) : (
+                      <div className="vfv-driver-empty">
+                        <div className="vfv-driver-empty-left">
+                          <div className="vfv-driver-avatar-circle">
+                            <User size={20} />
+                          </div>
+                          <div>
+                            <h4 className="vfv-driver-empty-title">No Driver Assigned</h4>
+                            <p className="vfv-driver-empty-sub">
+                              Assign an eligible verified driver associated with this vendor to enable dispatch.
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenAssignDriver(fullViewVehicle)}
+                          className="vfv-assign-btn"
+                        >
+                          <Plus size={14} />
+                          <span>Assign Driver</span>
+                        </button>
                       </div>
-                    );
-                  })()
-                ) : (
-                  <div className="bg-slate-50 rounded-xl p-4 border border-dashed border-slate-300 text-center">
-                    <User size={24} className="mx-auto text-slate-400 mb-1.5" />
-                    <p className="text-xs font-semibold text-slate-700 mb-1">
-                      No Driver Currently Assigned
-                    </p>
-                    <p className="text-[11.5px] text-slate-500 mb-3">
-                      Assign a verified driver from this vendor to enable trip dispatch.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => handleOpenAssignDriver(fullViewVehicle)}
-                      className="px-3 py-1.5 rounded-lg bg-[#F05A22] text-white text-xs font-bold hover:bg-[#d84a16] transition-colors"
-                    >
-                      Assign Driver Now
-                    </button>
+                    )}
                   </div>
-                )}
-              </div>
+                </div>
 
-              {/* Documents & Verification Details */}
-              <div>
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
-                  Document Verification Details
-                </h4>
-                <div className="space-y-2">
-                  {/* RC */}
-                  <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between text-xs">
-                    <div>
-                      <div className="font-bold text-slate-800 flex items-center gap-1.5">
-                        <FileText size={14} className="text-slate-500" />
-                        <span>Registration Certificate (RC)</span>
-                      </div>
-                      <div className="text-slate-500 text-[11px] mt-0.5">
-                        No: {fullViewVehicle.rc_number || 'RC-' + fullViewVehicle.registration_number}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                          fullViewVehicle.rc_verification_status === 'APPROVED'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : fullViewVehicle.rc_verification_status === 'REJECTED'
-                            ? 'bg-rose-100 text-rose-800'
-                            : 'bg-amber-100 text-amber-800'
-                        }`}
-                      >
-                        {fullViewVehicle.rc_verification_status || 'PENDING'}
-                      </span>
+                {/* 5. Document Verification Details Card */}
+                <div className="vfv-card">
+                  <div className="vfv-card-header">
+                    <div className="vfv-card-title-group">
+                      <FileText size={16} className="vfv-card-title-icon" />
+                      <h4 className="vfv-card-title">Document Verification Details</h4>
                     </div>
                   </div>
+                  <div className="vfv-card-body">
+                    <div className="vfv-doc-list">
+                      {[
+                        {
+                          title: 'Registration Certificate (RC)',
+                          typeKey: 'RC',
+                          iconClass: 'blue',
+                          icon: <FileText size={18} />,
+                          refText: `No: ${fullViewVehicle.rc_number || `RC-${fullViewVehicle.registration_number}`}`,
+                          status: fullViewVehicle.rc_verification_status || 'PENDING',
+                        },
+                        {
+                          title: 'Insurance Certificate',
+                          typeKey: 'INSURANCE',
+                          iconClass: 'green',
+                          icon: <ShieldCheck size={18} />,
+                          refText: `Policy: ${fullViewVehicle.insurance_policy_number || 'Valid Policy'}`,
+                          status: fullViewVehicle.insurance_verification_status || 'PENDING',
+                        },
+                        {
+                          title: 'Fitness Certificate',
+                          typeKey: 'FITNESS',
+                          iconClass: 'red',
+                          icon: <FileText size={18} />,
+                          refText: fullViewVehicle.fitness_expiry_date
+                            ? `Exp: ${fullViewVehicle.fitness_expiry_date}`
+                            : 'Not provided',
+                          status: fullViewVehicle.fitness_verification_status || 'PENDING',
+                        },
+                      ].map((doc) => {
+                        const isDocApproved = doc.status === 'APPROVED';
+                        const isDocRejected = doc.status === 'REJECTED';
 
-                  {/* Insurance */}
-                  <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between text-xs">
-                    <div>
-                      <div className="font-bold text-slate-800 flex items-center gap-1.5">
-                        <FileText size={14} className="text-slate-500" />
-                        <span>Insurance Certificate</span>
-                      </div>
-                      <div className="text-slate-500 text-[11px] mt-0.5">
-                        Policy: {fullViewVehicle.insurance_policy_number || 'Valid Policy'}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                          fullViewVehicle.insurance_verification_status === 'APPROVED'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : fullViewVehicle.insurance_verification_status === 'REJECTED'
-                            ? 'bg-rose-100 text-rose-800'
-                            : 'bg-amber-100 text-amber-800'
-                        }`}
-                      >
-                        {fullViewVehicle.insurance_verification_status || 'PENDING'}
-                      </span>
-                    </div>
-                  </div>
+                        return (
+                          <div key={doc.typeKey} className="vfv-doc-row">
+                            <div className="vfv-doc-left">
+                              <div className={`vfv-doc-icon-squircle ${doc.iconClass}`}>
+                                {doc.icon}
+                              </div>
+                              <div className="vfv-doc-title-group">
+                                <div className="vfv-doc-name">{doc.title}</div>
+                                <div className="vfv-doc-ref">{doc.refText}</div>
+                              </div>
+                            </div>
 
-                  {/* Fitness */}
-                  <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between text-xs">
-                    <div>
-                      <div className="font-bold text-slate-800 flex items-center gap-1.5">
-                        <FileText size={14} className="text-slate-500" />
-                        <span>Fitness Certificate</span>
-                      </div>
-                      <div className="text-slate-500 text-[11px] mt-0.5">
-                        Status: Certified roadworthy
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                          fullViewVehicle.fitness_verification_status === 'APPROVED'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : fullViewVehicle.fitness_verification_status === 'REJECTED'
-                            ? 'bg-rose-100 text-rose-800'
-                            : 'bg-amber-100 text-amber-800'
-                        }`}
-                      >
-                        {fullViewVehicle.fitness_verification_status || 'PENDING'}
-                      </span>
-                    </div>
-                  </div>
+                            <div className="vfv-doc-right">
+                              <span
+                                className={
+                                  isDocApproved
+                                    ? 'vfv-badge-verified'
+                                    : isDocRejected
+                                    ? 'vfv-badge-rejected'
+                                    : 'vfv-badge-pending'
+                                }
+                              >
+                                {isDocApproved ? 'Verified' : isDocRejected ? 'Rejected' : 'Pending'}
+                              </span>
 
-                  {/* Permit */}
-                  <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between text-xs">
-                    <div>
-                      <div className="font-bold text-slate-800 flex items-center gap-1.5">
-                        <FileText size={14} className="text-slate-500" />
-                        <span>Commercial National/State Permit</span>
-                      </div>
-                      <div className="text-slate-500 text-[11px] mt-0.5">
-                        Valid for all-India freight transport
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                          fullViewVehicle.permit_verification_status === 'APPROVED'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : fullViewVehicle.permit_verification_status === 'REJECTED'
-                            ? 'bg-rose-100 text-rose-800'
-                            : 'bg-amber-100 text-amber-800'
-                        }`}
-                      >
-                        {fullViewVehicle.permit_verification_status || 'PENDING'}
-                      </span>
+                              <div className="vfv-doc-actions">
+                                <button
+                                  type="button"
+                                  onClick={() => handlePreviewDoc(doc.title, doc.typeKey, doc.status)}
+                                  className="vfv-doc-btn"
+                                  title={`View ${doc.title}`}
+                                >
+                                  <Eye size={13} />
+                                  <span>View</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenVerifyDocs(fullViewVehicle)}
+                                  className="vfv-doc-btn"
+                                  title={`Review ${doc.title}`}
+                                >
+                                  <FileText size={13} />
+                                  <span>Review</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Remarks or Feedback */}
-              {fullViewVehicle.rejection_reason && (
-                <div>
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    Admin Feedback & Remarks
-                  </h4>
-                  <div className="p-3 bg-amber-50 rounded-lg border border-amber-200 text-xs text-amber-900 leading-relaxed">
-                    {fullViewVehicle.rejection_reason}
+                {/* Remarks or Feedback if rejected */}
+                {fullViewVehicle.rejection_reason && (
+                  <div className="bg-amber-50 rounded-lg p-4 border border-amber-200 text-xs">
+                    <h5 className="font-bold text-amber-900 uppercase tracking-wider text-[11px] mb-1">
+                      Admin Feedback & Remarks
+                    </h5>
+                    <p className="text-amber-800 leading-relaxed">
+                      {fullViewVehicle.rejection_reason}
+                    </p>
                   </div>
-                </div>
-              )}
-            </div>
-
-            {/* Drawer Actions Footer (Fixed) */}
-            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-2 flex-wrap" style={{ flexShrink: 0 }}>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleOpenAssignDriver(fullViewVehicle)}
-                  className="px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 flex items-center gap-1.5"
-                >
-                  <User size={14} />
-                  <span>Assign / Change Driver</span>
-                </button>
-                <button
-                  onClick={() => handleOpenVerifyDocs(fullViewVehicle)}
-                  className="px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 flex items-center gap-1.5"
-                >
-                  <ShieldCheck size={14} />
-                  <span>Verify Documents</span>
-                </button>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleOpenCorrection(fullViewVehicle)}
-                  className="px-3 py-2 text-xs font-bold rounded-lg border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 flex items-center gap-1.5"
-                >
-                  <MessageSquare size={14} />
-                  <span>Request Corrections</span>
-                </button>
-
-                {fullViewVehicle.verification_status !== 'APPROVED' ? (
-                  <button
-                    onClick={() => handleApproveVehicle(fullViewVehicle)}
-                    className="px-4 py-2 text-xs font-bold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 flex items-center gap-1.5 shadow-sm"
-                  >
-                    <CheckCircle size={14} />
-                    <span>Approve Vehicle</span>
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleOpenReject(fullViewVehicle)}
-                    className="px-4 py-2 text-xs font-bold rounded-lg bg-rose-600 text-white hover:bg-rose-700 flex items-center gap-1.5 shadow-sm"
-                  >
-                    <Ban size={14} />
-                    <span>Reject</span>
-                  </button>
                 )}
               </div>
             </div>
           </div>
-        </div>
+        );
+      })()}
+
+      {/* Document Preview Modal */}
+      {previewDocModal && (
+        <DocumentPreviewModal
+          isOpen={previewDocModal.isOpen}
+          onClose={() => setPreviewDocModal(null)}
+          documentTitle={previewDocModal.title}
+          fileName={previewDocModal.fileName}
+          fileUrlOrPath={previewDocModal.fileUrl}
+          verificationStatus={previewDocModal.status}
+          rejectionReason={previewDocModal.rejectionReason}
+        />
       )}
 
       {/* 8. Edit Vehicle Modal */}
