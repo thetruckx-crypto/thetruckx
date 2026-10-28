@@ -79,5 +79,15 @@ describe('SharedVehicleMasterDirectory Redesign (Reference Specification)', () =
     // Ensure the table tbody contains the mapping
     expect(code).toContain('{vehicles.map((vehicle, idx) => {');
   });
+
+  it('should render Vendor ID & Name column exactly matching Client Management Client ID & Company UI/UX', () => {
+    expect(code).toContain('client-name-cell');
+    expect(code).toContain('client-avatar-squircle');
+    expect(code).toContain('client-name-text');
+    expect(code).toContain('client-id-text');
+    expect(code).toContain('CLIENT_AVATAR_PALETTE');
+    expect(code).toContain('getAvatarColor');
+    expect(code).toContain('getInitials');
+  });
 });
 

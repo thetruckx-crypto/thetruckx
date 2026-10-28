@@ -6178,6 +6178,11 @@ body {
   line-height: 1.2;
 }
 
+button.client-name-text:hover {
+  color: #F05A22 !important;
+  text-decoration: underline;
+}
+
 .client-id-text {
   font-size: 11.5px;
   color: #64748B;

@@ -67,36 +67,36 @@ interface SharedVehicleMasterDirectoryProps {
   onNavigateToDriverProfile?: (driverId: string) => void;
 }
 
-// Helper to calculate avatar initials and consistent color
-function getVendorAvatar(name?: string, id?: string) {
-  const label = name || id || 'NE';
-  const clean = label.replace(/[^a-zA-Z0-9 ]/g, '').trim();
-  const parts = clean.split(/\s+/);
-  let initials = 'NE';
-  if (parts.length >= 2) {
-    initials = (parts[0][0] + parts[1][0]).toUpperCase();
-  } else if (parts.length === 1 && parts[0].length >= 2) {
-    initials = parts[0].substring(0, 2).toUpperCase();
-  } else if (parts[0]) {
-    initials = parts[0].toUpperCase();
-  }
+// Client Management standard palette for initials avatars
+const CLIENT_AVATAR_PALETTE = [
+  '#F05A22', '#2563EB', '#16A34A', '#7C3AED',
+  '#D97706', '#0891B2', '#E11D48', '#4F46E5'
+];
 
-  const palette = [
-    '#1E293B', // dark slate/navy
-    '#6B21A8', // purple
-    '#047857', // emerald
-    '#991B1B', // crimson
-    '#1D4ED8', // blue
-    '#C2410C', // orange-brown
-    '#0F766E', // teal
-    '#4338CA', // indigo
-  ];
+function getAvatarColor(name: string): string {
   let hash = 0;
-  for (let i = 0; i < label.length; i++) {
-    hash = label.charCodeAt(i) + ((hash << 5) - hash);
+  const str = name || '';
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
   }
-  const bg = palette[Math.abs(hash) % palette.length];
-  return { initials, bg };
+  return CLIENT_AVATAR_PALETTE[Math.abs(hash) % CLIENT_AVATAR_PALETTE.length];
+}
+
+function getInitials(name: string): string {
+  if (!name) return 'VN';
+  const clean = name.replace(/[^a-zA-Z0-9 ]/g, ' ').trim();
+  const parts = clean.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'VN';
+  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
+function getVendorAvatar(name?: string, id?: string) {
+  const label = name || id || 'VN';
+  return {
+    initials: getInitials(label),
+    bg: getAvatarColor(label),
+  };
 }
 
 // Helper to format date & time on a single line: e.g. "17 Oct 2026, 03:52 PM"
@@ -1808,7 +1808,15 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                     <td style={{ textAlign: 'center' }}><div className="table-skeleton-cell" style={{ width: 16, height: 16, margin: '0 auto', borderRadius: 4 }} /></td>
                     <td style={{ textAlign: 'center' }}><div className="table-skeleton-cell" style={{ width: 20, margin: '0 auto' }} /></td>
                     <td><div className="table-skeleton-cell" style={{ width: 135, height: 26, borderRadius: 6 }} /></td>
-                    <td><div className="table-skeleton-cell" style={{ width: 150 }} /></td>
+                    <td>
+                      <div className="client-name-cell" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div className="client-avatar-squircle" style={{ background: '#F1F5F9', width: 36, height: 36, borderRadius: 10, flexShrink: 0 }} />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          <div className="table-skeleton-cell" style={{ width: 110, height: 11 }} />
+                          <div className="table-skeleton-cell" style={{ width: 70, height: 8 }} />
+                        </div>
+                      </div>
+                    </td>
                     <td><div className="table-skeleton-cell" style={{ width: 90 }} /></td>
                     <td><div className="table-skeleton-cell" style={{ width: 80 }} /></td>
                     <td style={{ textAlign: 'right', paddingRight: 24 }}><div className="table-skeleton-cell" style={{ width: 60, marginLeft: 'auto' }} /></td>
@@ -1998,10 +2006,13 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                   {vehicles.map((vehicle, idx) => {
                     const rowNum = (page - 1) * itemsPerPage + idx + 1;
                     const vendorMeta = transporterDetails[vehicle.id];
-                    const hasVendor = Boolean(vendorMeta && vendorMeta.vendorName);
-                    const vendorName = hasVendor ? vendorMeta.vendorName : null;
-                    const vendorCode = vendorMeta?.vendorCode || null;
-                    const avatar = getVendorAvatar(vendorName || 'V', vendorCode || vehicle.id);
+                    const rawVendorName = vendorMeta?.vendorName || (vehicle as any).vendor_name || (vehicle as any).transporter_name || null;
+                    const rawVendorCode = vendorMeta?.vendorCode || (vehicle as any).vendor_code || (vendorMeta?.vendorId ? formatDisplayId('VD', vendorMeta.vendorId) : null);
+                    const hasVendor = Boolean(rawVendorName || rawVendorCode || vendorMeta?.vendorId);
+                    const vendorName = rawVendorName;
+                    const vendorCode = rawVendorCode;
+                    const avatarColor = getAvatarColor(vendorName || vendorCode || vehicle.id);
+                    const initials = getInitials(vendorName || vendorCode || 'VN');
                     const ownership = vendorMeta?.ownership || (vehicle as any).ownership_type || 'Owned';
                     const isMenuOpen = menuAnchor?.vehicle.id === vehicle.id;
 
@@ -2050,61 +2061,139 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                           </div>
                         </td>
 
-                        {/* 4. Vendor ID & Name */}
+                        {/* 4. Vendor ID & Name (Client Management Exact Match) */}
                         {visibleColumns.vendor && (
                           <td onClick={(e) => e.stopPropagation()}>
-                            <div className="flex items-center gap-2.5">
+                            <div className="client-name-cell" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              {/* 36x36px Initials Avatar matching Client Management squircle */}
                               <div
-                                className="vendor-avatar-box"
-                                style={{ backgroundColor: avatar.bg }}
-                                title={vendorName || 'No Vendor'}
+                                className="client-avatar-squircle"
+                                style={{
+                                  background: hasVendor ? avatarColor : '#94A3B8',
+                                  color: '#FFFFFF',
+                                  fontWeight: 700,
+                                  fontSize: 13,
+                                  borderRadius: 10,
+                                  width: 36,
+                                  height: 36,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  flexShrink: 0,
+                                }}
+                                aria-hidden="true"
+                                title={vendorName || 'No Vendor Assigned'}
                               >
-                                {avatar.initials}
+                                {initials}
                               </div>
+
+                              {/* Two-Line Details: Company Name on line 1, Registered Vendor ID on line 2 */}
                               <div style={{ minWidth: 0, overflow: 'hidden' }}>
                                 {hasVendor ? (
                                   <>
-                                    {onNavigateToVendorProfile && vendorMeta.vendorId ? (
+                                    {onNavigateToVendorProfile && vendorMeta?.vendorId ? (
                                       <button
                                         type="button"
-                                        onClick={() => onNavigateToVendorProfile(vendorMeta.vendorId)}
-                                        className="font-semibold text-slate-900 text-[13px] truncate max-w-[170px] hover:text-[#F05A22] hover:underline text-left block"
-                                        title={`View vendor profile: ${vendorName}`}
+                                        onClick={() => onNavigateToVendorProfile(vendorMeta.vendorId!)}
+                                        className="client-name-text text-left block"
+                                        style={{
+                                          fontWeight: 600,
+                                          color: '#0F172A',
+                                          cursor: 'pointer',
+                                          whiteSpace: 'nowrap',
+                                          overflow: 'hidden',
+                                          textOverflow: 'ellipsis',
+                                          maxWidth: 180,
+                                          background: 'none',
+                                          border: 'none',
+                                          padding: 0,
+                                          fontSize: 13.5,
+                                          lineHeight: 1.2,
+                                        }}
+                                        title={vendorName || ''}
                                       >
                                         {vendorName}
                                       </button>
                                     ) : (
                                       <div
-                                        className="font-semibold text-slate-900 text-[13px] truncate max-w-[170px]"
-                                        title={vendorName}
+                                        className="client-name-text"
+                                        style={{
+                                          fontWeight: 600,
+                                          color: '#0F172A',
+                                          cursor: 'default',
+                                          whiteSpace: 'nowrap',
+                                          overflow: 'hidden',
+                                          textOverflow: 'ellipsis',
+                                          maxWidth: 180,
+                                          fontSize: 13.5,
+                                          lineHeight: 1.2,
+                                        }}
+                                        title={vendorName || ''}
                                       >
                                         {vendorName}
                                       </div>
                                     )}
-                                    <div className="flex items-center gap-1.5 mt-0.5">
-                                      <span className="font-mono text-slate-500 text-[11px] truncate max-w-[125px]" title={vendorCode}>
-                                        {vendorCode}
-                                      </span>
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          navigator.clipboard.writeText(vendorCode);
-                                          toast.success('Vendor ID copied to clipboard');
-                                        }}
-                                        className="p-0.5 text-slate-400 hover:text-slate-700 rounded transition-colors"
-                                        title="Copy Vendor ID"
-                                        aria-label="Copy Vendor ID"
-                                      >
-                                        <Copy size={11} />
-                                      </button>
+                                    <div
+                                      className="client-id-text"
+                                      style={{
+                                        fontFamily: 'monospace',
+                                        fontSize: 11,
+                                        color: '#64748B',
+                                        whiteSpace: 'nowrap',
+                                        marginTop: 2,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 5,
+                                      }}
+                                      title={vendorCode || ''}
+                                    >
+                                      <span className="truncate max-w-[125px]">{vendorCode || '—'}</span>
+                                      {vendorCode && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            navigator.clipboard.writeText(vendorCode);
+                                            toast.success('Vendor ID copied to clipboard');
+                                          }}
+                                          className="p-0.5 text-slate-400 hover:text-slate-700 rounded transition-colors inline-flex items-center"
+                                          title="Copy Vendor ID"
+                                          aria-label="Copy Vendor ID"
+                                        >
+                                          <Copy size={11} />
+                                        </button>
+                                      )}
                                     </div>
                                   </>
                                 ) : (
                                   <>
-                                    <div className="text-slate-400 italic text-[12.5px] truncate max-w-[170px]">
-                                      Vendor name not provided
+                                    <div
+                                      className="client-name-text"
+                                      style={{
+                                        fontWeight: 500,
+                                        color: '#94A3B8',
+                                        fontStyle: 'italic',
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        maxWidth: 180,
+                                        fontSize: 13,
+                                        lineHeight: 1.2,
+                                      }}
+                                      title="Vendor not assigned"
+                                    >
+                                      Vendor not assigned
                                     </div>
-                                    <div className="font-mono text-slate-400 text-[11px]">
+                                    <div
+                                      className="client-id-text"
+                                      style={{
+                                        fontFamily: 'monospace',
+                                        fontSize: 11,
+                                        color: '#94A3B8',
+                                        marginTop: 2,
+                                      }}
+                                      title="No registered vendor ID"
+                                    >
                                       —
                                     </div>
                                   </>
