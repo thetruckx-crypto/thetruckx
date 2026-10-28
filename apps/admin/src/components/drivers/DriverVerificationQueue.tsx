@@ -18,69 +18,159 @@ import {
   ChevronDown,
   Plus,
   Trash2,
+  Truck,
+  Edit2,
+  SlidersHorizontal,
+  Columns as ColumnsIcon,
+  Check,
+  Zap,
+  AlertCircle,
+  Calendar,
+  Building2,
+  Phone,
+  ArrowUpDown,
+  ExternalLink,
+  User,
+  ShieldCheck,
+  Activity,
+  Layers,
 } from 'lucide-react';
 import { supabase, ensureAdminSession } from '../../utils/supabase';
 import { DriverLicenceAudit } from './DriverLicenceAudit';
+import { DriverDetailsDrawer } from './DriverDetailsDrawer';
 import { formatDisplayId, generateDbNeclId } from '../../utils/idGenerator';
 import { optimizeFileForUpload } from '../../utils/fileCompressor';
 import { apiFetch } from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
 
 interface DriverVerificationQueueProps {
-  onAuditDriver: (driverId: string) => void;
+  onAuditDriver?: (driverId: string) => void;
+  onNavigateToVendorProfile?: (vendorId: string) => void;
+  onNavigateToVehicleDirectory?: () => void;
+}
+
+// Client Management standard palette for initials avatars
+const AVATAR_PALETTE = [
+  '#F05A22', '#2563EB', '#16A34A', '#7C3AED',
+  '#D97706', '#0891B2', '#E11D48', '#4F46E5'
+];
+
+function getAvatarColor(name: string): string {
+  let hash = 0;
+  const str = name || '';
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return AVATAR_PALETTE[Math.abs(hash) % AVATAR_PALETTE.length];
+}
+
+function getInitials(name: string): string {
+  if (!name) return 'DR';
+  const clean = name.replace(/[^a-zA-Z0-9 ]/g, ' ').trim();
+  const parts = clean.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'DR';
+  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
 export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = ({
   onAuditDriver,
+  onNavigateToVendorProfile,
+  onNavigateToVehicleDirectory,
 }) => {
   const { hasPermission, adminProfile } = useAuth();
-  const canDelete = hasPermission('drivers', 'delete') || adminProfile?.role === 'SUPER_ADMIN' || adminProfile?.role === 'ADMIN';
+  const canDelete =
+    hasPermission('drivers', 'delete') ||
+    adminProfile?.role === 'SUPER_ADMIN' ||
+    adminProfile?.role === 'ADMIN';
+  const canEdit =
+    hasPermission('drivers', 'edit') ||
+    adminProfile?.role === 'SUPER_ADMIN' ||
+    adminProfile?.role === 'ADMIN';
+  const canApprove =
+    hasPermission('drivers', 'approve') ||
+    adminProfile?.role === 'SUPER_ADMIN' ||
+    adminProfile?.role === 'ADMIN';
 
+  // Core Data State
   const [drivers, setDrivers] = useState<any[]>([]);
   const [vendors, setVendors] = useState<any[]>([]);
+  const [vehicles, setVehicles] = useState<any[]>([]);
+  const [trips, setTrips] = useState<any[]>([]);
+  const [vendorVehicleLinks, setVendorVehicleLinks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Delete Driver State
-  const [deletingDriver, setDeletingDriver] = useState<any | null>(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
-  const [deleteReason, setDeleteReason] = useState('');
+  // Selection state
+  const [selectedDriverIds, setSelectedDriverIds] = useState<Set<string>>(new Set());
 
-  const handleConfirmDeleteDriver = async () => {
-    if (!deletingDriver) return;
-    setDeleteLoading(true);
-    try {
-      const res = await apiFetch('/admin/delete-user', {
-        method: 'POST',
-        body: JSON.stringify({
-          driverId: deletingDriver.id,
-          mobile: deletingDriver.mobile_number || deletingDriver.mobile,
-          role: 'DRIVER',
-          reason: deleteReason || 'Deleted by Administrator from Driver Queue',
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to delete driver account');
-      }
-      setDrivers((prev) => prev.filter((d) => d.id !== deletingDriver.id));
-      setToastMessage(`Driver "${deletingDriver.full_name || deletingDriver.name}" and all associated data permanently deleted.`);
-      setTimeout(() => setToastMessage(null), 4000);
-      setDeletingDriver(null);
-      setDeleteReason('');
-    } catch (err: any) {
-      console.error('Delete driver error:', err);
-      alert(`Error deleting driver: ${err.message || 'Unknown error'}`);
-    } finally {
-      setDeleteLoading(false);
-    }
-  };
+  // Filter & Search State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [vendorFilter, setVendorFilter] = useState('all');
+  const [vehicleAssignmentFilter, setVehicleAssignmentFilter] = useState<'all' | 'assigned' | 'unassigned'>('all');
+  const [transportStatusFilter, setTransportStatusFilter] = useState('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'expired'>('pending');
 
-  // Driver Licence Audit Modal State
+  // Sorting
+  const [sortField, setSortField] = useState<string>('createdAt');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  // Column preferences
+  const [showColumnConfig, setShowColumnConfig] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({
+    serialNo: true,
+    driverName: true,
+    mobile: true,
+    dob: true,
+    vendor: true,
+    vehicle: true,
+    transportStatus: true,
+    licenceStatus: true,
+    verificationStatus: true,
+    submissionDate: true,
+  });
+
+  // Modal & Drawer State
+  const [selectedDrawerDriver, setSelectedDrawerDriver] = useState<any | null>(null);
   const [selectedAuditDriver, setSelectedAuditDriver] = useState<any | null>(null);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
 
-  // Create Driver Account Modal State (Email NOT required / removed)
+  // Assign Vehicle Modal State
+  const [assigningVehicleDriver, setAssigningVehicleDriver] = useState<any | null>(null);
+  const [selectedVehicleToAssign, setSelectedVehicleToAssign] = useState<string>('');
+  const [isAssigningVehicle, setIsAssigningVehicle] = useState(false);
+
+  // Transport Status Modal State
+  const [statusUpdatingDriver, setStatusUpdatingDriver] = useState<any | null>(null);
+  const [selectedTransportStatus, setSelectedTransportStatus] = useState<string>('AVAILABLE');
+  const [transportStatusNote, setTransportStatusNote] = useState<string>('');
+  const [isUpdatingTransportStatus, setIsUpdatingTransportStatus] = useState(false);
+
+  // Edit Driver Modal State
+  const [editingDriver, setEditingDriver] = useState<any | null>(null);
+  const [editFormData, setEditFormData] = useState({
+    fullName: '',
+    mobile: '',
+    dateOfBirth: '',
+    licenceNumber: '',
+    licenceExpiryDate: '',
+    primaryVendorId: '',
+    address: '',
+    city: '',
+    state: '',
+    emergencyContactName: '',
+    emergencyContactPhone: '',
+  });
+  const [editErrors, setEditErrors] = useState<Record<string, string>>({});
+  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+
+  // Create Driver Account Modal State (Email NOT required)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [createFormData, setCreateFormData] = useState({
     fullName: '',
@@ -100,6 +190,16 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
   }>({});
   const [createErrors, setCreateErrors] = useState<Record<string, string>>({});
   const [isCreatingDriver, setIsCreatingDriver] = useState(false);
+
+  // Delete Driver State
+  const [deletingDriver, setDeletingDriver] = useState<any | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteReason, setDeleteReason] = useState('');
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3800);
+  };
 
   const calculateAge = (dobString: string): { age: number | null; isEligible: boolean; text: string } => {
     if (!dobString) return { age: null, isEligible: false, text: '' };
@@ -122,34 +222,33 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
     }
   };
 
-  // Filters
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [vendorFilter, setVendorFilter] = useState('all');
-  const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'expired'>('pending');
+  // ─── Data Loading ──────────────────────────────────────────────────────────
+  const loadData = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
 
-  // Pagination
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
-  };
-
-  const loadDrivers = useCallback(async () => {
-    setLoading(true);
     try {
       await ensureAdminSession();
 
-      const [driversRes, vendorsRes] = await Promise.all([
+      const [driversRes, vendorsRes, tripsRes, vehiclesRes, linksRes] = await Promise.all([
         supabase
           .from('drivers')
-          .select('*, vendor_companies:primary_vendor_id(id, vendor_name, vendor_code)')
+          .select('*, vendor_companies:primary_vendor_id(id, vendor_name, vendor_code, status, city)')
           .order('created_at', { ascending: false }),
         supabase
           .from('vendor_companies')
-          .select('id, vendor_name')
+          .select('id, vendor_name, vendor_code, status, city, phone')
+          .order('vendor_name', { ascending: true }),
+        supabase
+          .from('trips')
+          .select('id, booking_id, vehicle_id, driver_id, vendor_id, trip_status, started_at, completed_at, created_at, vehicle:vehicles(id, registration_number, vehicle_type, body_type, rated_capacity_mt, status, verification_status)')
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('vehicles')
+          .select('id, registration_number, vehicle_type, body_type, rated_capacity_mt, status, verification_status'),
+        supabase
+          .from('vendor_vehicle_links')
+          .select('vendor_id, vehicle_id'),
       ]);
 
       let fetchedDrivers = driversRes.data || [];
@@ -166,9 +265,14 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
       }
 
       setDrivers(fetchedDrivers);
+      setVendors(vendorsRes.data || []);
+      setTrips(tripsRes.data || []);
+      setVehicles(vehiclesRes.data || []);
+      setVendorVehicleLinks(linksRes.data || []);
 
-      const fetchedVendors = vendorsRes.data || [];
-      setVendors(fetchedVendors);
+      if (isRefresh) {
+        showToast('✅ Driver verification queue updated');
+      }
     } catch (err: any) {
       console.warn('Driver database query error:', err.message);
       try {
@@ -182,15 +286,16 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
       } catch {
         setDrivers([]);
       }
-      setVendors([]);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
   useEffect(() => {
-    loadDrivers();
+    loadData();
 
+    // Realtime PostgreSQL change subscriptions
     const channel = supabase
       .channel('driver_verification_queue_realtime_sync')
       .on(
@@ -198,7 +303,15 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
         { event: '*', schema: 'public', table: 'drivers' },
         (payload) => {
           console.log('[DriverQueue Realtime] drivers change detected:', payload.eventType);
-          loadDrivers();
+          loadData();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'trips' },
+        (payload) => {
+          console.log('[DriverQueue Realtime] trips change detected:', payload.eventType);
+          loadData();
         }
       )
       .on(
@@ -206,7 +319,7 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
         { event: '*', schema: 'public', table: 'documents' },
         (payload) => {
           console.log('[DriverQueue Realtime] documents change detected:', payload.eventType);
-          loadDrivers();
+          loadData();
         }
       )
       .subscribe((status) => {
@@ -214,50 +327,162 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
       });
 
     const pollInterval = setInterval(() => {
-      loadDrivers();
-    }, 10000);
+      loadData();
+    }, 12000);
 
     return () => {
       supabase.removeChannel(channel);
       clearInterval(pollInterval);
     };
-  }, [loadDrivers]);
+  }, [loadData]);
 
-  // Load vehicles linked to selected vendor for optional vehicle assignment
+  // Load vehicles linked to selected vendor for create modal
   useEffect(() => {
     if (!createFormData.primaryVendorId) {
       setVendorVehicles([]);
       setSelectedVehicleId('');
       return;
     }
-    let isMounted = true;
-    (async () => {
-      try {
-        const { data: vLinks } = await supabase
-          .from('vendor_vehicle_links')
-          .select('vehicle_id, vehicle:vehicles(*)')
-          .eq('vendor_id', createFormData.primaryVendorId);
-        if (isMounted) {
-          const vehs = (vLinks || []).map((l: any) => l.vehicle).filter(Boolean);
-          setVendorVehicles(vehs);
-        }
-      } catch (err) {
-        console.warn('Could not load vehicles for vendor:', err);
-      }
-    })();
-    return () => {
-      isMounted = false;
-    };
-  }, [createFormData.primaryVendorId]);
+    const linkedVehicleIds = vendorVehicleLinks
+      .filter((l) => l.vendor_id === createFormData.primaryVendorId)
+      .map((l) => l.vehicle_id);
 
+    const filteredVehs = vehicles.filter((v) => linkedVehicleIds.includes(v.id));
+    setVendorVehicles(filteredVehs);
+  }, [createFormData.primaryVendorId, vendorVehicleLinks, vehicles]);
+
+  // ─── Entity Relationship Resolvers ─────────────────────────────────────────
+
+  const getVendorInfo = useCallback(
+    (driver: any) => {
+      if (driver?.vendor_companies?.vendor_name) {
+        return {
+          name: driver.vendor_companies.vendor_name,
+          code: driver.vendor_companies.vendor_code || (driver.primary_vendor_id ? `VD-${driver.primary_vendor_id.slice(0, 6).toUpperCase()}` : '—'),
+          details: driver.vendor_companies,
+          isAssigned: true,
+        };
+      }
+      if (driver?.primary_vendor_id) {
+        const found = vendors.find((v) => v.id === driver.primary_vendor_id);
+        if (found) {
+          return {
+            name: found.vendor_name,
+            code: found.vendor_code || `VD-${found.id.slice(0, 6).toUpperCase()}`,
+            details: found,
+            isAssigned: true,
+          };
+        }
+        return {
+          name: 'Verified Transporter',
+          code: `VD-${driver.primary_vendor_id.slice(0, 6).toUpperCase()}`,
+          details: null,
+          isAssigned: true,
+        };
+      }
+      return {
+        name: 'Not Assigned',
+        code: '—',
+        details: null,
+        isAssigned: false,
+      };
+    },
+    [vendors]
+  );
+
+  const getDriverVehicleAssignment = useCallback(
+    (driverId: string) => {
+      const driverTrips = trips.filter((t) => t.driver_id === driverId);
+      // Active trip first
+      const activeTrip = driverTrips.find(
+        (t) => t.trip_status !== 'COMPLETED' && t.trip_status !== 'CANCELLED'
+      );
+      if (activeTrip) {
+        const veh = activeTrip.vehicle || vehicles.find((v) => v.id === activeTrip.vehicle_id);
+        return { vehicle: veh, trip: activeTrip, isActive: true };
+      }
+      // Fallback to latest trip
+      if (driverTrips.length > 0) {
+        const latest = driverTrips[0];
+        const veh = latest.vehicle || vehicles.find((v) => v.id === latest.vehicle_id);
+        return { vehicle: veh, trip: latest, isActive: false };
+      }
+      return { vehicle: null, trip: null, isActive: false };
+    },
+    [trips, vehicles]
+  );
+
+  const getDriverTransportStatus = useCallback((driver: any, activeTrip: any) => {
+    if (driver.is_active === false) {
+      return {
+        key: 'INACTIVE',
+        label: 'Inactive',
+        badgeClass: 'inactive',
+      };
+    }
+    if (activeTrip) {
+      if (['DISPATCHED', 'IN_TRANSIT', 'AT_LOADING'].includes(activeTrip.trip_status)) {
+        return {
+          key: 'ON_TRIP',
+          label: 'On Trip',
+          badgeClass: 'ontrip',
+        };
+      }
+      if (activeTrip.trip_status === 'LORRY_ASSIGNED') {
+        return {
+          key: 'ASSIGNED_TO_TRIP',
+          label: 'Assigned to Trip',
+          badgeClass: 'assigned',
+        };
+      }
+    }
+    if (driver.rejection_reason?.startsWith('STATUS:')) {
+      const statusKey = driver.rejection_reason.replace('STATUS:', '');
+      if (statusKey === 'NOT_TAKING_TRANSPORT') {
+        return {
+          key: 'NOT_TAKING_TRANSPORT',
+          label: 'Not Taking Transport',
+          badgeClass: 'not-taking',
+        };
+      }
+      if (statusKey === 'TEMP_UNAVAILABLE') {
+        return {
+          key: 'TEMP_UNAVAILABLE',
+          label: 'Temporarily Unavailable',
+          badgeClass: 'temp-unavail',
+        };
+      }
+    }
+    return {
+      key: 'AVAILABLE',
+      label: 'Available for Transport',
+      badgeClass: 'available',
+    };
+  }, []);
+
+  const getLicenceStatus = (driver: any): { label: string; color: string; status: 'VALID' | 'EXPIRED' | 'EXPIRING_SOON' | 'NONE' } => {
+    if (!driver.licence_expiry_date) return { label: 'No Expiry', color: 'gray', status: 'NONE' };
+
+    const today = new Date();
+    const expiry = new Date(driver.licence_expiry_date);
+    const daysLeft = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 3600 * 24));
+
+    if (daysLeft < 0) return { label: 'Expired', color: 'red', status: 'EXPIRED' };
+    if (daysLeft <= 30) return { label: `${daysLeft} days left`, color: 'amber', status: 'EXPIRING_SOON' };
+    return { label: 'Valid', color: 'green', status: 'VALID' };
+  };
+
+  // ─── KPI Calculations ──────────────────────────────────────────────────────
   const kpis = useMemo(() => {
     const total = drivers.length;
-    const pending = drivers.filter(d => d.status === 'PENDING' || d.status === 'PENDING_APPROVAL').length;
-    const approved = drivers.filter(d => d.status === 'APPROVED').length;
-    const rejected = drivers.filter(d => d.status === 'REJECTED').length;
-    
+    const pending = drivers.filter(
+      (d) => d.status === 'PENDING' || d.status === 'PENDING_APPROVAL'
+    ).length;
+    const approved = drivers.filter((d) => d.status === 'APPROVED').length;
+    const rejected = drivers.filter((d) => d.status === 'REJECTED').length;
+
     const today = new Date();
-    const expired = drivers.filter(d => {
+    const expired = drivers.filter((d) => {
       if (!d.licence_expiry_date) return false;
       const expiry = new Date(d.licence_expiry_date);
       return expiry < today;
@@ -266,9 +491,30 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
     return { total, pending, approved, rejected, expired };
   }, [drivers]);
 
+  // ─── Workflow Progress Counts ──────────────────────────────────────────────
+  const workflowStats = useMemo(() => {
+    const registered = drivers.length;
+    let assignedVehCount = 0;
+    let readyTransportCount = 0;
+
+    drivers.forEach((d) => {
+      const assignment = getDriverVehicleAssignment(d.id);
+      if (assignment.vehicle) assignedVehCount++;
+      const tStatus = getDriverTransportStatus(d, assignment.trip);
+      if (d.status === 'APPROVED' && tStatus.key === 'AVAILABLE') readyTransportCount++;
+    });
+
+    return {
+      registered,
+      assignedVehCount,
+      readyTransportCount,
+    };
+  }, [drivers, getDriverVehicleAssignment, getDriverTransportStatus]);
+
+  // ─── Filtering & Search ────────────────────────────────────────────────────
   const filteredDrivers = useMemo(() => {
-    return drivers.filter(d => {
-      // Tab filter
+    return drivers.filter((d) => {
+      // 1. Status Tab Filter
       if (activeTab === 'pending' && d.status !== 'PENDING' && d.status !== 'PENDING_APPROVAL') return false;
       if (activeTab === 'approved' && d.status !== 'APPROVED') return false;
       if (activeTab === 'rejected' && d.status !== 'REJECTED') return false;
@@ -278,118 +524,473 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
         if (!expiry || expiry >= today) return false;
       }
 
-      // Status dropdown
+      // 2. Status Dropdown Filter
       if (statusFilter !== 'all') {
         if (statusFilter === 'pending' && d.status !== 'PENDING' && d.status !== 'PENDING_APPROVAL') return false;
         else if (statusFilter !== 'pending' && d.status !== statusFilter.toUpperCase()) return false;
       }
 
-      // Vendor filter
+      // 3. Vendor Dropdown Filter
       if (vendorFilter !== 'all' && d.primary_vendor_id !== vendorFilter) return false;
 
-      // Search
+      // 4. Vehicle Assignment Filter
+      const vehAssign = getDriverVehicleAssignment(d.id);
+      if (vehicleAssignmentFilter === 'assigned' && !vehAssign.vehicle) return false;
+      if (vehicleAssignmentFilter === 'unassigned' && vehAssign.vehicle) return false;
+
+      // 5. Transport Status Filter
+      if (transportStatusFilter !== 'all') {
+        const tStatus = getDriverTransportStatus(d, vehAssign.trip);
+        if (tStatus.key !== transportStatusFilter) return false;
+      }
+
+      // 6. Search Query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const driverCode = formatDisplayId('DR', d.driver_code || d.id, d.created_at).toLowerCase();
         const matchName = d.full_name?.toLowerCase().includes(q);
-        const matchMobile = d.mobile?.toLowerCase().includes(q);
+        const matchMobile = (d.mobile || d.phone)?.toLowerCase().includes(q);
         const matchLicence = d.licence_number?.toLowerCase().includes(q);
         const matchId = d.id?.toLowerCase().includes(q) || driverCode.includes(q);
-        if (!matchName && !matchMobile && !matchLicence && !matchId) return false;
+
+        const vInfo = getVendorInfo(d);
+        const matchVendor = vInfo.name.toLowerCase().includes(q) || vInfo.code.toLowerCase().includes(q);
+
+        const vehReg = vehAssign.vehicle?.registration_number?.toLowerCase() || '';
+        const matchVehicle = vehReg.includes(q);
+
+        if (!matchName && !matchMobile && !matchLicence && !matchId && !matchVendor && !matchVehicle) {
+          return false;
+        }
       }
 
       return true;
     });
-  }, [drivers, activeTab, statusFilter, vendorFilter, searchQuery]);
+  }, [
+    drivers,
+    activeTab,
+    statusFilter,
+    vendorFilter,
+    vehicleAssignmentFilter,
+    transportStatusFilter,
+    searchQuery,
+    getDriverVehicleAssignment,
+    getDriverTransportStatus,
+    getVendorInfo,
+  ]);
 
+  // ─── Sorting ───────────────────────────────────────────────────────────────
+  const sortedDrivers = useMemo(() => {
+    return [...filteredDrivers].sort((a, b) => {
+      let valA: any = '';
+      let valB: any = '';
+
+      switch (sortField) {
+        case 'name':
+          valA = a.full_name?.toLowerCase() || '';
+          valB = b.full_name?.toLowerCase() || '';
+          break;
+        case 'mobile':
+          valA = a.mobile || a.phone || '';
+          valB = b.mobile || b.phone || '';
+          break;
+        case 'dob':
+          valA = a.date_of_birth || a.dob || '';
+          valB = b.date_of_birth || b.dob || '';
+          break;
+        case 'vendor':
+          valA = getVendorInfo(a).name.toLowerCase();
+          valB = getVendorInfo(b).name.toLowerCase();
+          break;
+        case 'vehicle':
+          valA = getDriverVehicleAssignment(a.id).vehicle?.registration_number || '';
+          valB = getDriverVehicleAssignment(b.id).vehicle?.registration_number || '';
+          break;
+        case 'licence':
+          valA = a.licence_expiry_date || '';
+          valB = b.licence_expiry_date || '';
+          break;
+        case 'status':
+          valA = a.status || '';
+          valB = b.status || '';
+          break;
+        case 'createdAt':
+        default:
+          valA = a.created_at || '';
+          valB = b.created_at || '';
+          break;
+      }
+
+      if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+      if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [filteredDrivers, sortField, sortOrder, getVendorInfo, getDriverVehicleAssignment]);
+
+  // ─── Pagination ────────────────────────────────────────────────────────────
   const paginatedDrivers = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
-    return filteredDrivers.slice(start, start + pageSize);
-  }, [filteredDrivers, currentPage, pageSize]);
+    return sortedDrivers.slice(start, start + pageSize);
+  }, [sortedDrivers, currentPage, pageSize]);
 
-  const totalPages = Math.ceil(filteredDrivers.length / pageSize) || 1;
+  const totalPages = Math.ceil(sortedDrivers.length / pageSize) || 1;
 
-  const getVendorName = (vendorId: string, driver?: any) => {
-    if (driver?.vendor_companies?.vendor_name) {
-      return driver.vendor_companies.vendor_name;
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortOrder('asc');
     }
-    const vendor = vendors.find(v => v.id === vendorId);
-    return vendor?.vendor_name || (vendorId ? 'Verified Transporter' : 'Independent / Unattached');
   };
 
-  const getLicenceStatus = (driver: any): { label: string; color: string; status: 'VALID' | 'EXPIRED' | 'EXPIRING_SOON' | 'NONE' } => {
-    if (!driver.licence_expiry_date) return { label: 'No Expiry', color: 'gray', status: 'NONE' };
-    
-    const today = new Date();
-    const expiry = new Date(driver.licence_expiry_date);
-    const daysLeft = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 3600 * 24));
+  // ─── Actions & Handlers ────────────────────────────────────────────────────
 
-    if (daysLeft < 0) return { label: 'Expired', color: 'red', status: 'EXPIRED' };
-    if (daysLeft < 7) return { label: `${daysLeft} days left`, color: 'red', status: 'EXPIRED' };
-    if (daysLeft < 30) return { label: `${daysLeft} days left`, color: 'amber', status: 'EXPIRING_SOON' };
-    return { label: 'Valid', color: 'green', status: 'VALID' };
-  };
-
-  const handleExport = () => {
-    if (filteredDrivers.length === 0) {
-      showToast('No drivers to export');
-      return;
+  // Toggle selection
+  const handleToggleSelectAll = () => {
+    if (selectedDriverIds.size === paginatedDrivers.length) {
+      setSelectedDriverIds(new Set());
+    } else {
+      setSelectedDriverIds(new Set(paginatedDrivers.map((d) => d.id)));
     }
-    const headers = ['Driver ID', 'Name', 'Mobile', 'Licence Number', 'Expiry Date', 'Status', 'Vendor'];
-    const rows = filteredDrivers.map(d => [
-      formatDisplayId('DR', d.driver_code || d.id, d.created_at),
-      d.full_name,
-      d.mobile,
-      d.licence_number,
-      d.licence_expiry_date || '',
-      d.status,
-      getVendorName(d.primary_vendor_id),
-    ]);
-    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `drivers_${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    showToast(`✅ Exported ${filteredDrivers.length} drivers`);
   };
 
-  const handleReset = () => {
+  const handleToggleSelectOne = (id: string) => {
+    setSelectedDriverIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  // Selected driver for Important Actions Bar
+  const activeSelectedDriver = useMemo(() => {
+    if (selectedDriverIds.size === 1) {
+      const singleId = Array.from(selectedDriverIds)[0];
+      return drivers.find((d) => d.id === singleId) || null;
+    }
+    return null;
+  }, [selectedDriverIds, drivers]);
+
+  // Reset Filters
+  const handleResetFilters = () => {
     setSearchQuery('');
     setStatusFilter('all');
     setVendorFilter('all');
+    setVehicleAssignmentFilter('all');
+    setTransportStatusFilter('all');
     setActiveTab('pending');
     setCurrentPage(1);
-    showToast('Filters reset');
+    setSelectedDriverIds(new Set());
+    showToast('Filters reset to default');
   };
 
+  // Export CSV
+  const handleExportCSV = () => {
+    if (sortedDrivers.length === 0) {
+      showToast('No driver records to export');
+      return;
+    }
+
+    const headers = [
+      'Driver ID',
+      'Full Name',
+      'Mobile Number',
+      'Date of Birth',
+      'Age',
+      'Connected Vendor',
+      'Vendor Code',
+      'Assigned Vehicle',
+      'Vehicle Category',
+      'Transport Status',
+      'Driving Licence Number',
+      'Licence Expiry Date',
+      'Licence Validity',
+      'Verification Status',
+      'Registered Date',
+    ];
+
+    const rows = sortedDrivers.map((d) => {
+      const vInfo = getVendorInfo(d);
+      const vehInfo = getDriverVehicleAssignment(d.id);
+      const tStatus = getDriverTransportStatus(d, vehInfo.trip);
+      const licStatus = getLicenceStatus(d);
+      const ageInfo = calculateAge(d.date_of_birth || d.dob);
+
+      return [
+        `"${formatDisplayId('DR', d.driver_code || d.id, d.created_at)}"`,
+        `"${d.full_name || ''}"`,
+        `"${d.mobile || d.phone || ''}"`,
+        `"${d.date_of_birth || d.dob || ''}"`,
+        `"${ageInfo.age || ''}"`,
+        `"${vInfo.name}"`,
+        `"${vInfo.code}"`,
+        `"${vehInfo.vehicle?.registration_number || 'Not Assigned'}"`,
+        `"${vehInfo.vehicle?.vehicle_type || ''}"`,
+        `"${tStatus.label}"`,
+        `"${d.licence_number || ''}"`,
+        `"${d.licence_expiry_date || ''}"`,
+        `"${licStatus.label}"`,
+        `"${d.status || 'PENDING'}"`,
+        `"${d.created_at ? new Date(d.created_at).toLocaleDateString('en-IN') : ''}"`,
+      ];
+    });
+
+    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `drivers_${activeTab}_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast(`✅ Exported ${sortedDrivers.length} driver records`);
+  };
+
+  // Direct Driver Approval
+  const handleApproveDriver = async (driver: any) => {
+    try {
+      await ensureAdminSession();
+      const { error } = await supabase
+        .from('drivers')
+        .update({
+          status: 'APPROVED',
+          verification_status: 'APPROVED',
+          is_active: true,
+          verified_at: new Date().toISOString(),
+          verified_by: adminProfile?.name || 'Administrator',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', driver.id);
+
+      if (error) throw error;
+
+      showToast(`✅ Driver "${driver.full_name}" verified & approved!`);
+      loadData();
+      if (selectedDrawerDriver?.id === driver.id) {
+        setSelectedDrawerDriver((prev: any) => ({ ...prev, status: 'APPROVED', verification_status: 'APPROVED' }));
+      }
+    } catch (err: any) {
+      alert(`Approval failed: ${err.message}`);
+    }
+  };
+
+  // Direct Driver Rejection
+  const handleRejectDriver = async (driver: any, reason: string) => {
+    try {
+      await ensureAdminSession();
+      const { error } = await supabase
+        .from('drivers')
+        .update({
+          status: 'REJECTED',
+          verification_status: 'REJECTED',
+          rejection_reason: reason,
+          is_active: false,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', driver.id);
+
+      if (error) throw error;
+
+      showToast(`Driver "${driver.full_name}" rejected`);
+      loadData();
+      if (selectedDrawerDriver?.id === driver.id) {
+        setSelectedDrawerDriver((prev: any) => ({ ...prev, status: 'REJECTED', rejection_reason: reason }));
+      }
+    } catch (err: any) {
+      alert(`Rejection failed: ${err.message}`);
+    }
+  };
+
+  // Assign Vehicle Submit
+  const handleConfirmAssignVehicle = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assigningVehicleDriver) return;
+
+    if (!selectedVehicleToAssign) {
+      alert('Please select an eligible fleet vehicle.');
+      return;
+    }
+
+    setIsAssigningVehicle(true);
+    try {
+      await ensureAdminSession();
+
+      // Check active assignment
+      const currentAssign = getDriverVehicleAssignment(assigningVehicleDriver.id);
+      if (currentAssign.trip && currentAssign.isActive) {
+        const { error: updErr } = await supabase
+          .from('trips')
+          .update({
+            vehicle_id: selectedVehicleToAssign,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', currentAssign.trip.id);
+        if (updErr) throw updErr;
+      } else {
+        const { error: insErr } = await supabase.from('trips').insert([
+          {
+            vehicle_id: selectedVehicleToAssign,
+            driver_id: assigningVehicleDriver.id,
+            vendor_id: assigningVehicleDriver.primary_vendor_id || null,
+            trip_status: 'LORRY_ASSIGNED',
+            created_at: new Date().toISOString(),
+          },
+        ]);
+        if (insErr) throw insErr;
+      }
+
+      showToast(`✅ Vehicle assigned to ${assigningVehicleDriver.full_name}!`);
+      setAssigningVehicleDriver(null);
+      setSelectedVehicleToAssign('');
+      loadData();
+    } catch (err: any) {
+      alert(`Assignment failed: ${err.message}`);
+    } finally {
+      setIsAssigningVehicle(false);
+    }
+  };
+
+  // Remove Vehicle Assignment
+  const handleRemoveVehicleAssignment = async (driver: any) => {
+    if (!driver) return;
+    const currentAssign = getDriverVehicleAssignment(driver.id);
+    if (!currentAssign.vehicle) return;
+
+    if (currentAssign.trip && ['DISPATCHED', 'IN_TRANSIT', 'AT_LOADING'].includes(currentAssign.trip.trip_status)) {
+      alert(`Cannot unassign vehicle: Driver is currently in active trip #${currentAssign.trip.id.slice(0, 8)} (${currentAssign.trip.trip_status}).`);
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to remove the vehicle assignment for ${driver.full_name}?`)) {
+      return;
+    }
+
+    try {
+      await ensureAdminSession();
+      if (currentAssign.trip) {
+        await supabase
+          .from('trips')
+          .update({ trip_status: 'COMPLETED', completed_at: new Date().toISOString() })
+          .eq('id', currentAssign.trip.id);
+      }
+      showToast(`Vehicle assignment removed for ${driver.full_name}`);
+      setAssigningVehicleDriver(null);
+      loadData();
+    } catch (err: any) {
+      alert(`Failed to remove assignment: ${err.message}`);
+    }
+  };
+
+  // Transport Status Submit
+  const handleConfirmTransportStatus = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!statusUpdatingDriver) return;
+
+    setIsUpdatingTransportStatus(true);
+    try {
+      await ensureAdminSession();
+
+      const isSettingActive = selectedTransportStatus !== 'INACTIVE';
+      let statusPayload: any = {
+        is_active: isSettingActive,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (['NOT_TAKING_TRANSPORT', 'TEMP_UNAVAILABLE'].includes(selectedTransportStatus)) {
+        statusPayload.rejection_reason = `STATUS:${selectedTransportStatus}`;
+      } else if (selectedTransportStatus === 'AVAILABLE' && statusUpdatingDriver.rejection_reason?.startsWith('STATUS:')) {
+        statusPayload.rejection_reason = null;
+      }
+
+      const { error } = await supabase
+        .from('drivers')
+        .update(statusPayload)
+        .eq('id', statusUpdatingDriver.id);
+
+      if (error) throw error;
+
+      showToast(`✅ Transport availability updated for ${statusUpdatingDriver.full_name}`);
+      setStatusUpdatingDriver(null);
+      loadData();
+    } catch (err: any) {
+      alert(`Failed to update transport status: ${err.message}`);
+    } finally {
+      setIsUpdatingTransportStatus(false);
+    }
+  };
+
+  // Edit Driver Submit
+  const handleConfirmEditDriver = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingDriver) return;
+
+    const errs: Record<string, string> = {};
+    if (!editFormData.fullName.trim()) errs.fullName = 'Full Name is required.';
+    const cleanMobile = editFormData.mobile.replace(/\D/g, '');
+    if (!cleanMobile || cleanMobile.length !== 10) errs.mobile = '10-digit mobile number required.';
+    if (!editFormData.licenceNumber.trim()) errs.licenceNumber = 'Licence number is required.';
+
+    if (Object.keys(errs).length > 0) {
+      setEditErrors(errs);
+      return;
+    }
+
+    setIsSubmittingEdit(true);
+    try {
+      await ensureAdminSession();
+      const { error } = await supabase
+        .from('drivers')
+        .update({
+          full_name: editFormData.fullName.trim(),
+          mobile: cleanMobile,
+          phone: cleanMobile,
+          date_of_birth: editFormData.dateOfBirth || null,
+          dob: editFormData.dateOfBirth || null,
+          licence_number: editFormData.licenceNumber.trim().toUpperCase(),
+          licence_expiry_date: editFormData.licenceExpiryDate || null,
+          primary_vendor_id: editFormData.primaryVendorId || null,
+          address: editFormData.address.trim() || null,
+          city: editFormData.city.trim() || null,
+          state: editFormData.state.trim() || null,
+          emergency_contact_name: editFormData.emergencyContactName.trim() || null,
+          emergency_contact_phone: editFormData.emergencyContactPhone.trim() || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', editingDriver.id);
+
+      if (error) throw error;
+
+      showToast(`✅ Driver "${editFormData.fullName}" updated successfully!`);
+      setEditingDriver(null);
+      loadData();
+    } catch (err: any) {
+      setEditErrors({ global: err.message || 'Failed to update driver.' });
+    } finally {
+      setIsSubmittingEdit(false);
+    }
+  };
+
+  // Create Driver Submit (No Email Field)
   const handleCreateDriverSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const errs: Record<string, string> = {};
 
-    if (!createFormData.fullName.trim()) {
-      errs.fullName = 'Full Name is required.';
-    }
-
+    if (!createFormData.fullName.trim()) errs.fullName = 'Full Name is required.';
     const cleanMobile = createFormData.mobile.replace(/\D/g, '');
-    if (!cleanMobile || cleanMobile.length !== 10) {
-      errs.mobile = '10-digit mobile number is required.';
+    if (!cleanMobile || cleanMobile.length !== 10) errs.mobile = '10-digit mobile number is required.';
+    if (!createFormData.dateOfBirth.trim()) errs.dateOfBirth = 'Date of Birth is required.';
+    if (!createFormData.licenceNumber.trim()) errs.licenceNumber = 'Driving Licence Number is required.';
+    if (!createFormData.primaryVendorId) errs.primaryVendorId = 'Connected Vendor selection is required.';
+
+    const ageInfo = calculateAge(createFormData.dateOfBirth);
+    if (ageInfo.age !== null && ageInfo.age < 18) {
+      errs.dateOfBirth = 'Driver must be at least 18 years old.';
     }
 
-    if (!createFormData.dateOfBirth.trim()) {
-      errs.dateOfBirth = 'Date of Birth is required.';
-    }
-
-    if (!createFormData.licenceNumber.trim()) {
-      errs.licenceNumber = 'Driving Licence Number is required.';
-    }
-
-    if (!createFormData.primaryVendorId) {
-      errs.primaryVendorId = 'Connected Vendor selection is required.';
-    }
-
-    // Server-side check for duplicate mobile
+    // Check duplicate mobile
     if (!errs.mobile) {
       try {
         const { data: existing } = await supabase
@@ -401,14 +1002,7 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
         if (existing) {
           errs.mobile = 'A driver with this mobile number is already registered.';
         }
-      } catch (e) {
-        // network timeout fallback
-      }
-    }
-
-    const ageInfo = calculateAge(createFormData.dateOfBirth);
-    if (ageInfo.age !== null && ageInfo.age < 18) {
-      errs.dateOfBirth = 'Driver must be at least 18 years old.';
+      } catch {}
     }
 
     if (Object.keys(errs).length > 0) {
@@ -419,39 +1013,50 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
     setIsCreatingDriver(true);
     try {
       const driverCode = await generateDbNeclId('DR');
-      const { data, error } = await supabase.from('drivers').insert([
-        {
-          driver_code: driverCode,
-          full_name: createFormData.fullName.trim(),
-          mobile: cleanMobile,
-          phone: cleanMobile,
-          date_of_birth: createFormData.dateOfBirth,
-          dob: createFormData.dateOfBirth,
-          licence_number: createFormData.licenceNumber.trim().toUpperCase(),
-          primary_vendor_id: createFormData.primaryVendorId,
-          status: createFormData.status,
-        },
-      ]).select().single();
+      const { data, error } = await supabase
+        .from('drivers')
+        .insert([
+          {
+            driver_code: driverCode,
+            full_name: createFormData.fullName.trim(),
+            mobile: cleanMobile,
+            phone: cleanMobile,
+            date_of_birth: createFormData.dateOfBirth,
+            dob: createFormData.dateOfBirth,
+            licence_number: createFormData.licenceNumber.trim().toUpperCase(),
+            primary_vendor_id: createFormData.primaryVendorId,
+            status: createFormData.status,
+            verification_status: createFormData.status,
+            is_active: createFormData.status === 'APPROVED',
+          },
+        ])
+        .select()
+        .single();
 
       if (error) throw error;
 
       if (data?.id) {
         const driverId = data.id;
 
-        // If vehicle selected, associate driver to vehicle
+        // If vehicle selected, associate via trip
         if (selectedVehicleId) {
           try {
-            await supabase
-              .from('vehicles')
-              .update({ assigned_driver_id: driverId })
-              .eq('id', selectedVehicleId);
+            await supabase.from('trips').insert([
+              {
+                vehicle_id: selectedVehicleId,
+                driver_id: driverId,
+                vendor_id: createFormData.primaryVendorId,
+                trip_status: 'LORRY_ASSIGNED',
+                created_at: new Date().toISOString(),
+              },
+            ]);
           } catch (vehErr) {
             console.warn('Vehicle driver association notice:', vehErr);
           }
         }
 
         // Upload and insert documents if attached
-        const docConfigs: Array<{ file: File | null | undefined; type: string; side: 'FRONT' | 'BACK'; label: string }> = [
+        const docConfigs = [
           { file: driverDocFiles.dlFront, type: 'LICENCE', side: 'FRONT', label: 'Driving Licence — Front Side' },
           { file: driverDocFiles.dlBack, type: 'LICENCE', side: 'BACK', label: 'Driving Licence — Back Side' },
           { file: driverDocFiles.aadhaarFront, type: 'AADHAAR', side: 'FRONT', label: 'Aadhaar Card — Front Side' },
@@ -471,9 +1076,7 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
               const { data: upData, error: upErr } = await supabase.storage
                 .from('client-documents')
                 .upload(storagePath, uploadReadyFile, { upsert: true });
-              if (!upErr && upData) {
-                publicUrl = storagePath;
-              }
+              if (!upErr && upData) publicUrl = storagePath;
             } catch (storErr) {
               console.warn('Storage upload notice for driver doc:', storErr);
             }
@@ -499,7 +1102,7 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
         }
       }
 
-      showToast(`✅ Driver account created successfully (${createFormData.fullName})!`);
+      showToast(`✅ Driver account created (${createFormData.fullName})!`);
       setIsCreateModalOpen(false);
       setCreateFormData({
         fullName: '',
@@ -511,11 +1114,44 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
       });
       setSelectedVehicleId('');
       setDriverDocFiles({});
-      loadDrivers();
+      loadData();
     } catch (err: any) {
       setCreateErrors({ global: err.message || 'Failed to create driver account.' });
     } finally {
       setIsCreatingDriver(false);
+    }
+  };
+
+  // Permanent Delete Driver
+  const handleConfirmDeleteDriver = async () => {
+    if (!deletingDriver) return;
+    setDeleteLoading(true);
+    try {
+      const res = await apiFetch('/admin/delete-user', {
+        method: 'POST',
+        body: JSON.stringify({
+          driverId: deletingDriver.id,
+          mobile: deletingDriver.mobile_number || deletingDriver.mobile,
+          role: 'DRIVER',
+          reason: deleteReason || 'Deleted by Administrator from Driver Queue',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to delete driver account');
+      }
+      setDrivers((prev) => prev.filter((d) => d.id !== deletingDriver.id));
+      showToast(`Driver "${deletingDriver.full_name || deletingDriver.name}" permanently deleted.`);
+      setDeletingDriver(null);
+      setDeleteReason('');
+      if (selectedDrawerDriver?.id === deletingDriver.id) {
+        setSelectedDrawerDriver(null);
+      }
+    } catch (err: any) {
+      console.error('Delete driver error:', err);
+      alert(`Error deleting driver: ${err.message || 'Unknown error'}`);
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -527,7 +1163,7 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
         </div>
       )}
 
-      {/* Header Banner matching Client Management */}
+      {/* 1. Header Banner matching Client Management */}
       <div className="client-header-hero">
         <div className="client-header-text">
           <div className="page-breadcrumb">
@@ -537,25 +1173,25 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
           </div>
           <h1 className="page-title">Driver Verification Queue</h1>
           <p className="page-subtitle">
-            Review driver identity documents, driving licences, and verification requirements.
+            Review commercial driver identity documents, driving licences, transporter fleet assignments, and compliance statuses.
           </p>
         </div>
 
         <div className="client-mgmt-header-actions">
           <button
             className="btn-header-secondary"
-            onClick={() => loadDrivers()}
-            disabled={loading}
+            onClick={() => loadData(true)}
+            disabled={loading || refreshing}
             title="Refresh driver verification queue"
             id="btn-refresh-drivers"
           >
-            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+            <RefreshCw size={15} className={loading || refreshing ? 'animate-spin' : ''} />
             <span>Refresh Queue</span>
           </button>
 
           <button
             className="btn-header-secondary"
-            onClick={handleExport}
+            onClick={handleExportCSV}
             title="Export drivers to CSV"
             id="btn-export-drivers"
           >
@@ -575,7 +1211,7 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
         </div>
       </div>
 
-      {/* 4 Summary KPI Cards matching Client Management */}
+      {/* 2. 5 Summary KPI Cards (Connected to Real DB Counts) */}
       <div className="client-kpi-bar" role="region" aria-label="Driver statistics summary">
         {/* Total Drivers */}
         <div
@@ -597,7 +1233,7 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
           </div>
         </div>
 
-        {/* Pending Review */}
+        {/* Pending Approval */}
         <div
           className={`kpi-stat-card ${activeTab === 'pending' ? 'card-highlighted' : ''}`}
           onClick={() => { setActiveTab('pending'); setCurrentPage(1); }}
@@ -637,43 +1273,272 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
           </div>
         </div>
 
-        {/* Expired Licence / Rejected */}
+        {/* Rejected Drivers */}
+        <div
+          className={`kpi-stat-card ${activeTab === 'rejected' ? 'card-highlighted' : ''}`}
+          onClick={() => { setActiveTab('rejected'); setCurrentPage(1); }}
+          role="button"
+          tabIndex={0}
+          title="Click to view rejected drivers"
+        >
+          <div className="kpi-stat-icon" style={{ background: '#FEF2F2' }}>
+            <XCircle size={20} color="#EF4444" />
+          </div>
+          <div className="kpi-stat-content">
+            <div className="kpi-stat-header">
+              <span className="kpi-stat-label">Rejected Drivers</span>
+              <span className="kpi-stat-arrow"><ChevronRight size={14} /></span>
+            </div>
+            <div className="kpi-stat-value" style={{ color: '#EF4444' }}>{kpis.rejected}</div>
+          </div>
+        </div>
+
+        {/* Expired Licences */}
         <div
           className={`kpi-stat-card ${activeTab === 'expired' ? 'card-highlighted' : ''}`}
           onClick={() => { setActiveTab('expired'); setCurrentPage(1); }}
           role="button"
           tabIndex={0}
-          title="Click to view expired licence or rejected drivers"
+          title="Click to view expired licence drivers"
         >
-          <div className="kpi-stat-icon" style={{ background: '#FEF2F2' }}>
-            <AlertTriangle size={20} color="#EF4444" />
+          <div className="kpi-stat-icon" style={{ background: '#FFFBEB' }}>
+            <AlertTriangle size={20} color="#D97706" />
           </div>
           <div className="kpi-stat-content">
             <div className="kpi-stat-header">
               <span className="kpi-stat-label">Expired Licences</span>
               <span className="kpi-stat-arrow"><ChevronRight size={14} /></span>
             </div>
-            <div className="kpi-stat-value" style={{ color: '#EF4444' }}>{kpis.expired}</div>
+            <div className="kpi-stat-value" style={{ color: '#D97706' }}>{kpis.expired}</div>
           </div>
         </div>
       </div>
 
-      {/* Filters Bar Card matching Client Management */}
+      {/* 3. Task 19: 5-Step Operational Lifecycle Workflow Progress Panel */}
+      <div className="driver-workflow-card" role="region" aria-label="Driver onboarding workflow stages">
+        <div className="driver-workflow-header">
+          <div className="driver-workflow-title">
+            <Layers size={15} color="#F05A22" />
+            <span>Driver Onboarding & Dispatch Lifecycle</span>
+          </div>
+          <span style={{ fontSize: 12, color: '#64748B', fontWeight: 600 }}>
+            Active Roster: <strong style={{ color: '#0F172A' }}>{drivers.length} Drivers</strong>
+          </span>
+        </div>
+
+        <div className="driver-workflow-steps">
+          {/* Step 1: Registration */}
+          <div
+            className={`driver-workflow-step ${workflowStats.registered > 0 ? 'step-completed' : ''}`}
+            onClick={() => { setActiveTab('all'); setCurrentPage(1); }}
+            title="Account registered in system"
+          >
+            <div className="driver-workflow-step-num">1</div>
+            <div className="driver-workflow-step-content">
+              <div className="driver-workflow-step-name">Registration</div>
+              <div className="driver-workflow-step-sub">{workflowStats.registered} Registered</div>
+            </div>
+          </div>
+
+          {/* Step 2: Document Review */}
+          <div
+            className={`driver-workflow-step ${kpis.pending > 0 ? 'step-active' : 'step-completed'}`}
+            onClick={() => { setActiveTab('pending'); setCurrentPage(1); }}
+            title="Inspect driving licences and KYC"
+          >
+            <div className="driver-workflow-step-num">2</div>
+            <div className="driver-workflow-step-content">
+              <div className="driver-workflow-step-name">Document Review</div>
+              <div className="driver-workflow-step-sub">{kpis.pending} Under Review</div>
+            </div>
+          </div>
+
+          {/* Step 3: Assign Vehicle */}
+          <div
+            className="driver-workflow-step"
+            onClick={() => { setVehicleAssignmentFilter('assigned'); setCurrentPage(1); }}
+            title="Link driver to verified transporter fleet"
+          >
+            <div className="driver-workflow-step-num">3</div>
+            <div className="driver-workflow-step-content">
+              <div className="driver-workflow-step-name">Assign Vehicle</div>
+              <div className="driver-workflow-step-sub">{workflowStats.assignedVehCount} Assigned</div>
+            </div>
+          </div>
+
+          {/* Step 4: Approve Driver */}
+          <div
+            className={`driver-workflow-step ${kpis.approved > 0 ? 'step-completed' : ''}`}
+            onClick={() => { setActiveTab('approved'); setCurrentPage(1); }}
+            title="Official administrator clearance"
+          >
+            <div className="driver-workflow-step-num">4</div>
+            <div className="driver-workflow-step-content">
+              <div className="driver-workflow-step-name">Approve Driver</div>
+              <div className="driver-workflow-step-sub">{kpis.approved} Verified</div>
+            </div>
+          </div>
+
+          {/* Step 5: Ready for Transport */}
+          <div
+            className="driver-workflow-step"
+            onClick={() => { setTransportStatusFilter('AVAILABLE'); setCurrentPage(1); }}
+            title="Ready for commercial dispatch allocation"
+          >
+            <div className="driver-workflow-step-num">5</div>
+            <div className="driver-workflow-step-content">
+              <div className="driver-workflow-step-name">Ready for Transport</div>
+              <div className="driver-workflow-step-sub">{workflowStats.readyTransportCount} Available</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 4. Task 20: Important Actions Panel (Active When Driver Selected) */}
+      {activeSelectedDriver && (
+        <div className="driver-selected-actions-card">
+          <div className="driver-actions-info">
+            <div className="driver-actions-avatar">
+              {getInitials(activeSelectedDriver.full_name)}
+            </div>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <strong style={{ fontSize: 14 }}>{activeSelectedDriver.full_name}</strong>
+                <span style={{ fontSize: 12, opacity: 0.8, fontFamily: 'monospace' }}>
+                  ({formatDisplayId('DR', activeSelectedDriver.driver_code || activeSelectedDriver.id, activeSelectedDriver.created_at)})
+                </span>
+                <span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 10, background: 'rgba(255,255,255,0.15)' }}>
+                  Vendor: {getVendorInfo(activeSelectedDriver).name}
+                </span>
+              </div>
+              <div style={{ fontSize: 12, opacity: 0.75, marginTop: 2 }}>
+                Vehicle: {getDriverVehicleAssignment(activeSelectedDriver.id).vehicle?.registration_number || 'Unassigned'} •
+                Licence: {activeSelectedDriver.licence_number || '—'}
+              </div>
+            </div>
+          </div>
+
+          <div className="driver-actions-btns">
+            <button
+              type="button"
+              className="btn-action-panel-secondary"
+              onClick={() => setSelectedDrawerDriver(activeSelectedDriver)}
+              title="Open full view drawer"
+            >
+              <Eye size={13} />
+              <span>View Details</span>
+            </button>
+
+            <button
+              type="button"
+              className="btn-action-panel-secondary"
+              onClick={() => {
+                setSelectedAuditDriver(activeSelectedDriver);
+                setIsAuditModalOpen(true);
+              }}
+              title="Audit licence documents"
+            >
+              <FileCheck size={13} />
+              <span>Audit Docs</span>
+            </button>
+
+            {canEdit && (
+              <button
+                type="button"
+                className="btn-action-panel-secondary"
+                onClick={() => {
+                  setEditingDriver(activeSelectedDriver);
+                  setEditFormData({
+                    fullName: activeSelectedDriver.full_name || '',
+                    mobile: activeSelectedDriver.mobile || activeSelectedDriver.phone || '',
+                    dateOfBirth: activeSelectedDriver.date_of_birth || activeSelectedDriver.dob || '',
+                    licenceNumber: activeSelectedDriver.licence_number || '',
+                    licenceExpiryDate: activeSelectedDriver.licence_expiry_date || '',
+                    primaryVendorId: activeSelectedDriver.primary_vendor_id || '',
+                    address: activeSelectedDriver.address || '',
+                    city: activeSelectedDriver.city || '',
+                    state: activeSelectedDriver.state || '',
+                    emergencyContactName: activeSelectedDriver.emergency_contact_name || '',
+                    emergencyContactPhone: activeSelectedDriver.emergency_contact_phone || '',
+                  });
+                }}
+                title="Edit driver particulars"
+              >
+                <Edit2 size={13} />
+                <span>Edit</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              className="btn-action-panel-primary"
+              onClick={() => {
+                setAssigningVehicleDriver(activeSelectedDriver);
+                const curr = getDriverVehicleAssignment(activeSelectedDriver.id);
+                setSelectedVehicleToAssign(curr.vehicle?.id || '');
+              }}
+              title="Assign or reassign fleet vehicle"
+            >
+              <Truck size={13} />
+              <span>Assign Vehicle</span>
+            </button>
+
+            <button
+              type="button"
+              className="btn-action-panel-secondary"
+              onClick={() => {
+                setStatusUpdatingDriver(activeSelectedDriver);
+                const vehAssign = getDriverVehicleAssignment(activeSelectedDriver.id);
+                const tStatus = getDriverTransportStatus(activeSelectedDriver, vehAssign.trip);
+                setSelectedTransportStatus(tStatus.key);
+              }}
+              title="Update availability for transport"
+            >
+              <SlidersHorizontal size={13} />
+              <span>Transport Status</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSelectedDriverIds(new Set())}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'rgba(255,255,255,0.7)',
+                fontSize: 12,
+                cursor: 'pointer',
+                padding: '4px 8px',
+              }}
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 5. Filters Bar Card matching Reference Design */}
       <div className="filters-bar-card">
+        {/* Search */}
         <div className="search-input-wrap">
           <Search size={15} className="search-icon-abs" />
           <input
             type="text"
-            placeholder="Search by driver name, mobile, licence..."
+            placeholder="Search by driver name, mobile, licence, vendor, vehicle..."
             value={searchQuery}
-            onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setCurrentPage(1);
+            }}
             className="client-search-input"
             aria-label="Search drivers"
           />
           {searchQuery && (
             <button
               className="clear-search-btn"
-              onClick={() => { setSearchQuery(''); setCurrentPage(1); }}
+              onClick={() => {
+                setSearchQuery('');
+                setCurrentPage(1);
+              }}
               aria-label="Clear search"
             >
               <X size={14} />
@@ -681,49 +1546,154 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
           )}
         </div>
 
+        {/* Status Dropdown */}
         <select
           value={statusFilter}
-          onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
+          onChange={(e) => {
+            setStatusFilter(e.target.value);
+            setCurrentPage(1);
+          }}
           className="filter-select"
           aria-label="Filter by Status"
         >
-          <option value="all">All Status</option>
-          <option value="pending">Pending</option>
-          <option value="approved">Verified</option>
+          <option value="all">All Verification Status</option>
+          <option value="pending">Pending Approval</option>
+          <option value="approved">Verified (Approved)</option>
           <option value="rejected">Rejected</option>
         </select>
 
+        {/* Vendor Dropdown */}
         <select
           value={vendorFilter}
-          onChange={(e) => { setVendorFilter(e.target.value); setCurrentPage(1); }}
+          onChange={(e) => {
+            setVendorFilter(e.target.value);
+            setCurrentPage(1);
+          }}
           className="filter-select"
           aria-label="Filter by Vendor"
         >
-          <option value="all">All Vendors</option>
-          {vendors.map(v => (
-            <option key={v.id} value={v.id}>{v.vendor_name}</option>
+          <option value="all">All Transporters / Vendors</option>
+          {vendors.map((v) => (
+            <option key={v.id} value={v.id}>
+              {v.vendor_name} {v.vendor_code ? `(${v.vendor_code})` : ''}
+            </option>
           ))}
         </select>
 
-        <button className="btn-filter-reset" onClick={handleReset} title="Reset filters">
+        {/* Vehicle Assignment Dropdown */}
+        <select
+          value={vehicleAssignmentFilter}
+          onChange={(e) => {
+            setVehicleAssignmentFilter(e.target.value as any);
+            setCurrentPage(1);
+          }}
+          className="filter-select"
+          aria-label="Filter by Vehicle Assignment"
+        >
+          <option value="all">All Vehicle States</option>
+          <option value="assigned">Assigned to Vehicle</option>
+          <option value="unassigned">Unassigned / No Vehicle</option>
+        </select>
+
+        {/* Transport Status Dropdown */}
+        <select
+          value={transportStatusFilter}
+          onChange={(e) => {
+            setTransportStatusFilter(e.target.value);
+            setCurrentPage(1);
+          }}
+          className="filter-select"
+          aria-label="Filter by Transport Status"
+        >
+          <option value="all">All Transport Statuses</option>
+          <option value="AVAILABLE">Available for Transport</option>
+          <option value="ON_TRIP">On Trip</option>
+          <option value="ASSIGNED_TO_TRIP">Assigned to Trip</option>
+          <option value="NOT_TAKING_TRANSPORT">Not Taking Transport</option>
+          <option value="TEMP_UNAVAILABLE">Temporarily Unavailable</option>
+          <option value="INACTIVE">Inactive</option>
+        </select>
+
+        {/* Reset */}
+        <button className="btn-filter-reset" onClick={handleResetFilters} title="Reset filters">
           <RotateCcw size={14} />
           <span>Reset Filters</span>
         </button>
 
-        <button className="btn-filter-search" onClick={() => setCurrentPage(1)} title="Search">
+        {/* Search button */}
+        <button className="btn-filter-search" onClick={() => setCurrentPage(1)} title="Execute search">
           <Search size={14} />
           <span>Search</span>
         </button>
       </div>
 
-      {/* Sub-bar: Status Tabs & Export */}
+      {/* Active Filter Chips Strip */}
+      {(searchQuery ||
+        statusFilter !== 'all' ||
+        vendorFilter !== 'all' ||
+        vehicleAssignmentFilter !== 'all' ||
+        transportStatusFilter !== 'all') && (
+        <div className="active-filters-chips-bar" role="region" aria-label="Active filters">
+          <span style={{ fontSize: 12, fontWeight: 700, color: '#64748B', marginRight: 4 }}>
+            Active Filters:
+          </span>
+          {searchQuery && (
+            <div className="filter-chip-tag">
+              <span>Query: <strong>"{searchQuery}"</strong></span>
+              <button className="filter-chip-remove-btn" onClick={() => setSearchQuery('')}>
+                <X size={12} />
+              </button>
+            </div>
+          )}
+          {statusFilter !== 'all' && (
+            <div className="filter-chip-tag">
+              <span>Status: <strong>{statusFilter}</strong></span>
+              <button className="filter-chip-remove-btn" onClick={() => setStatusFilter('all')}>
+                <X size={12} />
+              </button>
+            </div>
+          )}
+          {vendorFilter !== 'all' && (
+            <div className="filter-chip-tag">
+              <span>Vendor: <strong>{vendors.find((v) => v.id === vendorFilter)?.vendor_name || vendorFilter}</strong></span>
+              <button className="filter-chip-remove-btn" onClick={() => setVendorFilter('all')}>
+                <X size={12} />
+              </button>
+            </div>
+          )}
+          {vehicleAssignmentFilter !== 'all' && (
+            <div className="filter-chip-tag">
+              <span>Vehicle: <strong>{vehicleAssignmentFilter}</strong></span>
+              <button className="filter-chip-remove-btn" onClick={() => setVehicleAssignmentFilter('all')}>
+                <X size={12} />
+              </button>
+            </div>
+          )}
+          {transportStatusFilter !== 'all' && (
+            <div className="filter-chip-tag">
+              <span>Transport: <strong>{transportStatusFilter}</strong></span>
+              <button className="filter-chip-remove-btn" onClick={() => setTransportStatusFilter('all')}>
+                <X size={12} />
+              </button>
+            </div>
+          )}
+          <button className="filter-clear-all-action" onClick={handleResetFilters}>
+            Clear all filters
+          </button>
+        </div>
+      )}
+
+      {/* 6. Sub-bar: Status Tabs, Column Preferences & Export */}
       <div className="table-sub-bar">
         <div className="status-tabs-list" role="tablist">
           <button
             role="tab"
             aria-selected={activeTab === 'pending'}
             className={`status-tab-btn ${activeTab === 'pending' ? 'active-tab' : ''}`}
-            onClick={() => { setActiveTab('pending'); setCurrentPage(1); }}
+            onClick={() => {
+              setActiveTab('pending');
+              setCurrentPage(1);
+            }}
           >
             Pending Review ({kpis.pending})
           </button>
@@ -731,7 +1701,10 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
             role="tab"
             aria-selected={activeTab === 'approved'}
             className={`status-tab-btn ${activeTab === 'approved' ? 'active-tab' : ''}`}
-            onClick={() => { setActiveTab('approved'); setCurrentPage(1); }}
+            onClick={() => {
+              setActiveTab('approved');
+              setCurrentPage(1);
+            }}
           >
             Verified ({kpis.approved})
           </button>
@@ -739,7 +1712,10 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
             role="tab"
             aria-selected={activeTab === 'rejected'}
             className={`status-tab-btn ${activeTab === 'rejected' ? 'active-tab' : ''}`}
-            onClick={() => { setActiveTab('rejected'); setCurrentPage(1); }}
+            onClick={() => {
+              setActiveTab('rejected');
+              setCurrentPage(1);
+            }}
           >
             Rejected ({kpis.rejected})
           </button>
@@ -747,7 +1723,10 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
             role="tab"
             aria-selected={activeTab === 'expired'}
             className={`status-tab-btn ${activeTab === 'expired' ? 'active-tab' : ''}`}
-            onClick={() => { setActiveTab('expired'); setCurrentPage(1); }}
+            onClick={() => {
+              setActiveTab('expired');
+              setCurrentPage(1);
+            }}
           >
             Expired Licence ({kpis.expired})
           </button>
@@ -755,40 +1734,149 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
             role="tab"
             aria-selected={activeTab === 'all'}
             className={`status-tab-btn ${activeTab === 'all' ? 'active-tab' : ''}`}
-            onClick={() => { setActiveTab('all'); setCurrentPage(1); }}
+            onClick={() => {
+              setActiveTab('all');
+              setCurrentPage(1);
+            }}
           >
             All Drivers ({kpis.total})
           </button>
         </div>
 
-        <div className="table-actions-group" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div className="table-actions-group" style={{ display: 'flex', alignItems: 'center', gap: 10, position: 'relative' }}>
           <span style={{ fontSize: 12, fontWeight: 700, color: '#64748B' }}>
-            Total: <strong style={{ color: '#0F172A' }}>{filteredDrivers.length}</strong>
+            Total: <strong style={{ color: '#0F172A' }}>{sortedDrivers.length}</strong>
           </span>
-          <button className="btn-action-outline" onClick={handleExport} title="Export to CSV">
+
+          {/* Column Visibility Menu */}
+          <div style={{ position: 'relative' }}>
+            <button
+              className={`btn-action-outline ${showColumnConfig ? 'active-filter' : ''}`}
+              onClick={() => setShowColumnConfig(!showColumnConfig)}
+              title="Customize visible columns"
+            >
+              <ColumnsIcon size={14} />
+              <span>Columns</span>
+            </button>
+
+            {showColumnConfig && (
+              <div className="columns-popover-menu" onClick={(e) => e.stopPropagation()}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 8, borderBottom: '1px solid #E2E8F0', marginBottom: 8 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#0F172A' }}>Customize Columns</span>
+                  <button
+                    onClick={() =>
+                      setVisibleColumns({
+                        serialNo: true,
+                        driverName: true,
+                        mobile: true,
+                        dob: true,
+                        vendor: true,
+                        vehicle: true,
+                        transportStatus: true,
+                        licenceStatus: true,
+                        verificationStatus: true,
+                        submissionDate: true,
+                      })
+                    }
+                    style={{ background: 'none', border: 'none', color: '#F05A22', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    Reset All
+                  </button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {[
+                    { key: 'serialNo', label: '# (Serial No)' },
+                    { key: 'driverName', label: 'Driver Name & ID' },
+                    { key: 'mobile', label: 'Mobile Number' },
+                    { key: 'dob', label: 'Date of Birth & Age' },
+                    { key: 'vendor', label: 'Connected Vendor' },
+                    { key: 'vehicle', label: 'Assigned Vehicle' },
+                    { key: 'transportStatus', label: 'Transport Status' },
+                    { key: 'licenceStatus', label: 'Licence Status' },
+                    { key: 'verificationStatus', label: 'Verification Status' },
+                    { key: 'submissionDate', label: 'Submission Date' },
+                  ].map((col) => (
+                    <label key={col.key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#334155', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={visibleColumns[col.key]}
+                        onChange={(e) => setVisibleColumns((prev) => ({ ...prev, [col.key]: e.target.checked }))}
+                      />
+                      <span>{col.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <button className="btn-action-outline" onClick={handleExportCSV} title="Export to CSV">
             <Download size={14} />
             <span>Export</span>
           </button>
         </div>
       </div>
 
-      {/* Table Card */}
+      {/* 7. Task 7: Professional Redesigned Driver Table */}
       <div className="client-table-card">
         <div className="vendor-table-scroll" style={{ overflowX: 'auto', overflowY: 'hidden', width: '100%' }}>
-          <table className="client-table" style={{ minWidth: 1200 }}>
+          <table className="client-table" style={{ minWidth: 1350 }}>
             <thead>
               <tr>
-                <th style={{ width: '40px' }}>
-                  <input type="checkbox" className="custom-table-checkbox" />
+                <th style={{ width: '40px', textAlign: 'center' }}>
+                  <input
+                    type="checkbox"
+                    className="custom-table-checkbox"
+                    checked={paginatedDrivers.length > 0 && selectedDriverIds.size === paginatedDrivers.length}
+                    onChange={handleToggleSelectAll}
+                    aria-label="Select all drivers"
+                  />
                 </th>
-                <th style={{ minWidth: 180 }}>Driver Name & ID</th>
-                <th style={{ minWidth: 120 }}>Mobile Number</th>
-                <th style={{ minWidth: 110 }}>Date of Birth</th>
-                <th style={{ minWidth: 150 }}>Vendor Association</th>
-                <th style={{ minWidth: 120 }}>Submission Date</th>
-                <th style={{ minWidth: 120 }}>Licence Status</th>
-                <th style={{ minWidth: 130 }}>Verification Status</th>
-                <th style={{ width: 100, minWidth: 100, textAlign: 'center' }}>Actions</th>
+                {visibleColumns.serialNo && <th style={{ width: '50px' }}>#</th>}
+                {visibleColumns.driverName && (
+                  <th style={{ minWidth: 190, cursor: 'pointer' }} onClick={() => handleSort('name')}>
+                    Driver Name ⇅
+                  </th>
+                )}
+                {visibleColumns.mobile && (
+                  <th style={{ minWidth: 120, cursor: 'pointer' }} onClick={() => handleSort('mobile')}>
+                    Mobile ⇅
+                  </th>
+                )}
+                {visibleColumns.dob && (
+                  <th style={{ minWidth: 130, cursor: 'pointer' }} onClick={() => handleSort('dob')}>
+                    Date of Birth ⇅
+                  </th>
+                )}
+                {visibleColumns.vendor && (
+                  <th style={{ minWidth: 160, cursor: 'pointer' }} onClick={() => handleSort('vendor')}>
+                    Vendor ⇅
+                  </th>
+                )}
+                {visibleColumns.vehicle && (
+                  <th style={{ minWidth: 140, cursor: 'pointer' }} onClick={() => handleSort('vehicle')}>
+                    Assigned Vehicle ⇅
+                  </th>
+                )}
+                {visibleColumns.transportStatus && (
+                  <th style={{ minWidth: 140 }}>Transport Status ⇅</th>
+                )}
+                {visibleColumns.licenceStatus && (
+                  <th style={{ minWidth: 130, cursor: 'pointer' }} onClick={() => handleSort('licence')}>
+                    Licence Status ⇅
+                  </th>
+                )}
+                {visibleColumns.verificationStatus && (
+                  <th style={{ minWidth: 140, cursor: 'pointer' }} onClick={() => handleSort('status')}>
+                    Verification Status ⇅
+                  </th>
+                )}
+                {visibleColumns.submissionDate && (
+                  <th style={{ minWidth: 120, cursor: 'pointer' }} onClick={() => handleSort('createdAt')}>
+                    Submission Date ⇅
+                  </th>
+                )}
+                <th style={{ width: 130, minWidth: 130, textAlign: 'center' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -796,18 +1884,23 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
                 Array.from({ length: 6 }).map((_, i) => (
                   <tr key={`skel-${i}`} className="table-skeleton-row">
                     <td><div className="table-skeleton-cell" style={{ width: '16px', height: '16px' }} /></td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <div className={`client-avatar-squircle ${['peach', 'purple', 'orange', 'blue', 'teal', 'red'][i % 6]}`} />
-                        <div className="table-skeleton-cell" style={{ width: `${120 + (i % 3) * 30}px`, height: '14px' }} />
-                      </div>
-                    </td>
-                    <td><div className="table-skeleton-cell" style={{ width: '100px', height: '12px' }} /></td>
-                    <td><div className="table-skeleton-cell" style={{ width: '90px', height: '12px' }} /></td>
-                    <td><div className="table-skeleton-cell" style={{ width: '110px', height: '12px' }} /></td>
-                    <td><div className="table-skeleton-cell" style={{ width: '85px', height: '12px' }} /></td>
-                    <td><div className="table-skeleton-cell" style={{ width: '75px', height: '22px', borderRadius: '12px' }} /></td>
-                    <td><div className="table-skeleton-cell" style={{ width: '85px', height: '22px', borderRadius: '12px' }} /></td>
+                    {visibleColumns.serialNo && <td><div className="table-skeleton-cell" style={{ width: '20px', height: '12px' }} /></td>}
+                    {visibleColumns.driverName && (
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <div className={`client-avatar-squircle ${['peach', 'purple', 'orange', 'blue', 'teal', 'red'][i % 6]}`} />
+                          <div className="table-skeleton-cell" style={{ width: `${120 + (i % 3) * 30}px`, height: '14px' }} />
+                        </div>
+                      </td>
+                    )}
+                    {visibleColumns.mobile && <td><div className="table-skeleton-cell" style={{ width: '100px', height: '12px' }} /></td>}
+                    {visibleColumns.dob && <td><div className="table-skeleton-cell" style={{ width: '90px', height: '12px' }} /></td>}
+                    {visibleColumns.vendor && <td><div className="table-skeleton-cell" style={{ width: '110px', height: '12px' }} /></td>}
+                    {visibleColumns.vehicle && <td><div className="table-skeleton-cell" style={{ width: '95px', height: '12px' }} /></td>}
+                    {visibleColumns.transportStatus && <td><div className="table-skeleton-cell" style={{ width: '85px', height: '22px', borderRadius: '12px' }} /></td>}
+                    {visibleColumns.licenceStatus && <td><div className="table-skeleton-cell" style={{ width: '75px', height: '22px', borderRadius: '12px' }} /></td>}
+                    {visibleColumns.verificationStatus && <td><div className="table-skeleton-cell" style={{ width: '85px', height: '22px', borderRadius: '12px' }} /></td>}
+                    {visibleColumns.submissionDate && <td><div className="table-skeleton-cell" style={{ width: '80px', height: '12px' }} /></td>}
                     <td style={{ textAlign: 'center' }}>
                       <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
                         <div className="table-skeleton-cell" style={{ width: '28px', height: '28px', borderRadius: '50%' }} />
@@ -818,101 +1911,269 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
                 ))
               ) : paginatedDrivers.length === 0 ? (
                 <tr>
-                  <td colSpan={9}>
+                  <td colSpan={12}>
                     <div className="table-empty-state">
                       <div className="empty-state-icon-box">
                         <Users size={32} />
                       </div>
                       <h4 className="empty-state-heading">No drivers found</h4>
                       <p className="empty-state-text">
-                        {searchQuery || statusFilter !== 'all' || vendorFilter !== 'all'
+                        {searchQuery || statusFilter !== 'all' || vendorFilter !== 'all' || vehicleAssignmentFilter !== 'all' || transportStatusFilter !== 'all'
                           ? 'No driver records match the selected filter criteria. Try resetting filters.'
-                          : 'No drivers found in the database.'}
+                          : 'No drivers found in the database. Click "+ Create Driver Account" above to register a commercial driver.'}
                       </p>
+                      <button
+                        type="button"
+                        className="btn-filter-reset"
+                        style={{ marginTop: 12 }}
+                        onClick={handleResetFilters}
+                      >
+                        Reset Filters
+                      </button>
                     </div>
                   </td>
                 </tr>
               ) : (
                 paginatedDrivers.map((driver, idx) => {
-                  const isPending = driver.status === 'PENDING' || driver.status === 'PENDING_APPROVAL';
-                  const isApproved = driver.status === 'APPROVED';
-                  const isRejected = driver.status === 'REJECTED';
+                  const isDriverApproved = driver.status === 'APPROVED';
+                  const isDriverPending = driver.status === 'PENDING' || driver.status === 'PENDING_APPROVAL';
+                  const isDriverRejected = driver.status === 'REJECTED';
                   const licenceStatus = getLicenceStatus(driver);
-                  const colorThemes = ['peach', 'purple', 'orange', 'blue', 'teal', 'red'];
-                  const theme = colorThemes[idx % colorThemes.length];
+                  const vendorInfo = getVendorInfo(driver);
+                  const vehAssign = getDriverVehicleAssignment(driver.id);
+                  const transportStatus = getDriverTransportStatus(driver, vehAssign.trip);
+                  const ageInfo = calculateAge(driver.date_of_birth || driver.dob);
+                  const isSelected = selectedDriverIds.has(driver.id);
+                  const serialIndex = (currentPage - 1) * pageSize + idx + 1;
+                  const displayId = formatDisplayId('DR', driver.driver_code || driver.id, driver.created_at);
 
                   return (
-                    <tr key={driver.id} className="client-data-row">
-                      <td>
-                        <input type="checkbox" className="custom-table-checkbox" />
+                    <tr
+                      key={driver.id}
+                      className={`client-data-row ${isSelected ? 'row-selected' : ''}`}
+                      onClick={() => handleToggleSelectOne(driver.id)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <td onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          className="custom-table-checkbox"
+                          checked={isSelected}
+                          onChange={() => handleToggleSelectOne(driver.id)}
+                        />
                       </td>
-                      <td>
-                        <div className="client-info-cell">
-                          <div className={`client-avatar-squircle ${theme}`}>
-                            <Users size={16} />
+
+                      {visibleColumns.serialNo && (
+                        <td style={{ color: '#64748B', fontWeight: 600 }}>{serialIndex}</td>
+                      )}
+
+                      {visibleColumns.driverName && (
+                        <td>
+                          <div className="client-info-cell">
+                            <div
+                              className="client-avatar-squircle"
+                              style={{ background: getAvatarColor(driver.full_name || driver.name || 'DR'), color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}
+                            >
+                              {getInitials(driver.full_name || driver.name)}
+                            </div>
+                            <div>
+                              <div className="client-name-bold">{driver.full_name || driver.name}</div>
+                              <div className="client-id-sub">{displayId}</div>
+                            </div>
                           </div>
+                        </td>
+                      )}
+
+                      {visibleColumns.mobile && (
+                        <td style={{ fontFamily: 'monospace' }}>
+                          {driver.mobile || driver.phone || '—'}
+                        </td>
+                      )}
+
+                      {visibleColumns.dob && (
+                        <td>
                           <div>
-                            <div className="client-name-bold">{driver.full_name}</div>
-                            <div className="client-id-sub">{formatDisplayId('DR', driver.driver_code || driver.id, driver.created_at)}</div>
+                            {driver.date_of_birth || driver.dob
+                              ? new Date(driver.date_of_birth || driver.dob).toLocaleDateString('en-IN')
+                              : '—'}
                           </div>
-                        </div>
-                      </td>
-                      <td>{driver.mobile || driver.phone}</td>
-                      <td>
-                        {driver.date_of_birth || driver.dob
-                          ? new Date(driver.date_of_birth || driver.dob).toLocaleDateString('en-IN')
-                          : '—'}
-                      </td>
-                      <td>
-                        <span className="table-cell-sub">{getVendorName(driver.primary_vendor_id, driver)}</span>
-                      </td>
-                      <td>
-                        {driver.created_at
-                          ? new Date(driver.created_at).toLocaleDateString('en-IN')
-                          : '—'}
-                      </td>
-                      <td>
-                        <span className={`status-badge-pastel ${
-                          licenceStatus.status === 'VALID' ? 'active' : licenceStatus.status === 'EXPIRED' ? 'inactive' : 'pending'
-                        }`}>
-                          {licenceStatus.label}
-                        </span>
-                      </td>
-                      <td>
-                        <span className={`status-badge-pastel ${
-                          isApproved ? 'active' : isPending ? 'pending' : isRejected ? 'inactive' : 'draft'
-                        }`}>
-                          {isApproved ? 'Approved' : isPending ? 'Pending Approval' : isRejected ? 'Rejected' : driver.status}
-                        </span>
-                      </td>
-                      <td style={{ textAlign: 'right' }}>
+                          {ageInfo.age !== null && (
+                            <div style={{ fontSize: 11, color: ageInfo.isEligible ? '#16A34A' : '#DC2626', fontWeight: 600 }}>
+                              {ageInfo.text}
+                            </div>
+                          )}
+                        </td>
+                      )}
+
+                      {visibleColumns.vendor && (
+                        <td>
+                          {vendorInfo.isAssigned ? (
+                            <div>
+                              <div style={{ fontWeight: 600, color: '#0F172A' }}>{vendorInfo.name}</div>
+                              <div style={{ fontSize: 11, color: '#64748B', fontFamily: 'monospace' }}>
+                                {vendorInfo.code}
+                              </div>
+                            </div>
+                          ) : (
+                            <span style={{ fontSize: 11.5, color: '#DC2626', fontWeight: 600, background: '#FEF2F2', padding: '2px 8px', borderRadius: 4, border: '1px solid #FECACA' }}>
+                              Not Assigned
+                            </span>
+                          )}
+                        </td>
+                      )}
+
+                      {visibleColumns.vehicle && (
+                        <td>
+                          {vehAssign.vehicle ? (
+                            <div>
+                              <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#0F172A', background: '#F8FAFC', padding: '2px 6px', borderRadius: 4, border: '1px solid #CBD5E1' }}>
+                                {vehAssign.vehicle.registration_number}
+                              </span>
+                              <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
+                                {vehAssign.vehicle.vehicle_type || 'Lorry'}
+                              </div>
+                            </div>
+                          ) : (
+                            <span style={{ fontSize: 11, color: '#64748B', fontStyle: 'italic' }}>
+                              Not Assigned
+                            </span>
+                          )}
+                        </td>
+                      )}
+
+                      {visibleColumns.transportStatus && (
+                        <td>
+                          <span className={`transport-badge ${transportStatus.badgeClass}`}>
+                            {transportStatus.label}
+                          </span>
+                        </td>
+                      )}
+
+                      {visibleColumns.licenceStatus && (
+                        <td>
+                          <span
+                            className={`status-badge-pastel ${
+                              licenceStatus.status === 'VALID'
+                                ? 'active'
+                                : licenceStatus.status === 'EXPIRED'
+                                ? 'inactive'
+                                : 'pending'
+                            }`}
+                          >
+                            {licenceStatus.label}
+                          </span>
+                        </td>
+                      )}
+
+                      {visibleColumns.verificationStatus && (
+                        <td>
+                          <span
+                            className={`status-badge-pastel ${
+                              isDriverApproved ? 'active' : isDriverPending ? 'pending' : isDriverRejected ? 'inactive' : 'draft'
+                            }`}
+                          >
+                            {isDriverApproved ? 'Approved' : isDriverPending ? 'Pending Approval' : isDriverRejected ? 'Rejected' : driver.status}
+                          </span>
+                        </td>
+                      )}
+
+                      {visibleColumns.submissionDate && (
+                        <td>
+                          {driver.created_at
+                            ? new Date(driver.created_at).toLocaleDateString('en-IN')
+                            : '—'}
+                        </td>
+                      )}
+
+                      <td onClick={(e) => e.stopPropagation()} style={{ textAlign: 'right' }}>
                         <div className="row-actions-group">
+                          {/* View Full Drawer */}
+                          <button
+                            className="row-action-btn-circle"
+                            title="View Driver Details Drawer"
+                            id={`btn-view-driver-details-${driver.id}`}
+                            onClick={() => setSelectedDrawerDriver(driver)}
+                          >
+                            <Eye size={14} />
+                          </button>
+
+                          {/* Audit Documents */}
                           <button
                             className="row-action-btn-circle"
                             title="Audit Licence & Documents"
+                            id={`btn-audit-driver-${driver.id}`}
                             onClick={() => {
                               setSelectedAuditDriver(driver);
                               setIsAuditModalOpen(true);
-                              onAuditDriver(driver.id);
+                              if (onAuditDriver) onAuditDriver(driver.id);
                             }}
                           >
                             <FileCheck size={14} />
                           </button>
+
+                          {/* Assign / Change Vehicle */}
                           <button
                             className="row-action-btn-circle"
-                            title="View Driver Details"
+                            title="Assign / Change Vehicle"
+                            id={`btn-assign-vehicle-${driver.id}`}
                             onClick={() => {
-                              setSelectedAuditDriver(driver);
-                              setIsAuditModalOpen(true);
+                              setAssigningVehicleDriver(driver);
+                              const curr = getDriverVehicleAssignment(driver.id);
+                              setSelectedVehicleToAssign(curr.vehicle?.id || '');
                             }}
                           >
-                            <Eye size={14} />
+                            <Truck size={14} />
                           </button>
+
+                          {/* Edit Driver */}
+                          {canEdit && (
+                            <button
+                              className="row-action-btn-circle"
+                              title="Edit Driver"
+                              id={`btn-edit-driver-${driver.id}`}
+                              onClick={() => {
+                                setEditingDriver(driver);
+                                setEditFormData({
+                                  fullName: driver.full_name || '',
+                                  mobile: driver.mobile || driver.phone || '',
+                                  dateOfBirth: driver.date_of_birth || driver.dob || '',
+                                  licenceNumber: driver.licence_number || '',
+                                  licenceExpiryDate: driver.licence_expiry_date || '',
+                                  primaryVendorId: driver.primary_vendor_id || '',
+                                  address: driver.address || '',
+                                  city: driver.city || '',
+                                  state: driver.state || '',
+                                  emergencyContactName: driver.emergency_contact_name || '',
+                                  emergencyContactPhone: driver.emergency_contact_phone || '',
+                                });
+                              }}
+                            >
+                              <Edit2 size={14} />
+                            </button>
+                          )}
+
+                          {/* Transport Status */}
+                          <button
+                            className="row-action-btn-circle"
+                            title="Update Transport Availability"
+                            id={`btn-transport-status-${driver.id}`}
+                            onClick={() => {
+                              setStatusUpdatingDriver(driver);
+                              const vehAssign = getDriverVehicleAssignment(driver.id);
+                              const tStatus = getDriverTransportStatus(driver, vehAssign.trip);
+                              setSelectedTransportStatus(tStatus.key);
+                            }}
+                          >
+                            <SlidersHorizontal size={14} />
+                          </button>
+
+                          {/* Delete Driver */}
                           {canDelete && (
                             <button
                               className="row-action-btn-circle"
                               title="Delete Driver"
                               style={{ color: '#DC2626' }}
+                              id={`btn-delete-driver-${driver.id}`}
                               onClick={() => setDeletingDriver(driver)}
                             >
                               <Trash2 size={14} />
@@ -928,18 +2189,19 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
           </table>
         </div>
 
-        {/* Pagination */}
+        {/* 8. Pagination Row */}
         <div className="pagination-row">
           <div className="pagination-info">
-            Showing {filteredDrivers.length > 0 ? (currentPage - 1) * pageSize + 1 : 0} to{' '}
-            {Math.min(currentPage * pageSize, filteredDrivers.length)} of {filteredDrivers.length} drivers
+            Showing {sortedDrivers.length > 0 ? (currentPage - 1) * pageSize + 1 : 0} to{' '}
+            {Math.min(currentPage * pageSize, sortedDrivers.length)} of {sortedDrivers.length} drivers
           </div>
 
           <div className="pagination-controls">
             <button
               className="page-nav-btn"
               disabled={currentPage === 1}
-              onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+              onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+              aria-label="Previous page"
             >
               ‹
             </button>
@@ -969,7 +2231,8 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
             <button
               className="page-nav-btn"
               disabled={currentPage === totalPages}
-              onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+              onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+              aria-label="Next page"
             >
               ›
             </button>
@@ -977,21 +2240,70 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
             <select
               className="page-size-select"
               value={pageSize}
-              onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              aria-label="Rows per page"
             >
               <option value={10}>10 / page</option>
               <option value={25}>25 / page</option>
               <option value={50}>50 / page</option>
+              <option value={100}>100 / page</option>
             </select>
           </div>
         </div>
       </div>
 
-      {/* Driver Licence Audit Modal */}
+      {/* 9. Task 13: View Driver Details Full-View Side Drawer */}
+      {selectedDrawerDriver && (
+        <DriverDetailsDrawer
+          isOpen={Boolean(selectedDrawerDriver)}
+          driver={selectedDrawerDriver}
+          vendorName={getVendorInfo(selectedDrawerDriver).name}
+          vendorDetails={getVendorInfo(selectedDrawerDriver).details}
+          assignedVehicle={getDriverVehicleAssignment(selectedDrawerDriver.id).vehicle}
+          activeTrip={getDriverVehicleAssignment(selectedDrawerDriver.id).trip}
+          onClose={() => setSelectedDrawerDriver(null)}
+          onEditDriver={(d) => {
+            setEditingDriver(d);
+            setEditFormData({
+              fullName: d.full_name || '',
+              mobile: d.mobile || d.phone || '',
+              dateOfBirth: d.date_of_birth || d.dob || '',
+              licenceNumber: d.licence_number || '',
+              licenceExpiryDate: d.licence_expiry_date || '',
+              primaryVendorId: d.primary_vendor_id || '',
+              address: d.address || '',
+              city: d.city || '',
+              state: d.state || '',
+              emergencyContactName: d.emergency_contact_name || '',
+              emergencyContactPhone: d.emergency_contact_phone || '',
+            });
+          }}
+          onAssignVehicle={(d) => {
+            setAssigningVehicleDriver(d);
+            const curr = getDriverVehicleAssignment(d.id);
+            setSelectedVehicleToAssign(curr.vehicle?.id || '');
+          }}
+          onUpdateTransportStatus={(d) => {
+            setStatusUpdatingDriver(d);
+            const vehAssign = getDriverVehicleAssignment(d.id);
+            const tStatus = getDriverTransportStatus(d, vehAssign.trip);
+            setSelectedTransportStatus(tStatus.key);
+          }}
+          onApproveDriver={handleApproveDriver}
+          onRejectDriver={handleRejectDriver}
+          onRefreshData={loadData}
+          onNavigateToVendorProfile={onNavigateToVendorProfile}
+        />
+      )}
+
+      {/* 10. Driver Licence Audit Modal */}
       {isAuditModalOpen && selectedAuditDriver && (
         <DriverLicenceAudit
           driver={selectedAuditDriver}
-          vendorName={getVendorName(selectedAuditDriver.primary_vendor_id)}
+          vendorName={getVendorInfo(selectedAuditDriver).name}
           isOpen={isAuditModalOpen}
           onClose={() => {
             setIsAuditModalOpen(false);
@@ -1001,12 +2313,414 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
             setDrivers((prev) =>
               prev.map((d) => (d.id === updated.id ? { ...d, ...updated } : d))
             );
+            loadData();
             showToast(`Driver ${updated.full_name} status updated to ${updated.status}`);
           }}
         />
       )}
 
-      {/* Create Driver Account Modal (No Email Address Field) */}
+      {/* 11. Tasks 10 & 11: Assign / Change / Remove Vehicle Modal */}
+      {assigningVehicleDriver && (
+        <div className="client-modal-overlay" style={{ zIndex: 1200 }}>
+          <div className="client-modal-container" style={{ maxWidth: '540px' }}>
+            <div className="client-modal-header">
+              <div>
+                <h3 className="client-modal-title">Assign / Change Vehicle</h3>
+                <p style={{ margin: '2px 0 0', fontSize: '13px', color: '#64748B' }}>
+                  Assign an eligible verified fleet vehicle to driver {assigningVehicleDriver.full_name}.
+                </p>
+              </div>
+              <button
+                className="client-modal-close"
+                onClick={() => setAssigningVehicleDriver(null)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmAssignVehicle}>
+              <div className="client-modal-body" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {/* Driver & Vendor Summary Card */}
+                <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '12px 14px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <span style={{ fontSize: 12, color: '#64748B', fontWeight: 600 }}>Driver:</span>
+                    <strong style={{ fontSize: 13, color: '#0F172A' }}>{assigningVehicleDriver.full_name}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <span style={{ fontSize: 12, color: '#64748B', fontWeight: 600 }}>Connected Vendor:</span>
+                    <strong style={{ fontSize: 13, color: '#0F172A' }}>{getVendorInfo(assigningVehicleDriver).name}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 12, color: '#64748B', fontWeight: 600 }}>Current Assignment:</span>
+                    <strong style={{ fontSize: 13, color: '#0F172A', fontFamily: 'monospace' }}>
+                      {getDriverVehicleAssignment(assigningVehicleDriver.id).vehicle?.registration_number || 'None (Unassigned)'}
+                    </strong>
+                  </div>
+                </div>
+
+                {/* Eligible Vehicles Dropdown */}
+                <div className="form-field-group">
+                  <label className="field-label-req">Select Eligible Fleet Vehicle *</label>
+                  <select
+                    required
+                    className="client-field-input"
+                    value={selectedVehicleToAssign}
+                    onChange={(e) => setSelectedVehicleToAssign(e.target.value)}
+                  >
+                    <option value="">-- Choose Vehicle from Fleet --</option>
+                    {(() => {
+                      const vendorLinks = vendorVehicleLinks.filter(
+                        (l) => l.vendor_id === assigningVehicleDriver.primary_vendor_id
+                      );
+                      const vendorVehIds = vendorLinks.map((l) => l.vehicle_id);
+                      const eligibleList = vehicles.filter((v) => vendorVehIds.includes(v.id) || v.id === selectedVehicleToAssign);
+
+                      if (eligibleList.length === 0) {
+                        return <option disabled value="">No fleet vehicles registered for this vendor</option>;
+                      }
+
+                      return eligibleList.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.registration_number} ({v.vehicle_type || 'Lorry'} - {v.body_type || 'Open'} - {v.rated_capacity_mt || 'Standard'} MT)
+                        </option>
+                      ));
+                    })()}
+                  </select>
+                  {vendorVehicleLinks.filter((l) => l.vendor_id === assigningVehicleDriver.primary_vendor_id).length === 0 && (
+                    <span style={{ fontSize: '11.5px', color: '#D97706', marginTop: 4 }}>
+                      ⚠️ No fleet vehicles linked to this transporter. Register vehicles under this vendor first.
+                    </span>
+                  )}
+                </div>
+
+                {/* Remove vehicle button if currently assigned */}
+                {getDriverVehicleAssignment(assigningVehicleDriver.id).vehicle && (
+                  <div style={{ paddingTop: 6, borderTop: '1px dashed #CBD5E1' }}>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveVehicleAssignment(assigningVehicleDriver)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#DC2626',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4,
+                      }}
+                    >
+                      <Trash2 size={13} />
+                      <span>Remove current vehicle assignment (Set as Unassigned)</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="client-modal-footer">
+                <button
+                  type="button"
+                  className="btn-modal-cancel"
+                  onClick={() => setAssigningVehicleDriver(null)}
+                  disabled={isAssigningVehicle}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-modal-submit"
+                  disabled={isAssigningVehicle || !selectedVehicleToAssign}
+                >
+                  {isAssigningVehicle ? 'Assigning...' : 'Confirm Assignment'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 12. Task 12: Transport Status Management Modal */}
+      {statusUpdatingDriver && (
+        <div className="client-modal-overlay" style={{ zIndex: 1200 }}>
+          <div className="client-modal-container" style={{ maxWidth: '480px' }}>
+            <div className="client-modal-header">
+              <div>
+                <h3 className="client-modal-title">Update Transport Availability</h3>
+                <p style={{ margin: '2px 0 0', fontSize: '13px', color: '#64748B' }}>
+                  Manage dispatch readiness status for {statusUpdatingDriver.full_name}.
+                </p>
+              </div>
+              <button
+                className="client-modal-close"
+                onClick={() => setStatusUpdatingDriver(null)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmTransportStatus}>
+              <div className="client-modal-body" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {[
+                    { key: 'AVAILABLE', label: 'Available for Transport', desc: 'Driver is healthy, certified, and ready for dispatch.' },
+                    { key: 'NOT_TAKING_TRANSPORT', label: 'Not Taking Up for Transport', desc: 'Driver has requested temporary leave or is off duty.' },
+                    { key: 'TEMP_UNAVAILABLE', label: 'Temporarily Unavailable', desc: 'Medical check, licence renewal, or vehicle maintenance.' },
+                    { key: 'INACTIVE', label: 'Inactive / Suspended', desc: 'Disable driver profile from transport dispatch roster.' },
+                  ].map((opt) => (
+                    <label
+                      key={opt.key}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 10,
+                        padding: '10px 12px',
+                        borderRadius: 8,
+                        border: selectedTransportStatus === opt.key ? '1px solid #F05A22' : '1px solid #E2E8F0',
+                        background: selectedTransportStatus === opt.key ? '#FFF8F5' : '#FFFFFF',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="transportStatus"
+                        value={opt.key}
+                        checked={selectedTransportStatus === opt.key}
+                        onChange={(e) => setSelectedTransportStatus(e.target.value)}
+                        style={{ marginTop: 2 }}
+                      />
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>{opt.label}</div>
+                        <div style={{ fontSize: 11.5, color: '#64748B', marginTop: 1 }}>{opt.desc}</div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+
+                <div className="form-field-group">
+                  <label className="field-label-opt" style={{ fontSize: 13, fontWeight: 600, color: '#334155' }}>
+                    Status Notes / Reason (Optional)
+                  </label>
+                  <textarea
+                    rows={2}
+                    className="client-field-input"
+                    placeholder="e.g. Leave request until 5 Nov, awaiting fitness certificate..."
+                    value={transportStatusNote}
+                    onChange={(e) => setTransportStatusNote(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="client-modal-footer">
+                <button
+                  type="button"
+                  className="btn-modal-cancel"
+                  onClick={() => setStatusUpdatingDriver(null)}
+                  disabled={isUpdatingTransportStatus}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-modal-submit"
+                  disabled={isUpdatingTransportStatus}
+                >
+                  {isUpdatingTransportStatus ? 'Updating...' : 'Save Availability'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 13. Task 14: Edit Driver Particulars Modal */}
+      {editingDriver && (
+        <div className="client-modal-overlay" style={{ zIndex: 1200 }}>
+          <div className="client-modal-container" style={{ maxWidth: '580px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div className="client-modal-header">
+              <div>
+                <h3 className="client-modal-title">Edit Driver Profile</h3>
+                <p style={{ margin: '2px 0 0', fontSize: '13px', color: '#64748B' }}>
+                  Update profile particulars and connected vendor for {editingDriver.full_name}.
+                </p>
+              </div>
+              <button
+                className="client-modal-close"
+                onClick={() => setEditingDriver(null)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmEditDriver}>
+              <div className="client-modal-body" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {editErrors.global && (
+                  <div style={{ background: '#FEE2E2', border: '1px solid #FECACA', borderRadius: '8px', padding: '10px 14px', color: '#B91C1C', fontSize: '13px' }}>
+                    {editErrors.global}
+                  </div>
+                )}
+
+                <div className="form-field-group">
+                  <label className="field-label-req">Full Legal Name *</label>
+                  <input
+                    type="text"
+                    required
+                    className="client-field-input"
+                    value={editFormData.fullName}
+                    onChange={(e) => setEditFormData({ ...editFormData, fullName: e.target.value })}
+                  />
+                  {editErrors.fullName && <div className="field-error-text">{editErrors.fullName}</div>}
+                </div>
+
+                <div className="form-field-group">
+                  <label className="field-label-req">Mobile Number *</label>
+                  <div className="phone-input-group">
+                    <span className="country-code-pill">+91</span>
+                    <input
+                      type="tel"
+                      required
+                      maxLength={10}
+                      className="client-field-input"
+                      value={editFormData.mobile}
+                      onChange={(e) => setEditFormData({ ...editFormData, mobile: e.target.value.replace(/\D/g, '') })}
+                    />
+                  </div>
+                  {editErrors.mobile && <div className="field-error-text">{editErrors.mobile}</div>}
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div className="form-field-group">
+                    <label className="field-label-req">Date of Birth</label>
+                    <input
+                      type="date"
+                      className="client-field-input"
+                      value={editFormData.dateOfBirth}
+                      onChange={(e) => setEditFormData({ ...editFormData, dateOfBirth: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="form-field-group">
+                    <label className="field-label-req">DL Number *</label>
+                    <input
+                      type="text"
+                      required
+                      className="client-field-input"
+                      value={editFormData.licenceNumber}
+                      onChange={(e) => setEditFormData({ ...editFormData, licenceNumber: e.target.value.toUpperCase() })}
+                    />
+                    {editErrors.licenceNumber && <div className="field-error-text">{editErrors.licenceNumber}</div>}
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div className="form-field-group">
+                    <label className="field-label-req">Licence Expiry Date</label>
+                    <input
+                      type="date"
+                      className="client-field-input"
+                      value={editFormData.licenceExpiryDate}
+                      onChange={(e) => setEditFormData({ ...editFormData, licenceExpiryDate: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="form-field-group">
+                    <label className="field-label-req">Connected Transporter</label>
+                    <select
+                      className="client-field-input"
+                      value={editFormData.primaryVendorId}
+                      onChange={(e) => setEditFormData({ ...editFormData, primaryVendorId: e.target.value })}
+                    >
+                      <option value="">-- Choose Vendor --</option>
+                      {vendors.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.vendor_name} {v.vendor_code ? `(${v.vendor_code})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-field-group">
+                  <label className="field-label-opt" style={{ fontSize: 13, fontWeight: 600, color: '#334155' }}>
+                    Residential Address
+                  </label>
+                  <input
+                    type="text"
+                    className="client-field-input"
+                    placeholder="House/Plot, Street, Area"
+                    value={editFormData.address}
+                    onChange={(e) => setEditFormData({ ...editFormData, address: e.target.value })}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div className="form-field-group">
+                    <label className="field-label-opt" style={{ fontSize: 13, fontWeight: 600, color: '#334155' }}>City</label>
+                    <input
+                      type="text"
+                      className="client-field-input"
+                      value={editFormData.city}
+                      onChange={(e) => setEditFormData({ ...editFormData, city: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-field-group">
+                    <label className="field-label-opt" style={{ fontSize: 13, fontWeight: 600, color: '#334155' }}>State</label>
+                    <input
+                      type="text"
+                      className="client-field-input"
+                      value={editFormData.state}
+                      onChange={(e) => setEditFormData({ ...editFormData, state: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div className="form-field-group">
+                    <label className="field-label-opt" style={{ fontSize: 13, fontWeight: 600, color: '#334155' }}>Emergency Contact Name</label>
+                    <input
+                      type="text"
+                      className="client-field-input"
+                      placeholder="e.g. S. Barman (Brother)"
+                      value={editFormData.emergencyContactName}
+                      onChange={(e) => setEditFormData({ ...editFormData, emergencyContactName: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-field-group">
+                    <label className="field-label-opt" style={{ fontSize: 13, fontWeight: 600, color: '#334155' }}>Emergency Phone</label>
+                    <input
+                      type="tel"
+                      className="client-field-input"
+                      placeholder="9876543210"
+                      value={editFormData.emergencyContactPhone}
+                      onChange={(e) => setEditFormData({ ...editFormData, emergencyContactPhone: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="client-modal-footer">
+                <button
+                  type="button"
+                  className="btn-modal-cancel"
+                  onClick={() => setEditingDriver(null)}
+                  disabled={isSubmittingEdit}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn-modal-submit"
+                  disabled={isSubmittingEdit}
+                >
+                  {isSubmittingEdit ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 14. Task 15: Create Driver Account Modal (No Email Address Field) */}
       {isCreateModalOpen && (
         <div className="client-modal-overlay">
           <div className="client-modal-container" style={{ maxWidth: '580px', maxHeight: '90vh', overflowY: 'auto' }}>
@@ -1125,7 +2839,7 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
                     <option value="">-- Choose Connected Vendor --</option>
                     {vendors.map((v) => (
                       <option key={v.id} value={v.id}>
-                        {v.vendor_name}
+                        {v.vendor_name} {v.vendor_code ? `(${v.vendor_code})` : ''}
                       </option>
                     ))}
                   </select>
@@ -1158,7 +2872,7 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
                   </div>
                 )}
 
-                {/* KYC Identity & Licence Documents */}
+                {/* Document Uploads */}
                 <div style={{ marginTop: '6px', borderTop: '1px solid #E2E8F0', paddingTop: '12px' }}>
                   <label style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A', display: 'block', marginBottom: '8px' }}>
                     Document Uploads (DL & Aadhaar Card)
@@ -1289,7 +3003,7 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
         </div>
       )}
 
-      {/* Permanent Delete Driver Confirmation Dialog */}
+      {/* 15. Permanent Delete Driver Confirmation Dialog */}
       {deletingDriver && (
         <div
           style={{
@@ -1424,4 +3138,3 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
     </div>
   );
 };
-

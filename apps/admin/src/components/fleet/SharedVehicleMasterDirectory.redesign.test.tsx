@@ -89,5 +89,43 @@ describe('SharedVehicleMasterDirectory Redesign (Reference Specification)', () =
     expect(code).toContain('getAvatarColor');
     expect(code).toContain('getInitials');
   });
+
+  it('should render 40x40px white square Actions buttons with centered alignment and 8px gap', () => {
+    expect(code).toContain('ACTIONS');
+    expect(code).toContain('table-action-square-btn');
+    expect(code).toContain('title="View Details"');
+    expect(code).toContain('title="More Actions"');
+    expect(code).toContain("gap: 8");
+    expect(code).toContain("width: 120, minWidth: 120, textAlign: 'center'");
+  });
+
+  it('should render Edit Vehicle Record modal with dark navy header, full 6 fields, and capacity validation', () => {
+    expect(code).toContain('edit-veh-modal-backdrop');
+    expect(code).toContain('edit-veh-modal-card');
+    expect(code).toContain('edit-veh-modal-header');
+    expect(code).toContain('Edit Vehicle Record');
+    expect(code).toContain('edit-veh-reg-badge');
+    expect(code).toContain('Vehicle Category *');
+    expect(code).toContain('Body Type *');
+    expect(code).toContain('Rated Capacity (MT) *');
+    expect(code).toContain('Minimum Capacity (MT) *');
+    expect(code).toContain('RC Number *');
+    expect(code).toContain('Operational Status *');
+    expect(code).toContain('validateEditForm');
+    expect(code).toContain('Minimum capacity cannot exceed rated capacity');
+    expect(code).toContain('handleSaveEdit');
+  });
+
+  it('should render Associated Driver section with complete details, actions, and empty state', () => {
+    expect(code).toContain('Associated Driver');
+    expect(code).toContain('Mobile Number:');
+    expect(code).toContain('Driver Operational Status:');
+    expect(code).toContain('Associated Vendor:');
+    expect(code).toContain('Change Driver');
+    expect(code).toContain('handleRemoveDriverAssignment');
+    expect(code).toContain('No Driver Assigned');
+    expect(code).toContain('Assign a verified driver associated with this vendor to enable trip dispatch and fleet tracking.');
+    expect(code).toContain('Assign Driver');
+  });
 });
 

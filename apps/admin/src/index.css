@@ -15768,3 +15768,932 @@ button.client-name-text:hover {
   background: #F8FAFC;
   border-color: #94A3B8;
 }
+
+/* 40x40px White Table Action Buttons matching reference specification */
+.table-action-square-btn {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  border-radius: 11px;
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.table-action-square-btn:hover {
+  background: #F8FAFC;
+  border-color: #CBD5E1;
+  color: #0F172A;
+}
+
+.table-action-square-btn:focus-visible {
+  outline: none;
+  border-color: #F05A22;
+  box-shadow: 0 0 0 2px rgba(240, 90, 34, 0.2);
+}
+
+.table-action-square-btn.active {
+  background: #FFF7ED;
+  border-color: #F05A22;
+  color: #F05A22;
+}
+
+/* Edit Vehicle Modal premium styles matching Client Management */
+.edit-veh-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 1300;
+}
+
+.edit-veh-modal-card {
+  background: #FFFFFF;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 520px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  border: 1px solid #E2E8F0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.edit-veh-modal-header {
+  background: #0B192C;
+  color: #FFFFFF;
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.edit-veh-modal-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #FFFFFF;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.edit-veh-reg-badge {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 6px;
+  color: #FFFFFF;
+}
+
+.edit-veh-modal-body {
+  padding: 24px;
+  max-height: 72vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.edit-veh-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.edit-veh-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.edit-veh-input,
+.edit-veh-select {
+  width: 100%;
+  padding: 9px 13px;
+  font-size: 13.5px;
+  border: 1px solid #CBD5E1;
+  border-radius: 9px;
+  background: #FFFFFF;
+  color: #0F172A;
+  transition: all 0.15s ease;
+}
+
+.edit-veh-input:focus,
+.edit-veh-select:focus {
+  outline: none;
+  border-color: #F05A22;
+  box-shadow: 0 0 0 3px rgba(240, 90, 34, 0.15);
+}
+
+.edit-veh-input.has-error,
+.edit-veh-select.has-error {
+  border-color: #E11D48;
+  background: #FFF1F2;
+}
+
+.edit-veh-input.has-error:focus,
+.edit-veh-select.has-error:focus {
+  border-color: #E11D48;
+  box-shadow: 0 0 0 3px rgba(225, 29, 72, 0.15);
+}
+
+.edit-veh-error-msg {
+  font-size: 11.5px;
+  color: #E11D48;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 500;
+}
+
+.edit-veh-modal-footer {
+  padding: 16px 24px;
+  background: #F8FAFC;
+  border-top: 1px solid #E2E8F0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* ==========================================================================
+   DRIVER VERIFICATION QUEUE & LIFECYCLE WORKFLOW (Reference Design)
+   ========================================================================== */
+
+/* 5-Step Operational Workflow Progress Panel */
+.driver-workflow-card {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+}
+
+.driver-workflow-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.driver-workflow-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0F172A;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.driver-workflow-steps {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  position: relative;
+}
+
+@media (max-width: 900px) {
+  .driver-workflow-steps {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .driver-workflow-steps {
+    grid-template-columns: 1fr;
+  }
+}
+
+.driver-workflow-step {
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.driver-workflow-step:hover {
+  background: #F1F5F9;
+  border-color: #CBD5E1;
+  transform: translateY(-1px);
+}
+
+.driver-workflow-step.step-active {
+  background: #FFF8F5;
+  border-color: #F05A22;
+  box-shadow: 0 0 0 1px #F05A22;
+}
+
+.driver-workflow-step-num {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #E2E8F0;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.driver-workflow-step.step-completed .driver-workflow-step-num {
+  background: #ECFDF5;
+  color: #10B981;
+}
+
+.driver-workflow-step.step-active .driver-workflow-step-num {
+  background: #F05A22;
+  color: #FFFFFF;
+}
+
+.driver-workflow-step-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.driver-workflow-step-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #0F172A;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.driver-workflow-step-sub {
+  font-size: 11px;
+  color: #64748B;
+  font-weight: 500;
+  margin-top: 1px;
+}
+
+/* Important Actions Action Bar (Selected Driver Toolbar) */
+.driver-selected-actions-card {
+  background: linear-gradient(135deg, #111D38 0%, #1E293B 100%);
+  border-radius: 12px;
+  padding: 14px 20px;
+  margin-bottom: 16px;
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  box-shadow: 0 4px 12px rgba(17, 29, 56, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  animation: vfvFadeIn 0.2s ease-out;
+}
+
+.driver-actions-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.driver-actions-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: #F05A22;
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.driver-actions-btns {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-action-panel-primary {
+  background: #F05A22;
+  color: #FFFFFF;
+  border: none;
+  border-radius: 6px;
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-action-panel-primary:hover {
+  background: #E0531E;
+}
+
+.btn-action-panel-secondary {
+  background: rgba(255, 255, 255, 0.12);
+  color: #FFFFFF;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-action-panel-secondary:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Transport Status Badges */
+.transport-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2.5px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.transport-badge.available {
+  background: #ECFDF5;
+  color: #16A34A;
+  border: 1px solid #A7F3D0;
+}
+
+.transport-badge.ontrip {
+  background: #EFF6FF;
+  color: #2563EB;
+  border: 1px solid #BFDBFE;
+}
+
+.transport-badge.assigned {
+  background: #F5F3FF;
+  color: #7C3AED;
+  border: 1px solid #DDD6FE;
+}
+
+.transport-badge.temp-unavail {
+  background: #FEF3C7;
+  color: #B45309;
+  border: 1px solid #FDE68A;
+}
+
+.transport-badge.not-taking {
+  background: #FFF7ED;
+  color: #C2410C;
+  border: 1px solid #FFEDD5;
+}
+
+.transport-badge.inactive {
+  background: #F1F5F9;
+  color: #64748B;
+  border: 1px solid #CBD5E1;
+}
+
+/* Columns customization popover */
+.columns-popover-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  background: #FFFFFF;
+  border: 1px solid #CBD5E1;
+  border-radius: 10px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
+  padding: 12px;
+  width: 250px;
+  z-index: 100;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   THE TRUCKX — VEHICLE DIRECTORY MODAL SYSTEM (UI/UX DESIGN SYSTEM)
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Core Overlay & Position Utility Fallbacks */
+.fixed {
+  position: fixed !important;
+}
+
+.inset-0 {
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+}
+
+.vdir-modal-backdrop {
+  position: fixed !important;
+  inset: 0 !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  background: rgba(11, 25, 44, 0.72) !important;
+  backdrop-filter: blur(6px) !important;
+  -webkit-backdrop-filter: blur(6px) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 20px !important;
+  z-index: 1300 !important;
+  animation: vdirBackdropFade 0.22s ease-out;
+}
+
+@keyframes vdirBackdropFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.vdir-modal-card {
+  background: #FFFFFF;
+  border-radius: 20px;
+  width: 100%;
+  max-width: 620px;
+  box-shadow: 0 25px 60px -15px rgba(11, 25, 44, 0.4), 0 0 0 1px rgba(226, 232, 240, 0.8);
+  border: 1px solid #E2E8F0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  animation: vdirCardSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.vdir-modal-card.max-w-md {
+  max-width: 500px;
+}
+
+.vdir-modal-card.max-w-lg {
+  max-width: 640px;
+}
+
+@keyframes vdirCardSlideUp {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.vdir-modal-header {
+  background: linear-gradient(135deg, #0B192C 0%, #172554 100%);
+  color: #FFFFFF;
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+.vdir-modal-header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.vdir-modal-header-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(240, 90, 34, 0.18);
+  border: 1px solid rgba(240, 90, 34, 0.35);
+  color: #F05A22;
+  flex-shrink: 0;
+}
+
+.vdir-modal-header-icon.emerald {
+  background: rgba(16, 185, 129, 0.18);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #10B981;
+}
+
+.vdir-modal-header-icon.rose {
+  background: rgba(244, 63, 94, 0.18);
+  border-color: rgba(244, 63, 94, 0.35);
+  color: #F43F5E;
+}
+
+.vdir-modal-header-icon.amber {
+  background: rgba(245, 158, 11, 0.18);
+  border-color: rgba(245, 158, 11, 0.35);
+  color: #F59E0B;
+}
+
+.vdir-modal-header-icon.blue {
+  background: rgba(59, 130, 246, 0.18);
+  border-color: rgba(59, 130, 246, 0.35);
+  color: #3B82F6;
+}
+
+.vdir-modal-title {
+  font-size: 17px;
+  font-weight: 800;
+  color: #FFFFFF;
+  letter-spacing: -0.01em;
+  margin: 0;
+  line-height: 1.25;
+}
+
+.vdir-modal-subtitle-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.vdir-modal-reg-plate {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 6px;
+  color: #FFFFFF;
+  letter-spacing: 0.04em;
+}
+
+.vdir-modal-subtext {
+  font-size: 12px;
+  color: #94A3B8;
+}
+
+.vdir-modal-close-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #CBD5E1;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.vdir-modal-close-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #FFFFFF;
+  transform: scale(1.05);
+}
+
+.vdir-modal-body {
+  padding: 22px 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+}
+
+/* Verification Banner */
+.vdir-verify-banner {
+  background: linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%);
+  border: 1px solid #E2E8F0;
+  border-radius: 14px;
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.vdir-verify-banner-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.vdir-verify-banner-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0F172A;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.vdir-verify-banner-desc {
+  font-size: 11.5px;
+  color: #64748B;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.vdir-verify-progress-bar {
+  width: 100%;
+  height: 6px;
+  background: #E2E8F0;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.vdir-verify-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #F05A22 0%, #10B981 100%);
+  border-radius: 999px;
+  transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.vdir-fast-track-btn {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #10B981;
+  background: #ECFDF5;
+  border: 1px solid #A7F3D0;
+  border-radius: 8px;
+  padding: 5px 10px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+}
+
+.vdir-fast-track-btn:hover {
+  background: #D1FAE5;
+  border-color: #6EE7B7;
+  color: #047857;
+  transform: translateY(-1px);
+}
+
+/* Document Item Card */
+.vdir-doc-item-card {
+  background: #FFFFFF;
+  border: 1.5px solid #E2E8F0;
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  transition: all 0.2s ease;
+}
+
+.vdir-doc-item-card:hover {
+  border-color: #CBD5E1;
+  box-shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.06);
+}
+
+.vdir-doc-item-card.is-approved {
+  border-color: #A7F3D0;
+  background: #F0FDF4;
+}
+
+.vdir-doc-item-card.is-rejected {
+  border-color: #FECDD3;
+  background: #FFF1F2;
+}
+
+.vdir-doc-item-card.is-pending {
+  border-color: #FDE68A;
+  background: #FFFBEB;
+}
+
+.vdir-doc-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.vdir-doc-icon-sq {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: #F1F5F9;
+  border: 1px solid #E2E8F0;
+  color: #475569;
+}
+
+.vdir-doc-item-card.is-approved .vdir-doc-icon-sq {
+  background: #DCFCE7;
+  border-color: #86EFAC;
+  color: #16A34A;
+}
+
+.vdir-doc-item-card.is-rejected .vdir-doc-icon-sq {
+  background: #FFE4E6;
+  border-color: #FDA4AF;
+  color: #E11D48;
+}
+
+.vdir-doc-item-card.is-pending .vdir-doc-icon-sq {
+  background: #FEF3C7;
+  border-color: #FDE68A;
+  color: #D97706;
+}
+
+.vdir-doc-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.vdir-doc-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0F172A;
+  line-height: 1.3;
+}
+
+.vdir-doc-meta {
+  font-size: 11px;
+  color: #64748B;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.vdir-doc-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.vdir-doc-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.vdir-doc-preview-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #F8FAFC;
+  border: 1px solid #CBD5E1;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.vdir-doc-preview-btn:hover {
+  background: #F05A22;
+  border-color: #F05A22;
+  color: #FFFFFF;
+}
+
+.vdir-doc-status-select {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 8px;
+  border: 1.5px solid #CBD5E1;
+  background: #FFFFFF;
+  color: #1E293B;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.vdir-doc-status-select.sel-approved {
+  background: #ECFDF5;
+  border-color: #34D399;
+  color: #065F46;
+}
+
+.vdir-doc-status-select.sel-rejected {
+  background: #FFF1F2;
+  border-color: #FB7185;
+  color: #9F1239;
+}
+
+.vdir-doc-status-select.sel-pending {
+  background: #FFFBEB;
+  border-color: #FBBF24;
+  color: #92400E;
+}
+
+.vdir-modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid #E2E8F0;
+  background: #F8FAFC;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.vdir-footer-hint {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #64748B;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.vdir-footer-hint.approved {
+  color: #059669;
+}
+
+.vdir-footer-hint.rejected {
+  color: #E11D48;
+}
+
+.vdir-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.vdir-btn-secondary {
+  padding: 9px 18px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #475569;
+  background: #FFFFFF;
+  border: 1.5px solid #CBD5E1;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.vdir-btn-secondary:hover {
+  background: #F1F5F9;
+  color: #0F172A;
+  border-color: #94A3B8;
+}
+
+.vdir-btn-primary {
+  padding: 9px 20px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #FFFFFF;
+  background: #F05A22;
+  border: none;
+  border-radius: 9px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(240, 90, 34, 0.28);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.15s ease;
+}
+
+.vdir-btn-primary:hover:not(:disabled) {
+  background: #D94E1B;
+  box-shadow: 0 6px 16px rgba(240, 90, 34, 0.38);
+  transform: translateY(-1px);
+}
+
+.vdir-btn-primary:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}

@@ -119,6 +119,13 @@ function formatSingleLineDateTime(dateStr?: string | null): string {
 
 const formatDateTime = formatSingleLineDateTime;
 
+function formatDate(dateStr?: string | null): string {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
 // Helper to format vehicle category nicely (clean underscores: 32FT_MXL -> 32FT MXL)
 function formatVehicleCategory(cat?: string | null): string {
   if (!cat) return 'Standard Lorry';
@@ -340,7 +347,26 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
     rcNumber: '',
     status: 'ACTIVE',
   });
+  const [editErrors, setEditErrors] = useState<Record<string, string>>({});
+  const [editSubmitError, setEditSubmitError] = useState<string | null>(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+  // Prevent background scroll when Edit Vehicle modal is open and handle Escape key
+  useEffect(() => {
+    if (editingVehicle) {
+      document.body.style.overflow = 'hidden';
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape' && !isSavingEdit) {
+          setEditingVehicle(null);
+        }
+      };
+      window.addEventListener('keydown', handleKeyDown);
+      return () => {
+        document.body.style.overflow = '';
+        window.removeEventListener('keydown', handleKeyDown);
+      };
+    }
+  }, [editingVehicle, isSavingEdit]);
 
   // Reject Vehicle Modal
   const [rejectingVehicle, setRejectingVehicle] = useState<Vehicle | null>(null);
@@ -361,6 +387,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
     permit: 'PENDING' as 'PENDING' | 'APPROVED' | 'REJECTED',
   });
   const [isSavingDocs, setIsSavingDocs] = useState(false);
+  const [verifyingVehicleDocs, setVerifyingVehicleDocs] = useState<Record<string, any>>({});
 
   // Document Preview Modal State
   const [previewDocModal, setPreviewDocModal] = useState<{
@@ -374,6 +401,61 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
 
   // Uploaded documents cache for full view
   const [fullViewDocs, setFullViewDocs] = useState<Record<string, any>>({});
+
+  // Fetch documents for verifyingVehicle
+  useEffect(() => {
+    if (!verifyingVehicle) {
+      setVerifyingVehicleDocs({});
+      return;
+    }
+    let isMounted = true;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('documents')
+          .select('*')
+          .eq('category', 'VEHICLE')
+          .eq('reference_id', verifyingVehicle.id);
+        if (!error && data && isMounted) {
+          const map: Record<string, any> = {};
+          data.forEach((d: any) => {
+            map[d.document_type] = d;
+          });
+          setVerifyingVehicleDocs(map);
+        }
+      } catch (err) {
+        console.warn('Error fetching documents for verifyingVehicle:', err);
+      }
+    })();
+    return () => {
+      isMounted = false;
+    };
+  }, [verifyingVehicle]);
+
+  const handlePreviewVerifyDoc = (docTitle: string, docType: string, docStatus?: string) => {
+    if (!verifyingVehicle) return;
+    const docObj = verifyingVehicleDocs[docType] || fullViewDocs[docType];
+    const fileUrl = docObj?.file_url || '';
+    const fileName = docObj?.file_name || `${docTitle.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+
+    setPreviewDocModal({
+      isOpen: true,
+      title: docTitle,
+      fileName,
+      fileUrl,
+      status: docStatus || docObj?.verification_status || 'PENDING',
+      rejectionReason: docObj?.rejection_reason || verifyingVehicle.rejection_reason,
+    });
+  };
+
+  const handleApproveAllDocs = () => {
+    setDocStatuses({
+      rc: 'APPROVED',
+      insurance: 'APPROVED',
+      fitness: 'APPROVED',
+      permit: 'APPROVED',
+    });
+  };
 
   // Lock body scroll, handle Escape key, and load documents for Vehicle Full View Drawer
   useEffect(() => {
@@ -605,7 +687,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
             .from('trips')
             .select(`
               id, booking_id, vehicle_id, driver_id, vendor_id, trip_status, started_at, completed_at, created_at,
-              driver:drivers(id, full_name, mobile, licence_number, licence_expiry_date, status, driver_code),
+              driver:drivers(id, full_name, mobile, licence_number, licence_expiry_date, verification_status, status, is_active, driver_code, primary_vendor_id),
               booking:bookings(id, booking_reference, client_id)
             `)
             .in('vehicle_id', vehicleIds)
@@ -644,6 +726,32 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                   ? latestWithDriver.driver[0]
                   : latestWithDriver.driver;
                 assignmentsMap[vId].currentTrip = latestWithDriver;
+              }
+            }
+          }
+
+          // Check direct driver_id association on vehicles table if any
+          const directDriverVehicleMap: Record<string, string> = {};
+          for (const v of filteredVehicles) {
+            if ((v as any).driver_id) {
+              directDriverVehicleMap[v.id] = (v as any).driver_id;
+            }
+          }
+          const directDriverIds = Object.values(directDriverVehicleMap);
+          if (directDriverIds.length > 0) {
+            const { data: directDrivers } = await supabase
+              .from('drivers')
+              .select('id, full_name, mobile, licence_number, licence_expiry_date, verification_status, status, is_active, driver_code, primary_vendor_id')
+              .in('id', directDriverIds);
+            if (directDrivers) {
+              const dMap = new Map(directDrivers.map((d: any) => [d.id, d]));
+              for (const [vId, dId] of Object.entries(directDriverVehicleMap)) {
+                if (!assignmentsMap[vId]) {
+                  assignmentsMap[vId] = { currentDriver: null, currentTrip: null, history: [] };
+                }
+                if (!assignmentsMap[vId].currentDriver && dMap.has(dId)) {
+                  assignmentsMap[vId].currentDriver = dMap.get(dId);
+                }
               }
             }
           }
@@ -937,8 +1045,38 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
   };
 
   // Action Handlers
+  const validateEditForm = (): boolean => {
+    const errs: Record<string, string> = {};
+    if (!editForm.category?.trim()) {
+      errs.category = 'Vehicle category is required';
+    }
+    if (!editForm.bodyType?.trim()) {
+      errs.bodyType = 'Body type is required';
+    }
+    const rated = Number(editForm.ratedCapacityMt);
+    if (isNaN(rated) || rated <= 0) {
+      errs.ratedCapacityMt = 'Rated capacity must be greater than 0 MT';
+    }
+    const minCap = Number(editForm.minimumCapacityMt);
+    if (isNaN(minCap) || minCap < 0) {
+      errs.minimumCapacityMt = 'Minimum capacity must be 0 or greater';
+    } else if (!isNaN(rated) && minCap > rated) {
+      errs.minimumCapacityMt = 'Minimum capacity cannot exceed rated capacity';
+    }
+    if (!editForm.rcNumber?.trim()) {
+      errs.rcNumber = 'RC number is required';
+    }
+    if (!editForm.status) {
+      errs.status = 'Operational status is required';
+    }
+    setEditErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
   const handleOpenEdit = (vehicle: Vehicle) => {
     setEditingVehicle(vehicle);
+    setEditErrors({});
+    setEditSubmitError(null);
     setEditForm({
       category: vehicle.vehicle_type || 'Lorry',
       bodyType: vehicle.body_type || 'Open Body',
@@ -951,55 +1089,76 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
 
   const handleSaveEdit = async () => {
     if (!editingVehicle) return;
+    setEditSubmitError(null);
+    if (!validateEditForm()) {
+      toast.error('Please resolve validation errors before saving');
+      return;
+    }
     setIsSavingEdit(true);
     try {
-      await updateVehicle(editingVehicle.id, {
+      await ensureAdminSession();
+      const updates = {
         vehicle_type: editForm.category,
         body_type: editForm.bodyType,
         rated_capacity_mt: Number(editForm.ratedCapacityMt),
         minimum_capacity_mt: Number(editForm.minimumCapacityMt),
-        rc_number: editForm.rcNumber,
+        rc_number: editForm.rcNumber.trim().toUpperCase(),
         status: editForm.status as any,
-      });
+        updated_at: new Date().toISOString(),
+      };
+
+      await updateVehicle(editingVehicle.id, updates);
 
       setVehicles((prev) =>
-        prev.map((v) =>
-          v.id === editingVehicle.id
-            ? {
-                ...v,
-                vehicle_type: editForm.category,
-                body_type: editForm.bodyType,
-                rated_capacity_mt: Number(editForm.ratedCapacityMt),
-                minimum_capacity_mt: Number(editForm.minimumCapacityMt),
-                rc_number: editForm.rcNumber,
-                status: editForm.status as any,
-              }
-            : v
-        )
+        prev.map((v) => (v.id === editingVehicle.id ? { ...v, ...updates } : v))
       );
 
       if (fullViewVehicle?.id === editingVehicle.id) {
-        setFullViewVehicle((prev) =>
-          prev
-            ? {
-                ...prev,
-                vehicle_type: editForm.category,
-                body_type: editForm.bodyType,
-                rated_capacity_mt: Number(editForm.ratedCapacityMt),
-                minimum_capacity_mt: Number(editForm.minimumCapacityMt),
-                rc_number: editForm.rcNumber,
-                status: editForm.status as any,
-              }
-            : null
-        );
+        setFullViewVehicle((prev) => (prev ? { ...prev, ...updates } : null));
+      }
+
+      // Update counters immediately
+      try {
+        const freshStats = await getVehicleStats();
+        setStats(freshStats);
+      } catch (stErr) {
+        console.warn('Vehicle stats update warning:', stErr);
       }
 
       toast.success(`Vehicle ${editingVehicle.registration_number} updated successfully`);
       setEditingVehicle(null);
     } catch (err: any) {
-      toast.error(err.message || 'Failed to update vehicle');
+      console.error('Failed to update vehicle:', err);
+      const msg = err.message || 'Failed to update vehicle record in database';
+      setEditSubmitError(msg);
+      toast.error(msg);
     } finally {
       setIsSavingEdit(false);
+    }
+  };
+
+  const handleRemoveDriverAssignment = async (vehicle: Vehicle) => {
+    try {
+      await ensureAdminSession();
+      const currentAssign = driverAssignments[vehicle.id];
+      if (currentAssign?.currentTrip?.id) {
+        await supabase
+          .from('trips')
+          .update({ driver_id: null, updated_at: new Date().toISOString() })
+          .eq('id', currentAssign.currentTrip.id);
+      }
+      setDriverAssignments((prev) => ({
+        ...prev,
+        [vehicle.id]: {
+          ...prev[vehicle.id],
+          currentDriver: null,
+          currentTrip: null,
+        },
+      }));
+      toast.success(`Driver unassigned from vehicle ${vehicle.registration_number}`);
+    } catch (err: any) {
+      console.error('Failed to unassign driver:', err);
+      toast.error(`Failed to unassign driver: ${err.message}`);
     }
   };
 
@@ -1201,7 +1360,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
         className="cursor-pointer"
         onClick={(e) => {
           e.stopPropagation();
-          setVerifyingVehicle(vehicle);
+          handleOpenVerifyDocs(vehicle);
         }}
         title="Click to view & verify documents"
       >
@@ -1825,7 +1984,12 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                     <td><div className="table-skeleton-cell" style={{ width: 110 }} /></td>
                     <td><div className="table-skeleton-cell" style={{ width: 85, height: 22, borderRadius: 9999 }} /></td>
                     <td><div className="table-skeleton-cell" style={{ width: 120 }} /></td>
-                    <td style={{ textAlign: 'center' }}><div className="table-skeleton-cell" style={{ width: 50, height: 28, margin: '0 auto', borderRadius: 8 }} /></td>
+                    <td style={{ textAlign: 'center', width: 120, minWidth: 120 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                        <div className="table-skeleton-cell" style={{ width: 40, height: 40, borderRadius: 11 }} />
+                        <div className="table-skeleton-cell" style={{ width: 40, height: 40, borderRadius: 11 }} />
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -1997,8 +2161,8 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                     )}
 
                     {/* 13. Actions (Natural Non-Sticky) */}
-                    <th style={{ width: 90, minWidth: 90, textAlign: 'center' }}>
-                      Actions
+                    <th style={{ width: 120, minWidth: 120, textAlign: 'center' }}>
+                      ACTIONS
                     </th>
                   </tr>
                 </thead>
@@ -2260,32 +2424,30 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                           </td>
                         )}
 
-                        {/* 13. Actions (Natural Non-Sticky) */}
-                        <td onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center' }}>
-                          <div className="flex items-center justify-center gap-1">
-                            {/* Primary Eye View Button */}
+                        {/* 13. Actions (Reference Match: 40x40px White Buttons) */}
+                        <td onClick={(e) => e.stopPropagation()} style={{ width: 120, minWidth: 120, textAlign: 'center' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                            {/* 40x40px White View Button */}
                             <button
+                              type="button"
                               onClick={() => setFullViewVehicle(vehicle)}
-                              className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors"
-                              title="View Vehicle Details"
-                              aria-label="View Vehicle Details"
+                              className="table-action-square-btn"
+                              title="View Details"
+                              aria-label={`View Details for ${vehicle.registration_number}`}
                             >
-                              <Eye size={15} />
+                              <Eye size={18} strokeWidth={1.8} />
                             </button>
 
-                            {/* Floating Actions Menu Toggle */}
+                            {/* 40x40px White More Actions Button */}
                             <button
+                              type="button"
                               onClick={(e) => handleToggleActionMenu(vehicle, e)}
-                              className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
-                                isMenuOpen
-                                  ? 'bg-orange-50 text-[#F05A22]'
-                                  : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
-                              }`}
-                              title="More actions"
-                              aria-label="Actions menu"
+                              className={`table-action-square-btn ${isMenuOpen ? 'active' : ''}`}
+                              title="More Actions"
+                              aria-label={`More Actions for ${vehicle.registration_number}`}
                               aria-expanded={isMenuOpen}
                             >
-                              <MoreVertical size={15} />
+                              <MoreVertical size={18} strokeWidth={1.8} />
                             </button>
                           </div>
                         </td>
@@ -2457,7 +2619,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
 
                   <button
                     type="button"
-                    onClick={() => setEditingVehicle(fullViewVehicle)}
+                    onClick={() => handleOpenEdit(fullViewVehicle)}
                     className="vfv-edit-btn"
                     title="Edit vehicle details"
                   >
@@ -2632,13 +2794,24 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                       <h4 className="vfv-card-title">Associated Driver</h4>
                     </div>
                     {currentDriver && (
-                      <button
-                        type="button"
-                        onClick={() => handleOpenAssignDriver(fullViewVehicle)}
-                        className="text-xs font-semibold text-[#F45B0B] hover:underline flex items-center gap-1"
-                      >
-                        <span>Change Driver</span>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenAssignDriver(fullViewVehicle)}
+                          className="text-xs font-semibold text-[#F45B0B] hover:underline flex items-center gap-1"
+                        >
+                          <span>Change Driver</span>
+                        </button>
+                        <span className="text-slate-300">|</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveDriverAssignment(fullViewVehicle)}
+                          className="text-xs font-semibold text-rose-600 hover:underline flex items-center gap-1"
+                          title="Remove driver assignment"
+                        >
+                          <span>Remove</span>
+                        </button>
+                      </div>
                     )}
                   </div>
                   <div className="vfv-card-body">
@@ -2663,14 +2836,14 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                                       <span>{currentDriver.full_name}</span>
                                       <span
                                         className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                          currentDriver.status === 'APPROVED'
+                                          currentDriver.verification_status === 'APPROVED' || currentDriver.status === 'APPROVED'
                                             ? 'bg-emerald-100 text-emerald-800'
-                                            : currentDriver.status === 'REJECTED'
+                                            : currentDriver.verification_status === 'REJECTED' || currentDriver.status === 'REJECTED'
                                             ? 'bg-rose-100 text-rose-800'
                                             : 'bg-amber-100 text-amber-800'
                                         }`}
                                       >
-                                        {currentDriver.status || 'VERIFIED'}
+                                        {currentDriver.verification_status || currentDriver.status || 'VERIFIED'}
                                       </span>
                                     </div>
                                     <div className="text-slate-500 font-mono text-xs flex items-center gap-1.5 mt-0.5">
@@ -2709,9 +2882,35 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
 
                               <div className="grid grid-cols-2 gap-2 text-xs pt-2.5 border-t border-slate-200">
                                 <div>
-                                  <span className="text-slate-500">Mobile:</span>{' '}
+                                  <span className="text-slate-500">Mobile Number:</span>{' '}
                                   <span className="font-semibold text-slate-800">
                                     {currentDriver.mobile || '—'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-slate-500">Driver Operational Status:</span>{' '}
+                                  <span
+                                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                      currentDriver.is_active !== false
+                                        ? 'bg-emerald-100 text-emerald-800'
+                                        : 'bg-slate-200 text-slate-700'
+                                    }`}
+                                  >
+                                    {currentDriver.is_active !== false ? 'ACTIVE' : 'INACTIVE'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-slate-500">Associated Vendor:</span>{' '}
+                                  <span className="font-semibold text-slate-800">
+                                    {vendorMeta?.vendorName || (fullViewVehicle as any).primary_vendor_name || (fullViewVehicle as any).vendor_name || 'Direct Fleet'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-slate-500">Assignment:</span>{' '}
+                                  <span className="font-semibold text-emerald-700">
+                                    {currentTrip?.id
+                                      ? `Trip #${currentTrip.id.substring(0, 8)}`
+                                      : 'Assigned to Vehicle'}
                                   </span>
                                 </div>
                                 <div>
@@ -2731,14 +2930,6 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                                     {isDlExpired && '(Expired)'}
                                   </span>
                                 </div>
-                                <div>
-                                  <span className="text-slate-500">Assignment:</span>{' '}
-                                  <span className="font-semibold text-emerald-700">
-                                    {currentTrip?.id
-                                      ? `Trip #${currentTrip.id.substring(0, 8)}`
-                                      : 'Assigned to Vehicle'}
-                                  </span>
-                                </div>
                               </div>
                             </div>
                           </div>
@@ -2753,7 +2944,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                           <div>
                             <h4 className="vfv-driver-empty-title">No Driver Assigned</h4>
                             <p className="vfv-driver-empty-sub">
-                              Assign an eligible verified driver associated with this vendor to enable dispatch.
+                              Assign a verified driver associated with this vendor to enable trip dispatch and fleet tracking.
                             </p>
                           </div>
                         </div>
@@ -2896,37 +3087,58 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
 
       {/* 8. Edit Vehicle Modal */}
       {editingVehicle && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4" style={{ zIndex: 1200 }}>
-          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl border border-slate-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-orange-100 rounded-lg text-[#F05A22]">
-                  <Truck size={18} />
-                </div>
-                <div>
-                  <h3 className="font-bold text-slate-800 text-base">Edit Vehicle Record</h3>
-                  <p className="text-xs text-slate-500 font-mono">
-                    {editingVehicle.registration_number}
-                  </p>
-                </div>
+        <div
+          className="edit-veh-modal-backdrop"
+          onClick={() => !isSavingEdit && setEditingVehicle(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-vehicle-modal-title"
+        >
+          <div className="edit-veh-modal-card" onClick={(e) => e.stopPropagation()}>
+            {/* Dark Navy Header matching Client Management */}
+            <div className="edit-veh-modal-header">
+              <div className="edit-veh-modal-title" id="edit-vehicle-modal-title">
+                <Truck size={20} className="text-[#F05A22]" />
+                <span>Edit Vehicle Record</span>
+                <span className="edit-veh-reg-badge">
+                  {editingVehicle.registration_number}
+                </span>
               </div>
               <button
-                onClick={() => setEditingVehicle(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200"
+                type="button"
+                onClick={() => !isSavingEdit && setEditingVehicle(null)}
+                className="p-1 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
+                title="Close modal"
+                disabled={isSavingEdit}
               >
-                <X size={18} />
+                <X size={20} />
               </button>
             </div>
 
-            <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Vehicle Category
+            {/* Modal Body */}
+            <div className="edit-veh-modal-body">
+              {editSubmitError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-700 text-xs flex items-center gap-2">
+                  <AlertCircle size={15} className="shrink-0 text-rose-600" />
+                  <span>{editSubmitError}</span>
+                </div>
+              )}
+
+              {/* Vehicle Category */}
+              <div className="edit-veh-field-group">
+                <label className="edit-veh-label" htmlFor="edit-category">
+                  Vehicle Category *
                 </label>
                 <select
+                  id="edit-category"
                   value={editForm.category}
-                  onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F05A22]"
+                  onChange={(e) => {
+                    setEditForm({ ...editForm, category: e.target.value });
+                    if (editErrors.category) {
+                      setEditErrors((prev) => ({ ...prev, category: '' }));
+                    }
+                  }}
+                  className={`edit-veh-select ${editErrors.category ? 'has-error' : ''}`}
                 >
                   <option value="Lorry">Lorry</option>
                   <option value="Trailer">Trailer</option>
@@ -2936,244 +3148,542 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                   <option value="12 Wheeler">12 Wheeler</option>
                   <option value="14 Wheeler">14 Wheeler</option>
                 </select>
+                {editErrors.category && (
+                  <span className="edit-veh-error-msg">
+                    <AlertCircle size={12} />
+                    {editErrors.category}
+                  </span>
+                )}
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Body Type</label>
+              {/* Body Type */}
+              <div className="edit-veh-field-group">
+                <label className="edit-veh-label" htmlFor="edit-body-type">
+                  Body Type *
+                </label>
                 <select
+                  id="edit-body-type"
                   value={editForm.bodyType}
-                  onChange={(e) => setEditForm({ ...editForm, bodyType: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F05A22]"
+                  onChange={(e) => {
+                    setEditForm({ ...editForm, bodyType: e.target.value });
+                    if (editErrors.bodyType) {
+                      setEditErrors((prev) => ({ ...prev, bodyType: '' }));
+                    }
+                  }}
+                  className={`edit-veh-select ${editErrors.bodyType ? 'has-error' : ''}`}
                 >
                   <option value="Open Body">Open Body</option>
                   <option value="Closed Body">Closed Body</option>
                 </select>
+                {editErrors.bodyType && (
+                  <span className="edit-veh-error-msg">
+                    <AlertCircle size={12} />
+                    {editErrors.bodyType}
+                  </span>
+                )}
               </div>
 
+              {/* Capacities Grid */}
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Rated Capacity (MT)
+                <div className="edit-veh-field-group">
+                  <label className="edit-veh-label" htmlFor="edit-rated-cap">
+                    Rated Capacity (MT) *
                   </label>
                   <input
+                    id="edit-rated-cap"
                     type="number"
+                    step="0.1"
+                    min="0.1"
                     value={editForm.ratedCapacityMt}
-                    onChange={(e) =>
-                      setEditForm({ ...editForm, ratedCapacityMt: parseFloat(e.target.value) || 0 })
-                    }
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F05A22]"
+                    onChange={(e) => {
+                      setEditForm({ ...editForm, ratedCapacityMt: parseFloat(e.target.value) || 0 });
+                      if (editErrors.ratedCapacityMt) {
+                        setEditErrors((prev) => ({ ...prev, ratedCapacityMt: '' }));
+                      }
+                    }}
+                    className={`edit-veh-input ${editErrors.ratedCapacityMt ? 'has-error' : ''}`}
                   />
+                  {editErrors.ratedCapacityMt && (
+                    <span className="edit-veh-error-msg">
+                      <AlertCircle size={12} />
+                      {editErrors.ratedCapacityMt}
+                    </span>
+                  )}
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Minimum Capacity (MT)
+
+                <div className="edit-veh-field-group">
+                  <label className="edit-veh-label" htmlFor="edit-min-cap">
+                    Minimum Capacity (MT) *
                   </label>
                   <input
+                    id="edit-min-cap"
                     type="number"
+                    step="0.1"
+                    min="0"
                     value={editForm.minimumCapacityMt}
-                    onChange={(e) =>
+                    onChange={(e) => {
                       setEditForm({
                         ...editForm,
                         minimumCapacityMt: parseFloat(e.target.value) || 0,
-                      })
-                    }
-                    className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F05A22]"
+                      });
+                      if (editErrors.minimumCapacityMt) {
+                        setEditErrors((prev) => ({ ...prev, minimumCapacityMt: '' }));
+                      }
+                    }}
+                    className={`edit-veh-input ${editErrors.minimumCapacityMt ? 'has-error' : ''}`}
                   />
+                  {editErrors.minimumCapacityMt && (
+                    <span className="edit-veh-error-msg">
+                      <AlertCircle size={12} />
+                      {editErrors.minimumCapacityMt}
+                    </span>
+                  )}
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">RC Number</label>
+              {/* RC Number */}
+              <div className="edit-veh-field-group">
+                <label className="edit-veh-label" htmlFor="edit-rc-num">
+                  RC Number *
+                </label>
                 <input
+                  id="edit-rc-num"
                   type="text"
                   value={editForm.rcNumber}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, rcNumber: e.target.value.toUpperCase() })
-                  }
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F05A22]"
+                  onChange={(e) => {
+                    setEditForm({ ...editForm, rcNumber: e.target.value.toUpperCase() });
+                    if (editErrors.rcNumber) {
+                      setEditErrors((prev) => ({ ...prev, rcNumber: '' }));
+                    }
+                  }}
+                  placeholder="e.g. MH-12-AB-1234"
+                  className={`edit-veh-input ${editErrors.rcNumber ? 'has-error' : ''}`}
                 />
+                {editErrors.rcNumber && (
+                  <span className="edit-veh-error-msg">
+                    <AlertCircle size={12} />
+                    {editErrors.rcNumber}
+                  </span>
+                )}
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Operational Status
+              {/* Operational Status */}
+              <div className="edit-veh-field-group">
+                <label className="edit-veh-label" htmlFor="edit-status">
+                  Operational Status *
                 </label>
                 <select
+                  id="edit-status"
                   value={editForm.status}
-                  onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F05A22]"
+                  onChange={(e) => {
+                    setEditForm({ ...editForm, status: e.target.value });
+                    if (editErrors.status) {
+                      setEditErrors((prev) => ({ ...prev, status: '' }));
+                    }
+                  }}
+                  className={`edit-veh-select ${editErrors.status ? 'has-error' : ''}`}
                 >
                   <option value="ACTIVE">ACTIVE</option>
                   <option value="INACTIVE">INACTIVE</option>
                   <option value="MAINTENANCE">MAINTENANCE</option>
                 </select>
+                {editErrors.status && (
+                  <span className="edit-veh-error-msg">
+                    <AlertCircle size={12} />
+                    {editErrors.status}
+                  </span>
+                )}
               </div>
             </div>
 
-            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2">
+            {/* Modal Footer */}
+            <div className="edit-veh-modal-footer">
               <button
-                onClick={() => setEditingVehicle(null)}
-                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-lg"
+                type="button"
+                onClick={() => !isSavingEdit && setEditingVehicle(null)}
+                disabled={isSavingEdit}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleSaveEdit}
                 disabled={isSavingEdit}
-                className="px-5 py-2 text-xs font-bold text-white bg-[#F05A22] hover:bg-[#d94e1b] rounded-lg shadow-sm flex items-center gap-1.5"
+                className="px-5 py-2 text-xs font-bold text-white bg-[#F05A22] hover:bg-[#d94e1b] rounded-lg shadow-sm flex items-center gap-1.5 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <Save size={14} />
-                <span>{isSavingEdit ? 'Saving...' : 'Save Changes'}</span>
+                <span>{isSavingEdit ? 'Saving Changes...' : 'Save Changes'}</span>
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 9. Verify Documents Modal */}
-      {verifyingVehicle && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4" style={{ zIndex: 1200 }}>
-          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl border border-slate-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-emerald-50">
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-emerald-100 rounded-lg text-emerald-700">
-                  <ShieldCheck size={18} />
+      {/* 9. Verify Documents Modal — The TruckX Signature UI/UX Theme */}
+      {verifyingVehicle && (() => {
+        const vendorMeta = transporterDetails[verifyingVehicle.id];
+        const vendorName = vendorMeta?.vendorName || 'Transporter Partner';
+        const vendorCode = vendorMeta?.vendorCode || (vendorMeta?.vendorId ? formatDisplayId('VD', vendorMeta.vendorId) : '');
+
+        const approvedCount = [
+          docStatuses.rc,
+          docStatuses.insurance,
+          docStatuses.fitness,
+          docStatuses.permit,
+        ].filter((s) => s === 'APPROVED').length;
+
+        const rejectedCount = [
+          docStatuses.rc,
+          docStatuses.insurance,
+          docStatuses.fitness,
+          docStatuses.permit,
+        ].filter((s) => s === 'REJECTED').length;
+
+        const isAllApproved = approvedCount === 4;
+        const progressPercent = (approvedCount / 4) * 100;
+
+        return (
+          <div
+            className="vdir-modal-backdrop"
+            onClick={() => setVerifyingVehicle(null)}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="verify-veh-title"
+          >
+            <div
+              className="vdir-modal-card"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className="vdir-modal-header">
+                <div className="vdir-modal-header-left">
+                  <div className={`vdir-modal-header-icon ${isAllApproved ? 'emerald' : rejectedCount > 0 ? 'rose' : ''}`}>
+                    <ShieldCheck size={22} />
+                  </div>
+                  <div>
+                    <h3 id="verify-veh-title" className="vdir-modal-title">
+                      Verify Vehicle Documents
+                    </h3>
+                    <div className="vdir-modal-subtitle-row">
+                      <span className="vdir-modal-reg-plate">
+                        {verifyingVehicle.registration_number}
+                      </span>
+                      <span className="vdir-modal-subtext">
+                        {verifyingVehicle.vehicle_type}
+                        {verifyingVehicle.body_type ? ` • ${verifyingVehicle.body_type}` : ''}
+                        {verifyingVehicle.rated_capacity_mt ? ` • ${verifyingVehicle.rated_capacity_mt} MT` : ''}
+                      </span>
+                      {vendorName && (
+                        <span className="vdir-modal-subtext">
+                          • {vendorName} {vendorCode ? `(${vendorCode})` : ''}
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-bold text-emerald-950 text-base">Verify Vehicle Documents</h3>
-                  <p className="text-xs text-emerald-700 font-mono">
-                    {verifyingVehicle.registration_number}
+                <button
+                  onClick={() => setVerifyingVehicle(null)}
+                  className="vdir-modal-close-btn"
+                  title="Close modal"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="vdir-modal-body">
+                {/* Verification Progress & Fast-Track Banner */}
+                <div className="vdir-verify-banner">
+                  <div className="vdir-verify-banner-top">
+                    <div className="vdir-verify-banner-title">
+                      <FileText size={15} style={{ color: '#F05A22' }} />
+                      <span>Document Compliance Tracker:</span>
+                      <strong style={{ color: isAllApproved ? '#10B981' : rejectedCount > 0 ? '#E11D48' : '#F05A22' }}>
+                        {approvedCount}/4 Approved
+                      </strong>
+                    </div>
+
+                    {!isAllApproved && (
+                      <button
+                        type="button"
+                        onClick={handleApproveAllDocs}
+                        className="vdir-fast-track-btn"
+                        title="Mark all 4 documents as approved"
+                      >
+                        <Check size={13} />
+                        <span>Approve All 4</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="vdir-verify-progress-bar">
+                    <div
+                      className="vdir-verify-progress-fill"
+                      style={{ width: `${progressPercent}%` }}
+                    />
+                  </div>
+
+                  <p className="vdir-verify-banner-desc">
+                    Review statutory compliance documents. The vehicle is instantly cleared for operational assignment and trip dispatch once all 4 documents are marked Approved.
                   </p>
                 </div>
-              </div>
-              <button
-                onClick={() => setVerifyingVehicle(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200"
-              >
-                <X size={18} />
-              </button>
-            </div>
 
-            <div className="p-6 space-y-4">
-              <p className="text-xs text-slate-600">
-                Review and update individual document verification statuses. Vehicle will become eligible for operations once all required documents are marked Approved.
-              </p>
+                {/* Document Cards */}
+                {/* 1. Registration Certificate (RC) */}
+                <div className={`vdir-doc-item-card is-${docStatuses.rc.toLowerCase()}`}>
+                  <div className="vdir-doc-left">
+                    <div className="vdir-doc-icon-sq">
+                      <FileText size={20} />
+                    </div>
+                    <div className="vdir-doc-details">
+                      <div className="vdir-doc-title">Registration Certificate (RC)</div>
+                      <div className="vdir-doc-meta">
+                        <span className="vdir-doc-meta-item">
+                          Doc No: <strong className="font-mono">{verifyingVehicle.rc_number || verifyingVehicle.registration_number}</strong>
+                        </span>
+                        {verifyingVehicle.rc_expiry_date && (
+                          <span className="vdir-doc-meta-item">
+                            • Expiry: {formatDate(verifyingVehicle.rc_expiry_date)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
 
-              {/* RC */}
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-bold text-slate-800">Registration Certificate (RC)</div>
-                  <div className="text-[11px] text-slate-500">Document No: {verifyingVehicle.rc_number || verifyingVehicle.registration_number}</div>
+                  <div className="vdir-doc-right">
+                    <button
+                      type="button"
+                      className="vdir-doc-preview-btn"
+                      onClick={() => handlePreviewVerifyDoc('Registration Certificate (RC)', 'RC', docStatuses.rc)}
+                      title="Preview RC Document"
+                    >
+                      <Eye size={15} />
+                    </button>
+                    <select
+                      value={docStatuses.rc}
+                      onChange={(e) => setDocStatuses({ ...docStatuses, rc: e.target.value as any })}
+                      className={`vdir-doc-status-select sel-${docStatuses.rc.toLowerCase()}`}
+                    >
+                      <option value="PENDING">PENDING</option>
+                      <option value="APPROVED">APPROVED</option>
+                      <option value="REJECTED">REJECTED</option>
+                    </select>
+                  </div>
                 </div>
-                <select
-                  value={docStatuses.rc}
-                  onChange={(e) => setDocStatuses({ ...docStatuses, rc: e.target.value as any })}
-                  className="text-xs font-bold px-2.5 py-1.5 rounded border border-slate-300 outline-none"
-                >
-                  <option value="PENDING">PENDING</option>
-                  <option value="APPROVED">APPROVED</option>
-                  <option value="REJECTED">REJECTED</option>
-                </select>
-              </div>
 
-              {/* Insurance */}
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-bold text-slate-800">Vehicle Insurance</div>
-                  <div className="text-[11px] text-slate-500">Policy: {verifyingVehicle.insurance_policy_number || 'Standard Cover'}</div>
+                {/* 2. Vehicle Insurance */}
+                <div className={`vdir-doc-item-card is-${docStatuses.insurance.toLowerCase()}`}>
+                  <div className="vdir-doc-left">
+                    <div className="vdir-doc-icon-sq">
+                      <ShieldCheck size={20} />
+                    </div>
+                    <div className="vdir-doc-details">
+                      <div className="vdir-doc-title">Vehicle Insurance Policy</div>
+                      <div className="vdir-doc-meta">
+                        <span className="vdir-doc-meta-item">
+                          Policy: <strong className="font-mono">{verifyingVehicle.insurance_policy_number || 'Standard Comprehensive Cover'}</strong>
+                        </span>
+                        {verifyingVehicle.insurance_expiry_date && (
+                          <span className="vdir-doc-meta-item">
+                            • Expiry: {formatDate(verifyingVehicle.insurance_expiry_date)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="vdir-doc-right">
+                    <button
+                      type="button"
+                      className="vdir-doc-preview-btn"
+                      onClick={() => handlePreviewVerifyDoc('Vehicle Insurance Policy', 'INSURANCE', docStatuses.insurance)}
+                      title="Preview Insurance Document"
+                    >
+                      <Eye size={15} />
+                    </button>
+                    <select
+                      value={docStatuses.insurance}
+                      onChange={(e) => setDocStatuses({ ...docStatuses, insurance: e.target.value as any })}
+                      className={`vdir-doc-status-select sel-${docStatuses.insurance.toLowerCase()}`}
+                    >
+                      <option value="PENDING">PENDING</option>
+                      <option value="APPROVED">APPROVED</option>
+                      <option value="REJECTED">REJECTED</option>
+                    </select>
+                  </div>
                 </div>
-                <select
-                  value={docStatuses.insurance}
-                  onChange={(e) => setDocStatuses({ ...docStatuses, insurance: e.target.value as any })}
-                  className="text-xs font-bold px-2.5 py-1.5 rounded border border-slate-300 outline-none"
-                >
-                  <option value="PENDING">PENDING</option>
-                  <option value="APPROVED">APPROVED</option>
-                  <option value="REJECTED">REJECTED</option>
-                </select>
-              </div>
 
-              {/* Fitness */}
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-bold text-slate-800">Fitness Certificate</div>
-                  <div className="text-[11px] text-slate-500">RTO Vehicle Fitness Compliance</div>
+                {/* 3. Fitness Certificate */}
+                <div className={`vdir-doc-item-card is-${docStatuses.fitness.toLowerCase()}`}>
+                  <div className="vdir-doc-left">
+                    <div className="vdir-doc-icon-sq">
+                      <CheckCircle size={20} />
+                    </div>
+                    <div className="vdir-doc-details">
+                      <div className="vdir-doc-title">Fitness Certificate (RTO)</div>
+                      <div className="vdir-doc-meta">
+                        <span className="vdir-doc-meta-item">
+                          RTO Vehicle Fitness & Compliance
+                        </span>
+                        {verifyingVehicle.fitness_expiry_date && (
+                          <span className="vdir-doc-meta-item">
+                            • Expiry: {formatDate(verifyingVehicle.fitness_expiry_date)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="vdir-doc-right">
+                    <button
+                      type="button"
+                      className="vdir-doc-preview-btn"
+                      onClick={() => handlePreviewVerifyDoc('Fitness Certificate (RTO)', 'FITNESS', docStatuses.fitness)}
+                      title="Preview Fitness Certificate"
+                    >
+                      <Eye size={15} />
+                    </button>
+                    <select
+                      value={docStatuses.fitness}
+                      onChange={(e) => setDocStatuses({ ...docStatuses, fitness: e.target.value as any })}
+                      className={`vdir-doc-status-select sel-${docStatuses.fitness.toLowerCase()}`}
+                    >
+                      <option value="PENDING">PENDING</option>
+                      <option value="APPROVED">APPROVED</option>
+                      <option value="REJECTED">REJECTED</option>
+                    </select>
+                  </div>
                 </div>
-                <select
-                  value={docStatuses.fitness}
-                  onChange={(e) => setDocStatuses({ ...docStatuses, fitness: e.target.value as any })}
-                  className="text-xs font-bold px-2.5 py-1.5 rounded border border-slate-300 outline-none"
-                >
-                  <option value="PENDING">PENDING</option>
-                  <option value="APPROVED">APPROVED</option>
-                  <option value="REJECTED">REJECTED</option>
-                </select>
-              </div>
 
-              {/* Permit */}
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-bold text-slate-800">Commercial Permit</div>
-                  <div className="text-[11px] text-slate-500">National / State Freight Transport Permit</div>
+                {/* 4. Commercial Goods Permit */}
+                <div className={`vdir-doc-item-card is-${docStatuses.permit.toLowerCase()}`}>
+                  <div className="vdir-doc-left">
+                    <div className="vdir-doc-icon-sq">
+                      <Truck size={20} />
+                    </div>
+                    <div className="vdir-doc-details">
+                      <div className="vdir-doc-title">Commercial Goods Permit</div>
+                      <div className="vdir-doc-meta">
+                        <span className="vdir-doc-meta-item">
+                          National / State Freight Transport Permit
+                        </span>
+                        {verifyingVehicle.permit_expiry_date && (
+                          <span className="vdir-doc-meta-item">
+                            • Expiry: {formatDate(verifyingVehicle.permit_expiry_date)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="vdir-doc-right">
+                    <button
+                      type="button"
+                      className="vdir-doc-preview-btn"
+                      onClick={() => handlePreviewVerifyDoc('Commercial Goods Permit', 'PERMIT', docStatuses.permit)}
+                      title="Preview Commercial Permit"
+                    >
+                      <Eye size={15} />
+                    </button>
+                    <select
+                      value={docStatuses.permit}
+                      onChange={(e) => setDocStatuses({ ...docStatuses, permit: e.target.value as any })}
+                      className={`vdir-doc-status-select sel-${docStatuses.permit.toLowerCase()}`}
+                    >
+                      <option value="PENDING">PENDING</option>
+                      <option value="APPROVED">APPROVED</option>
+                      <option value="REJECTED">REJECTED</option>
+                    </select>
+                  </div>
                 </div>
-                <select
-                  value={docStatuses.permit}
-                  onChange={(e) => setDocStatuses({ ...docStatuses, permit: e.target.value as any })}
-                  className="text-xs font-bold px-2.5 py-1.5 rounded border border-slate-300 outline-none"
-                >
-                  <option value="PENDING">PENDING</option>
-                  <option value="APPROVED">APPROVED</option>
-                  <option value="REJECTED">REJECTED</option>
-                </select>
               </div>
-            </div>
 
-            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2">
-              <button
-                onClick={() => setVerifyingVehicle(null)}
-                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-lg"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveDocStatuses}
-                disabled={isSavingDocs}
-                className="px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm flex items-center gap-1.5"
-              >
-                <CheckCircle size={14} />
-                <span>{isSavingDocs ? 'Updating...' : 'Save Document Statuses'}</span>
-              </button>
+              {/* Modal Footer */}
+              <div className="vdir-modal-footer">
+                <div className={`vdir-footer-hint ${isAllApproved ? 'approved' : rejectedCount > 0 ? 'rejected' : ''}`}>
+                  {isAllApproved ? (
+                    <>
+                      <CheckCircle size={15} />
+                      <span>Ready to approve vehicle for operations</span>
+                    </>
+                  ) : rejectedCount > 0 ? (
+                    <>
+                      <AlertTriangle size={15} />
+                      <span>Vehicle will be marked as REJECTED</span>
+                    </>
+                  ) : (
+                    <>
+                      <Clock size={15} />
+                      <span>Vehicle remains PENDING_DOCS until all 4 approved</span>
+                    </>
+                  )}
+                </div>
+
+                <div className="vdir-footer-actions">
+                  <button
+                    type="button"
+                    onClick={() => setVerifyingVehicle(null)}
+                    className="vdir-btn-secondary"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveDocStatuses}
+                    disabled={isSavingDocs}
+                    className="vdir-btn-primary"
+                  >
+                    <CheckCircle size={15} />
+                    <span>{isSavingDocs ? 'Saving Updates...' : 'Save Document Statuses'}</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
-      {/* 10. Reject Vehicle Modal */}
+      {/* 10. Reject Vehicle Modal — The TruckX Signature UI/UX Theme */}
       {rejectingVehicle && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4" style={{ zIndex: 1200 }}>
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl border border-slate-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-rose-50">
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-rose-100 rounded-lg text-rose-600">
-                  <Ban size={18} />
+        <div
+          className="vdir-modal-backdrop"
+          onClick={() => setRejectingVehicle(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="vdir-modal-card max-w-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className="vdir-modal-header"
+              style={{ background: 'linear-gradient(135deg, #4C0519 0%, #881337 100%)' }}
+            >
+              <div className="vdir-modal-header-left">
+                <div className="vdir-modal-header-icon rose">
+                  <Ban size={20} />
                 </div>
                 <div>
-                  <h3 className="font-bold text-rose-900 text-base">Reject Vehicle</h3>
-                  <p className="text-xs text-rose-600 font-mono">
-                    {rejectingVehicle.registration_number}
-                  </p>
+                  <h3 className="vdir-modal-title">Reject Vehicle</h3>
+                  <div className="vdir-modal-subtitle-row">
+                    <span className="vdir-modal-reg-plate">
+                      {rejectingVehicle.registration_number}
+                    </span>
+                  </div>
                 </div>
               </div>
               <button
                 onClick={() => setRejectingVehicle(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200"
+                className="vdir-modal-close-btn"
+                title="Close modal"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="p-6 space-y-3">
-              <p className="text-xs text-slate-600">
+            <div className="vdir-modal-body">
+              <p style={{ fontSize: 12.5, color: '#475569', lineHeight: 1.5, margin: 0 }}>
                 Please provide the mandatory rejection reason. This will be recorded in the database audit log and sent to the vendor.
               </p>
               <textarea
@@ -3181,56 +3691,84 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                 onChange={(e) => setRejectionReason(e.target.value)}
                 placeholder="e.g. RC document unreadable or expired; Fitness certificate missing..."
                 rows={4}
-                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  fontSize: 12.5,
+                  border: '1.5px solid #CBD5E1',
+                  borderRadius: 10,
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                }}
               />
             </div>
 
-            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2">
-              <button
-                onClick={() => setRejectingVehicle(null)}
-                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-lg"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmReject}
-                disabled={isSubmittingReject}
-                className="px-5 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm flex items-center gap-1.5"
-              >
-                <Ban size={14} />
-                <span>{isSubmittingReject ? 'Rejecting...' : 'Confirm Rejection'}</span>
-              </button>
+            <div className="vdir-modal-footer">
+              <div />
+              <div className="vdir-footer-actions">
+                <button
+                  type="button"
+                  onClick={() => setRejectingVehicle(null)}
+                  className="vdir-btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmReject}
+                  disabled={isSubmittingReject}
+                  className="vdir-btn-primary"
+                  style={{ background: '#E11D48', boxShadow: '0 4px 12px rgba(225, 29, 72, 0.28)' }}
+                >
+                  <Ban size={14} />
+                  <span>{isSubmittingReject ? 'Rejecting...' : 'Confirm Rejection'}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* 11. Request Corrections Modal */}
+      {/* 11. Request Corrections Modal — The TruckX Signature UI/UX Theme */}
       {correctionVehicle && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4" style={{ zIndex: 1200 }}>
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl border border-slate-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-amber-50">
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-amber-100 rounded-lg text-amber-700">
-                  <MessageSquare size={18} />
+        <div
+          className="vdir-modal-backdrop"
+          onClick={() => setCorrectionVehicle(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="vdir-modal-card max-w-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className="vdir-modal-header"
+              style={{ background: 'linear-gradient(135deg, #451A03 0%, #78350F 100%)' }}
+            >
+              <div className="vdir-modal-header-left">
+                <div className="vdir-modal-header-icon amber">
+                  <MessageSquare size={20} />
                 </div>
                 <div>
-                  <h3 className="font-bold text-amber-950 text-base">Request Corrections</h3>
-                  <p className="text-xs text-amber-700 font-mono">
-                    {correctionVehicle.registration_number}
-                  </p>
+                  <h3 className="vdir-modal-title">Request Corrections</h3>
+                  <div className="vdir-modal-subtitle-row">
+                    <span className="vdir-modal-reg-plate">
+                      {correctionVehicle.registration_number}
+                    </span>
+                  </div>
                 </div>
               </div>
               <button
                 onClick={() => setCorrectionVehicle(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200"
+                className="vdir-modal-close-btn"
+                title="Close modal"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="p-6 space-y-3">
-              <p className="text-xs text-slate-600">
+            <div className="vdir-modal-body">
+              <p style={{ fontSize: 12.5, color: '#475569', lineHeight: 1.5, margin: 0 }}>
                 Identify the exact fields or documents requiring correction. The vendor will see these instructions in the Vendor App to update and resubmit.
               </p>
               <textarea
@@ -3238,25 +3776,39 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
                 onChange={(e) => setCorrectionFeedback(e.target.value)}
                 placeholder="e.g. Please re-upload a clear copy of the commercial fitness certificate and update the vehicle capacity..."
                 rows={4}
-                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  fontSize: 12.5,
+                  border: '1.5px solid #CBD5E1',
+                  borderRadius: 10,
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                }}
               />
             </div>
 
-            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2">
-              <button
-                onClick={() => setCorrectionVehicle(null)}
-                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-lg"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmCorrection}
-                disabled={isSubmittingCorrection}
-                className="px-5 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg shadow-sm flex items-center gap-1.5"
-              >
-                <MessageSquare size={14} />
-                <span>{isSubmittingCorrection ? 'Submitting...' : 'Send Correction Request'}</span>
-              </button>
+            <div className="vdir-modal-footer">
+              <div />
+              <div className="vdir-footer-actions">
+                <button
+                  type="button"
+                  onClick={() => setCorrectionVehicle(null)}
+                  className="vdir-btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmCorrection}
+                  disabled={isSubmittingCorrection}
+                  className="vdir-btn-primary"
+                  style={{ background: '#D97706', boxShadow: '0 4px 12px rgba(217, 119, 6, 0.28)' }}
+                >
+                  <MessageSquare size={14} />
+                  <span>{isSubmittingCorrection ? 'Submitting...' : 'Send Correction Request'}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -3551,23 +4103,37 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
         const displayId = d.driver_code || formatDisplayId('DR', d.id);
 
         return (
-          <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4" style={{ zIndex: 1200 }}>
-            <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl border border-slate-200 overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-blue-100 rounded-lg text-blue-600">
-                    <User size={18} />
+          <div
+            className="vdir-modal-backdrop"
+            onClick={() => setViewingDriverModal(null)}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div
+              className="vdir-modal-card max-w-lg"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="vdir-modal-header">
+                <div className="vdir-modal-header-left">
+                  <div className="vdir-modal-header-icon blue">
+                    <User size={20} />
                   </div>
                   <div>
-                    <h3 className="font-bold text-slate-800 text-base">Driver Profile & Verification</h3>
-                    <p className="text-xs text-slate-500 font-mono">
-                      {d.full_name} • {displayId}
-                    </p>
+                    <h3 className="vdir-modal-title">Driver Profile & Verification</h3>
+                    <div className="vdir-modal-subtitle-row">
+                      <span className="vdir-modal-reg-plate">
+                        {veh.registration_number}
+                      </span>
+                      <span className="vdir-modal-subtext">
+                        {d.full_name} • {displayId}
+                      </span>
+                    </div>
                   </div>
                 </div>
                 <button
                   onClick={() => setViewingDriverModal(null)}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200"
+                  className="vdir-modal-close-btn"
+                  title="Close modal"
                 >
                   <X size={18} />
                 </button>
@@ -3702,23 +4268,37 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
         const vendorMeta = transporterDetails[veh.id];
 
         return (
-          <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4" style={{ zIndex: 1200 }}>
-            <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl border border-slate-200 overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-orange-100 rounded-lg text-[#F05A22]">
-                    <User size={18} />
+          <div
+            className="vdir-modal-backdrop"
+            onClick={() => setAssigningDriverVehicle(null)}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div
+              className="vdir-modal-card max-w-lg"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="vdir-modal-header">
+                <div className="vdir-modal-header-left">
+                  <div className="vdir-modal-header-icon">
+                    <User size={20} />
                   </div>
                   <div>
-                    <h3 className="font-bold text-slate-800 text-base">Assign / Change Driver</h3>
-                    <p className="text-xs text-slate-500 font-mono">
-                      Vehicle: {veh.registration_number} • {vendorMeta?.vendorName || 'Transporter'}
-                    </p>
+                    <h3 className="vdir-modal-title">Assign / Change Driver</h3>
+                    <div className="vdir-modal-subtitle-row">
+                      <span className="vdir-modal-reg-plate">
+                        {veh.registration_number}
+                      </span>
+                      <span className="vdir-modal-subtext">
+                        {vendorMeta?.vendorName || 'Transporter Partner'}
+                      </span>
+                    </div>
                   </div>
                 </div>
                 <button
                   onClick={() => setAssigningDriverVehicle(null)}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200"
+                  className="vdir-modal-close-btn"
+                  title="Close modal"
                 >
                   <X size={18} />
                 </button>
@@ -3831,23 +4411,34 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
       {viewingHistoryVehicle && (() => {
         const veh = viewingHistoryVehicle;
         return (
-          <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4" style={{ zIndex: 1200 }}>
-            <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl border border-slate-200 overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-blue-100 rounded-lg text-blue-600">
-                    <Clock size={18} />
+          <div
+            className="vdir-modal-backdrop"
+            onClick={() => setViewingHistoryVehicle(null)}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div
+              className="vdir-modal-card max-w-md"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="vdir-modal-header">
+                <div className="vdir-modal-header-left">
+                  <div className="vdir-modal-header-icon blue">
+                    <Clock size={20} />
                   </div>
                   <div>
-                    <h3 className="font-bold text-slate-800 text-base">Verification History</h3>
-                    <p className="text-xs text-slate-500 font-mono">
-                      {veh.registration_number}
-                    </p>
+                    <h3 className="vdir-modal-title">Verification History</h3>
+                    <div className="vdir-modal-subtitle-row">
+                      <span className="vdir-modal-reg-plate">
+                        {veh.registration_number}
+                      </span>
+                    </div>
                   </div>
                 </div>
                 <button
                   onClick={() => setViewingHistoryVehicle(null)}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200"
+                  className="vdir-modal-close-btn"
+                  title="Close modal"
                 >
                   <X size={18} />
                 </button>
@@ -3910,23 +4501,34 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
         const vm = viewingVendorModal.vendorMeta;
         const veh = viewingVendorModal.vehicle;
         return (
-          <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4" style={{ zIndex: 1200 }}>
-            <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl border border-slate-200 overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-orange-100 rounded-lg text-[#F05A22]">
-                    <Building2 size={18} />
+          <div
+            className="vdir-modal-backdrop"
+            onClick={() => setViewingVendorModal(null)}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div
+              className="vdir-modal-card max-w-md"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="vdir-modal-header">
+                <div className="vdir-modal-header-left">
+                  <div className="vdir-modal-header-icon">
+                    <Building2 size={20} />
                   </div>
                   <div>
-                    <h3 className="font-bold text-slate-800 text-base">Associated Vendor Details</h3>
-                    <p className="text-xs text-slate-500 font-mono">
-                      {vm?.vendorCode || 'Vendor'}
-                    </p>
+                    <h3 className="vdir-modal-title">Associated Vendor Details</h3>
+                    <div className="vdir-modal-subtitle-row">
+                      <span className="vdir-modal-reg-plate">
+                        {vm?.vendorCode || 'Vendor'}
+                      </span>
+                    </div>
                   </div>
                 </div>
                 <button
                   onClick={() => setViewingVendorModal(null)}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200"
+                  className="vdir-modal-close-btn"
+                  title="Close modal"
                 >
                   <X size={18} />
                 </button>

@@ -1226,7 +1226,11 @@ function AdminShell() {
               {/* Driver Management Route */}
               <Route path="drivers" element={
                 <RequirePermission module="drivers">
-                  <DriverVerificationQueue onAuditDriver={(_id) => {}} />
+                  <DriverVerificationQueue
+                    onAuditDriver={(_id) => {}}
+                    onNavigateToVendorProfile={(id) => navigate(`/admin/vendors/${id}`)}
+                    onNavigateToVehicleDirectory={() => navigate('/admin/fleet')}
+                  />
                 </RequirePermission>
               } />
 
