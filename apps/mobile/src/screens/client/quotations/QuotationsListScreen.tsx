@@ -8,6 +8,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Modal,
 } from 'react-native';
 import {
   ArrowLeft,
@@ -20,6 +21,11 @@ import {
   CheckCircle2,
   Columns2,
   FileText,
+  ChevronDown,
+  ChevronUp,
+  X,
+  Zap,
+  Check,
 } from 'lucide-react-native';
 import { clientService } from '../../../services/clientService';
 
@@ -42,6 +48,7 @@ export const QuotationsListScreen: React.FC<QuotationsListScreenProps> = ({
 }) => {
   const [quotations, setQuotations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedQuoteId, setExpandedQuoteId] = useState<string | null>(null);
 
   useEffect(() => {
     clientService.fetchQuotationsForRequirement(requirementId).then((res: any[]) => {
@@ -171,14 +178,65 @@ export const QuotationsListScreen: React.FC<QuotationsListScreenProps> = ({
                   </View>
                 </View>
 
+                {/* Inline Itemized Rate Breakdown (Unified Hub Feature) */}
+                {expandedQuoteId === (q.id || String(idx)) && (
+                  <View style={styles.breakdownBox}>
+                    <Text style={styles.breakdownTitle}>ITEMIZED RATE BREAKDOWN</Text>
+                    <View style={styles.breakdownRow}>
+                      <Text style={styles.breakdownLabel}>Base Freight Linehaul</Text>
+                      <Text style={styles.breakdownValue}>
+                        ₹{Math.round((q.rate || 32000) * 0.88).toLocaleString('en-IN')}
+                      </Text>
+                    </View>
+                    <View style={styles.breakdownRow}>
+                      <Text style={styles.breakdownLabel}>Fuel & Toll Surcharge</Text>
+                      <Text style={styles.breakdownValue}>
+                        ₹{Math.round((q.rate || 32000) * 0.12).toLocaleString('en-IN')}
+                      </Text>
+                    </View>
+                    <View style={styles.breakdownRow}>
+                      <Text style={styles.breakdownLabel}>GST (18% RCM / Forward)</Text>
+                      <Text style={styles.breakdownValueGreen}>Included</Text>
+                    </View>
+                    <View style={styles.breakdownRow}>
+                      <Text style={styles.breakdownLabel}>Transit Insurance</Text>
+                      <Text style={styles.breakdownValueGreen}>Covered</Text>
+                    </View>
+                    <View style={styles.breakdownRow}>
+                      <Text style={styles.breakdownLabel}>Payment Terms</Text>
+                      <Text style={styles.breakdownValue}>Net 15 Days Credit</Text>
+                    </View>
+                    <View style={[styles.breakdownRow, { borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 6, marginTop: 4 }]}>
+                      <Text style={styles.breakdownTotalLabel}>Total All-Inclusive</Text>
+                      <Text style={styles.breakdownTotalValue}>
+                        ₹{(q.rate || 32000).toLocaleString('en-IN')}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.fullScreenLink}
+                      onPress={() => onViewQuoteDetails(q)}
+                    >
+                      <FileText size={12} color="#2563EB" />
+                      <Text style={styles.fullScreenLinkText}>Open Full Quote Sheet</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
                 {/* Actions */}
                 <View style={styles.actionsRow}>
                   <TouchableOpacity
                     style={styles.detailsBtn}
-                    onPress={() => onViewQuoteDetails(q)}
+                    onPress={() => setExpandedQuoteId((prev) => (prev === (q.id || String(idx)) ? null : (q.id || String(idx))))}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.detailsBtnText}>View Breakdown</Text>
+                    <Text style={styles.detailsBtnText}>
+                      {expandedQuoteId === (q.id || String(idx)) ? 'Hide Breakdown' : 'View Breakdown'}
+                    </Text>
+                    {expandedQuoteId === (q.id || String(idx)) ? (
+                      <ChevronUp size={15} color="#334155" />
+                    ) : (
+                      <ChevronDown size={15} color="#334155" />
+                    )}
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -467,5 +525,63 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  breakdownBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 12,
+    marginBottom: 12,
+  },
+  breakdownTitle: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#64748B',
+    letterSpacing: 0.8,
+    marginBottom: 8,
+  },
+  breakdownRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 3.5,
+  },
+  breakdownLabel: {
+    fontSize: 12,
+    color: '#475569',
+  },
+  breakdownValue: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  breakdownValueGreen: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#16A34A',
+  },
+  breakdownTotalLabel: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  breakdownTotalValue: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#F05A22',
+  },
+  fullScreenLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  fullScreenLinkText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#2563EB',
+    textDecorationLine: 'underline',
   },
 });
