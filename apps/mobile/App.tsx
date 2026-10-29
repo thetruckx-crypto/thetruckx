@@ -358,6 +358,9 @@ export default function App() {
   const [selectedQuotation, setSelectedQuotation] = useState<any | null>(null);
   const [activeBookingId, setActiveBookingId] = useState<string>('');
   const [activeTrackingId, setActiveTrackingId] = useState<string>('');
+  const [documentsReturnScreen, setDocumentsReturnScreen] = useState<ScreenId>('SHIPMENT_TRACKING');
+  const [podReturnScreen, setPodReturnScreen] = useState<ScreenId>('SHIPMENT_TRACKING');
+  const [bookingReturnScreen, setBookingReturnScreen] = useState<ScreenId>('MY_SHIPMENTS');
 
   // Vendor Registration & Operations Flow State
   const [registeredVendorId, setRegisteredVendorId] = useState<string>('');
@@ -1420,7 +1423,7 @@ export default function App() {
             const targetRef = refId || selectedNotification.refId;
             const category = selectedNotification.category;
 
-            if (targetRef?.startsWith('BOK')) {
+            if (targetRef?.startsWith('BOK') || targetRef?.startsWith('BK')) {
               setActiveBookingId(targetRef);
               if (selectedRole === 'VENDOR') {
                 setCurrentScreen('VENDOR_BOOKING_DETAILS');
@@ -1922,6 +1925,7 @@ export default function App() {
           onBookShipment={handleStartNewRequirement}
           onNavigateToBookingDetails={(bookingId) => {
             setActiveBookingId(bookingId);
+            setBookingReturnScreen('MY_SHIPMENTS');
             setCurrentScreen('BOOKING_DETAILS');
           }}
           onOpenProfile={() => setCurrentScreen('PROFILE')}
@@ -1936,6 +1940,7 @@ export default function App() {
           onBack={() => setCurrentScreen('MY_SHIPMENTS')}
           onSelectBooking={(bokId) => {
             setActiveBookingId(bokId);
+            setBookingReturnScreen('MY_BOOKINGS');
             setCurrentScreen('BOOKING_DETAILS');
           }}
           onTrackShipment={(id) => {
@@ -1950,17 +1955,19 @@ export default function App() {
       {currentScreen === 'BOOKING_DETAILS' && (
         <BookingDetailsScreen
           bookingId={activeBookingId}
-          onBack={() => setCurrentScreen('MY_SHIPMENTS')}
+          onBack={() => setCurrentScreen(bookingReturnScreen || 'MY_SHIPMENTS')}
           onTrackShipment={(id) => {
             setActiveTrackingId(id);
             setCurrentScreen('SHIPMENT_TRACKING');
           }}
           onViewDocuments={(id) => {
             setActiveTrackingId(id);
+            setDocumentsReturnScreen('BOOKING_DETAILS');
             setCurrentScreen('SHIPMENT_DOCUMENTS');
           }}
           onViewPod={(id) => {
             setActiveTrackingId(id);
+            setPodReturnScreen('BOOKING_DETAILS');
             setCurrentScreen('PROOF_OF_DELIVERY');
           }}
           onViewRequirement={(reqId) => {
@@ -1978,10 +1985,12 @@ export default function App() {
           onBack={() => setCurrentScreen('BOOKING_DETAILS')}
           onViewDocuments={(id) => {
             setActiveTrackingId(id);
+            setDocumentsReturnScreen('SHIPMENT_TRACKING');
             setCurrentScreen('SHIPMENT_DOCUMENTS');
           }}
           onViewPod={(id) => {
             setActiveTrackingId(id);
+            setPodReturnScreen('SHIPMENT_TRACKING');
             setCurrentScreen('PROOF_OF_DELIVERY');
           }}
           onViewDetails={(id) => {
@@ -1996,7 +2005,7 @@ export default function App() {
       {currentScreen === 'SHIPMENT_DOCUMENTS' && (
         <ShipmentDocumentsScreen
           shipmentId={activeTrackingId || activeBookingId}
-          onBack={() => setCurrentScreen('SHIPMENT_TRACKING')}
+          onBack={() => setCurrentScreen(documentsReturnScreen || 'SHIPMENT_TRACKING')}
           onViewPod={(id) => {
             setActiveTrackingId(id);
             setCurrentScreen('PROOF_OF_DELIVERY');
@@ -2008,7 +2017,7 @@ export default function App() {
       {currentScreen === 'PROOF_OF_DELIVERY' && (
         <ProofOfDeliveryScreen
           shipmentId={activeTrackingId || activeBookingId}
-          onBack={() => setCurrentScreen('SHIPMENT_TRACKING')}
+          onBack={() => setCurrentScreen(podReturnScreen || 'SHIPMENT_TRACKING')}
           onContactSupport={() => setCurrentScreen('HELP_SUPPORT')}
         />
       )}
