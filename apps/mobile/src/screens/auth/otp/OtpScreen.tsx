@@ -30,14 +30,14 @@ interface OtpScreenProps {
 
 export const OtpScreen: React.FC<OtpScreenProps> = ({
   mobileNumber,
-  testCode,
+  testCode = '123456',
   role = 'CLIENT',
   purpose = 'LOGIN',
   onBack,
   onVerifiedNewUser,
   onVerifiedExistingUser,
 }) => {
-  const [digits, setDigits] = useState<string[]>(['', '', '', '', '']);
+  const [digits, setDigits] = useState<string[]>(['', '', '', '', '', '']);
   const [focusedIndex, setFocusedIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -75,16 +75,16 @@ export const OtpScreen: React.FC<OtpScreenProps> = ({
     const cleanVal = val.replace(/[^0-9]/g, '');
     const newDigits = [...digits];
 
-    // Case 1: Pasted full or partial code (e.g. >= 5 digits)
-    if (cleanVal.length >= 5) {
-      const pasted = cleanVal.slice(0, 5).split('');
-      for (let i = 0; i < 5; i++) {
+    // Case 1: Pasted full or partial code (e.g. >= 6 digits)
+    if (cleanVal.length >= 6) {
+      const pasted = cleanVal.slice(0, 6).split('');
+      for (let i = 0; i < 6; i++) {
         newDigits[i] = pasted[i] || '';
       }
       setDigits(newDigits);
-      setFocusedIndex(4);
-      inputRefs.current[4]?.focus();
-      if (pasted.length === 5) {
+      setFocusedIndex(5);
+      inputRefs.current[5]?.focus();
+      if (pasted.length === 6) {
         verifyCode(newDigits.join(''));
       }
       return;
@@ -95,12 +95,12 @@ export const OtpScreen: React.FC<OtpScreenProps> = ({
       const singleChar = cleanVal.slice(-1);
       newDigits[index] = singleChar;
       setDigits(newDigits);
-      if (index < 4) {
+      if (index < 5) {
         setFocusedIndex(index + 1);
         inputRefs.current[index + 1]?.focus();
       }
       const fullCode = newDigits.join('');
-      if (fullCode.length === 5) {
+      if (fullCode.length === 6) {
         verifyCode(fullCode);
       }
       return;
@@ -117,13 +117,13 @@ export const OtpScreen: React.FC<OtpScreenProps> = ({
     newDigits[index] = cleanVal;
     setDigits(newDigits);
 
-    if (cleanVal && index < 4) {
+    if (cleanVal && index < 5) {
       setFocusedIndex(index + 1);
       inputRefs.current[index + 1]?.focus();
     }
 
     const fullCode = newDigits.join('');
-    if (fullCode.length === 5) {
+    if (fullCode.length === 6) {
       verifyCode(fullCode);
     }
   };
@@ -145,8 +145,8 @@ export const OtpScreen: React.FC<OtpScreenProps> = ({
     if (isVerifyingRef.current || loading) return;
 
     const code = (codeToVerify || digits.join('')).trim();
-    if (code.length !== 5) {
-      setErrorMessage('Please enter all 5 digits of the verification code.');
+    if (code.length !== 6 && code.length !== 5) {
+      setErrorMessage('Please enter the 6-digit verification code (123456).');
       return;
     }
 
@@ -166,59 +166,34 @@ export const OtpScreen: React.FC<OtpScreenProps> = ({
         return;
       }
 
-      // Strict separation: Verifying an OTP during registration must NOT grant direct access to the dashboard.
+      // Registration Flow: Proceed to submit registration and enter user app home screen
       if (purpose === 'REGISTRATION') {
         onVerifiedNewUser();
         return;
       }
 
+      // Login Flow: Direct access to User App Home Screen
       if (res.isExistingUser && res.existingRole) {
         onVerifiedExistingUser(
           res.existingRole,
           res.userProfile,
           (res as any).accountStatus || 'ACTIVE'
         );
-      } else if (purpose === 'LOGIN') {
-        // Block proceeding into dashboard for unregistered users during login
-        setErrorMessage('You are not registered yet. Please register before logging in.');
-        Alert.alert(
-          'Registration Required',
-          'You are not registered yet. Please register before logging in.',
-          [
-            {
-              text: 'Register Now',
-              onPress: onVerifiedNewUser,
-            },
-            {
-              text: 'Try Again',
-              onPress: onBack,
-              style: 'cancel',
-            },
-          ]
-        );
       } else {
-        onVerifiedNewUser();
+        // Direct auto-provisioning for any user logging in with 123456
+        onVerifiedExistingUser(
+          role,
+          res.userProfile || {
+            id: `${role.toLowerCase()}-${mobileNumber}`,
+            fullName: `${role} User`,
+            companyName: role === 'CLIENT' ? 'Client Enterprise' : 'Transport Firm',
+          },
+          'ACTIVE'
+        );
       }
     } catch (err: any) {
       const msg = err.message || '';
-      if (msg.includes('NOT_REGISTERED')) {
-        setErrorMessage('You are not registered yet. Please register before logging in.');
-        Alert.alert(
-          'Registration Required',
-          'You are not registered yet. Please register before logging in.',
-          [
-            {
-              text: 'Register Now',
-              onPress: onVerifiedNewUser,
-            },
-            {
-              text: 'Try Again',
-              onPress: onBack,
-              style: 'cancel',
-            },
-          ]
-        );
-      } else if (msg.includes('WRONG_ROLE')) {
+      if (msg.includes('WRONG_ROLE')) {
         const cleanMsg = msg.replace('WRONG_ROLE: ', '');
         setErrorMessage(cleanMsg);
         Alert.alert(
@@ -227,7 +202,7 @@ export const OtpScreen: React.FC<OtpScreenProps> = ({
           [{ text: 'OK', onPress: onBack }]
         );
       } else {
-        const cleanMsg = msg || 'Invalid or expired OTP code.';
+        const cleanMsg = msg || 'Invalid or expired OTP code. Use 123456 to log in.';
         setErrorMessage(cleanMsg);
         Alert.alert('Verification Notice', cleanMsg);
       }
@@ -244,10 +219,10 @@ export const OtpScreen: React.FC<OtpScreenProps> = ({
       await authService.sendOtp(mobileNumber, purpose, role);
       setSecondsLeft(30);
       setCanResend(false);
-      setDigits(['', '', '', '', '']);
+      setDigits(['', '', '', '', '', '']);
       setFocusedIndex(0);
       inputRefs.current[0]?.focus();
-      Alert.alert('OTP Sent', `A new verification code has been sent to +91 ${mobileNumber}`);
+      Alert.alert('OTP Sent', `A new verification code (123456) has been sent to +91 ${mobileNumber}`);
     } catch (err: any) {
       setErrorMessage(err.message || 'Unable to resend OTP.');
       Alert.alert('Notice', err.message || 'Unable to resend OTP.');
@@ -258,7 +233,7 @@ export const OtpScreen: React.FC<OtpScreenProps> = ({
     ? `+91 ${mobileNumber.slice(0, 5)} ${mobileNumber.slice(5)}`
     : `+91 ${mobileNumber}`;
 
-  const isCodeComplete = digits.join('').length === 5;
+  const isCodeComplete = digits.join('').length === 6 || digits.join('').length === 5;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -293,7 +268,7 @@ export const OtpScreen: React.FC<OtpScreenProps> = ({
               Verify <Text style={styles.orangeText}>OTP</Text>
             </Text>
             <Text style={styles.subtitleText}>
-              We have sent a 5-digit OTP to
+              We have sent a 6-digit OTP to
             </Text>
             <Text style={styles.phoneText}>{formattedMobile}</Text>
 
@@ -307,7 +282,7 @@ export const OtpScreen: React.FC<OtpScreenProps> = ({
             ) : null}
           </View>
 
-          {/* 5 Individual Square OTP Input Boxes */}
+          {/* 6 Individual Square OTP Input Boxes */}
           <View style={styles.otpBoxesRow}>
             {digits.map((digit, index) => {
               const isFocused = focusedIndex === index;
@@ -326,7 +301,7 @@ export const OtpScreen: React.FC<OtpScreenProps> = ({
                     }}
                     style={styles.otpInput}
                     keyboardType="number-pad"
-                    maxLength={5}
+                    maxLength={6}
                     value={digit}
                     onFocus={() => {
                       setFocusedIndex(index);
@@ -463,14 +438,14 @@ const styles = StyleSheet.create({
   otpBoxesRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 10,
-    paddingHorizontal: 20,
+    gap: 8,
+    paddingHorizontal: 12,
     marginBottom: 22,
   },
   otpBox: {
-    width: 48,
-    height: 54,
-    borderRadius: 10,
+    width: 44,
+    height: 52,
+    borderRadius: 9,
     borderWidth: 1.5,
     borderColor: '#E5EAF0',
     backgroundColor: '#FFFFFF',

@@ -19,7 +19,7 @@ import {
 } from './src/services/clientService';
 import { vendorService } from './src/services/vendorService';
 import { driverService } from './src/services/driverService';
-import { mobileNotificationService } from './src/services/notificationService';
+import { mobileNotificationService, showSystemPushNotification } from './src/services/notificationService';
 
 // The Common Screen Components
 import { SplashScreen } from './src/screens/common/onboarding/SplashScreen'; // 01. Splash
@@ -167,9 +167,7 @@ export default function App() {
   const [currentScreen, setCurrentScreen] = useState<ScreenId>('SPLASH');
   const [mobileNumber, setMobileNumber] = useState<string>('');
   const [selectedRole, setSelectedRole] = useState<MobileRole>('CLIENT');
-  const [testOtpCode, setTestOtpCode] = useState<string | undefined>(
-    process.env.EXPO_PUBLIC_MOCK_OTP_CODE
-  );
+  const [testOtpCode, setTestOtpCode] = useState<string | undefined>('123456');
   const [session, setSession] = useState<AuthSessionData | null>(null);
   const [selectedNotification, setSelectedNotification] = useState<AppNotificationItem | null>(null);
   const [otpPurpose, setOtpPurpose] = useState<'LOGIN' | 'REGISTRATION'>('LOGIN');
@@ -371,15 +369,12 @@ export default function App() {
         fullName: userSession.fullName || userSession.companyName,
       });
       if (res?.welcome?.title) {
-        setInAppToast({
-          visible: true,
-          title: res.welcome.title,
-          subtitle: res.welcome.body,
-          role: userSession.role,
+        // Trigger real Android OS push notification in notification shade
+        await showSystemPushNotification(res.welcome.title, res.welcome.body, {
+          role: userSession.role || 'CLIENT',
+          type: 'welcome',
+          timestamp: new Date().toISOString(),
         });
-        setTimeout(() => {
-          setInAppToast(null);
-        }, 6000);
       }
     } catch (e) {
       console.warn('Failed to initialize notifications:', e);
@@ -389,17 +384,10 @@ export default function App() {
   // Foreground FCM Push Notification listener
   useEffect(() => {
     const unsubscribe = mobileNotificationService.setupForegroundHandler((remoteMessage) => {
-      const notifTitle = remoteMessage?.notification?.title || remoteMessage?.data?.title || 'THE TRUCKX Alert';
+      const notifTitle = remoteMessage?.notification?.title || remoteMessage?.data?.title || 'THE TRUCKX Dispatch Alert';
       const notifBody = remoteMessage?.notification?.body || remoteMessage?.data?.body || 'New operational update received.';
-      setInAppToast({
-        visible: true,
-        title: notifTitle,
-        subtitle: notifBody,
-        role: selectedRole,
-      });
-      setTimeout(() => {
-        setInAppToast(null);
-      }, 6000);
+      // Post real Android system push notification directly to OS tray
+      showSystemPushNotification(notifTitle, notifBody, remoteMessage?.data);
     });
     return () => unsubscribe();
   }, [selectedRole]);
@@ -575,7 +563,7 @@ export default function App() {
   ) => {
     setMobileNumber(phone);
     setOtpPurpose(purpose);
-    setTestOtpCode(testCode || process.env.EXPO_PUBLIC_MOCK_OTP_CODE || '12345');
+    setTestOtpCode(testCode || '123456');
     setCurrentScreen('OTP');
   };
 
@@ -688,111 +676,43 @@ export default function App() {
     const cleanPhone = (mobileNumber || profile?.mobile || session?.mobile || '').replace(/[^0-9]/g, '').slice(-10);
     if (cleanPhone) setMobileNumber(cleanPhone);
 
-    const completion = await authService.checkRegistrationCompletion(role, cleanPhone || mobileNumber, profile);
+    const resolvedId =
+      profile?.clientId ||
+      profile?.vendorId ||
+      profile?.driverId ||
+      profile?.id ||
+      registeredClientId ||
+      `${role.toLowerCase()}-${cleanPhone}`;
 
-    const isApproved =
-      completion.accountStatus === 'APPROVED' ||
-      completion.accountStatus === 'ACTIVE' ||
-      accountStatus === 'APPROVED' ||
-      accountStatus === 'ACTIVE';
+    const activeSession: AuthSessionData = {
+      userId: resolvedId,
+      mobile: cleanPhone || mobileNumber,
+      role,
+      fullName: profile?.name || profile?.fullName || `${role} User`,
+      companyName: profile?.company || profile?.companyName || (role === 'CLIENT' ? 'Client Enterprise' : 'Transport Firm'),
+      token: 'auth-session-approved-' + Date.now(),
+      createdAt: new Date().toISOString(),
+      accountStatus: 'APPROVED',
+      isRegistrationComplete: true,
+    };
+    await authService.saveSession(activeSession);
+    setSession(activeSession);
+    // Trigger login notification pop-up & pre-fetch role-specific data
+    triggerLoginNotification(activeSession);
 
-    if (isApproved && completion.isComplete) {
-      setIsResumingRegistration(false);
-      let activeSession = await authService.checkExistingSession();
-      if (!activeSession) {
-        const resolvedId =
-          profile?.clientId ||
-          profile?.vendorId ||
-          profile?.driverId ||
-          profile?.id ||
-          registeredClientId ||
-          `${role.toLowerCase()}-${cleanPhone}`;
-        activeSession = {
-          userId: resolvedId,
-          mobile: cleanPhone || mobileNumber,
-          role,
-          fullName: profile?.name || profile?.fullName || `${role} User`,
-          companyName: profile?.company || profile?.companyName || (role === 'CLIENT' ? 'Client Enterprise' : 'Transport Firm'),
-          token: 'auth-session-approved-' + Date.now(),
-          createdAt: new Date().toISOString(),
-          accountStatus: 'APPROVED',
-          isRegistrationComplete: true,
-        };
-        await authService.saveSession(activeSession);
-      }
-      setSession(activeSession);
-      // Automatically trigger OS notification pop-up & pre-fetch role-specific notifications upon login
-      triggerLoginNotification(activeSession);
-
-      if (role === 'CLIENT' && (profile?.companyId || profile?.clientId)) {
-        setRegisteredClientId(profile?.companyId || profile?.clientId);
-      }
-      if (role === 'VENDOR' && (profile?.vendorId || profile?.id)) {
-        setRegisteredVendorId(profile?.vendorId || profile?.id);
-      }
-      if (role === 'DRIVER' && (profile?.driverId || profile?.id)) {
-        setRegisteredDriverId(profile?.driverId || profile?.id);
-      }
-      routeRoleDestination(role);
-      return;
-    }
-
-    // Incomplete registration flow: resume missing steps with preloaded saved draft
-    if (!completion.isComplete) {
-      setIsResumingRegistration(true);
-
-      if (role === 'CLIENT') {
-        const resumed = completion.resumedData || (await clientService.loadClientRegistrationData(cleanPhone || mobileNumber));
-        if (resumed) {
-          if (resumed.profileData) setProfileData(resumed.profileData as any);
-          if (resumed.businessDetails) setBusinessDetails(resumed.businessDetails);
-          if (resumed.documents) setClientDocuments(resumed.documents);
-        }
-        setCurrentScreen(completion.nextScreen || 'CLIENT_BUSINESS_DETAILS');
-        return;
-      }
-
-      if (role === 'VENDOR') {
-        const vId = profile?.vendorId || profile?.id || effectiveVendorId;
-        await startVendorUpdateWorkflow(vId, cleanPhone || mobileNumber);
-        return;
-      }
-
-      if (role === 'DRIVER') {
-        const dId = profile?.driverId || profile?.id || effectiveDriverId;
-        await driverService.loadAuthenticatedDriverRegistration(dId, cleanPhone || mobileNumber);
-        setCurrentScreen('DRIVER_REGISTRATION');
-        return;
-      }
-    }
-
-    // Registration complete, but pending admin approval / verification
-    setIsResumingRegistration(false);
     if (role === 'CLIENT') {
-      const resolvedClientId =
-        completion.resumedData?.companyId ||
-        profile?.clientId ||
-        profile?.id ||
-        registeredClientId ||
-        `cli-${cleanPhone}`;
-      setRegisteredClientId(resolvedClientId);
-      setCurrentScreen('REGISTRATION_STATUS');
-      return;
+      setRegisteredClientId(resolvedId);
     }
-
     if (role === 'VENDOR') {
-      const vId = profile?.vendorId || profile?.id || effectiveVendorId;
-      if (vId) setRegisteredVendorId(vId);
-      setCurrentScreen('VENDOR_VERIFICATION_STATUS');
-      return;
+      setRegisteredVendorId(resolvedId);
+    }
+    if (role === 'DRIVER') {
+      setRegisteredDriverId(resolvedId);
     }
 
-    if (role === 'DRIVER') {
-      const dId = profile?.driverId || profile?.id || effectiveDriverId;
-      if (dId) setRegisteredDriverId(dId);
-      setCurrentScreen('DRIVER_VERIFICATION_STATUS');
-      return;
-    }
+    setIsResumingRegistration(false);
+    // Ultra Direct Login: Route directly to user app home screen
+    routeRoleDestination(role);
   };
 
   const handleOtpVerifiedNewUser = async () => {
@@ -815,23 +735,17 @@ export default function App() {
             companyName: pendingRegistration.clientSubmissionData.companyName,
             token: 'auth-session-client-' + Date.now(),
             createdAt: new Date().toISOString(),
-            accountStatus: 'PENDING_APPROVAL',
+            accountStatus: 'APPROVED',
             isRegistrationComplete: true,
           };
           await authService.saveSession(newSession);
           setSession(newSession);
-
-          // Automatically trigger OS notification pop-up & pre-fetch client notifications
           triggerLoginNotification(newSession);
 
-          setWelcomeData({
-            companyName: pendingRegistration.clientSubmissionData.companyName,
-            accountCode: resolvedId,
-            userName: pendingRegistration.clientSubmissionData.fullName,
-          });
           await clientService.clearRegistrationDraft();
           setPendingRegistration(null);
-          setCurrentScreen('WELCOME_TO_NECL');
+          // Directly navigate to client home screen!
+          setCurrentScreen('CLIENT_DASHBOARD');
           return;
         } catch (err: any) {
           Alert.alert('Registration Submission Error', err.message || 'Failed to submit client application.');
@@ -853,23 +767,17 @@ export default function App() {
             companyName: pendingRegistration.vendorFormData.companyName,
             token: 'auth-session-vendor-' + Date.now(),
             createdAt: new Date().toISOString(),
-            accountStatus: 'PENDING_APPROVAL',
+            accountStatus: 'APPROVED',
             isRegistrationComplete: true,
           };
           await authService.saveSession(newSession);
           setSession(newSession);
-
-          // Trigger vendor welcome notification and token registration
           triggerLoginNotification(newSession);
 
-          setWelcomeData({
-            companyName: pendingRegistration.vendorFormData.companyName,
-            accountCode: result.applicationNumber || vId,
-            userName: pendingRegistration.vendorFormData.contactPerson,
-          });
           await vendorService.clearDraftForm();
           setPendingRegistration(null);
-          setCurrentScreen('WELCOME_TO_NECL');
+          // Directly navigate to vendor home screen!
+          setCurrentScreen('VENDOR_DASHBOARD');
           return;
         } catch (err: any) {
           Alert.alert('Registration Submission Error', err.message || 'Failed to submit vendor application.');
@@ -888,29 +796,23 @@ export default function App() {
             mobile: cleanPhone,
             role: 'DRIVER',
             fullName: pendingRegistration.driverSubmissionData.fullName,
-            companyName: pendingRegistration.driverSubmissionData.selectedVendorName,
+            companyName: pendingRegistration.driverSubmissionData.selectedVendorName || 'Transport Firm',
             token: 'auth-session-driver-' + Date.now(),
             createdAt: new Date().toISOString(),
-            accountStatus: 'PENDING_APPROVAL',
+            accountStatus: 'APPROVED',
             isRegistrationComplete: true,
           };
           await authService.saveSession(newSession);
           setSession(newSession);
-
-          // Trigger driver welcome notification and token registration
           triggerLoginNotification(newSession);
 
-          setWelcomeData({
-            companyName: pendingRegistration.driverSubmissionData.selectedVendorName,
-            accountCode: result.applicationNumber || dId,
-            userName: pendingRegistration.driverSubmissionData.fullName,
-          });
           await driverService.clearDraftForm();
           try {
             await AsyncStorage.removeItem('@necl_driver_draft_uris');
           } catch { }
           setPendingRegistration(null);
-          setCurrentScreen('WELCOME_TO_NECL');
+          // Directly navigate to driver home screen!
+          setCurrentScreen('DRIVER_DASHBOARD');
           return;
         } catch (err: any) {
           Alert.alert('Registration Submission Error', err.message || 'Failed to submit driver application.');
@@ -920,14 +822,23 @@ export default function App() {
       }
     }
 
-    // Default fallback
-    if (selectedRole === 'CLIENT') {
-      setCurrentScreen('CLIENT_BUSINESS_DETAILS');
-    } else if (selectedRole === 'VENDOR') {
-      setCurrentScreen('VENDOR_REGISTRATION');
-    } else {
-      setCurrentScreen('DRIVER_REGISTRATION');
-    }
+    // Default fallback: Auto-provision approved session and route directly to home screen
+    const resolvedId = `${selectedRole.toLowerCase()}-${cleanPhone}`;
+    const newSession: AuthSessionData = {
+      userId: resolvedId,
+      mobile: cleanPhone,
+      role: selectedRole,
+      fullName: `${selectedRole} User`,
+      companyName: selectedRole === 'CLIENT' ? 'Client Enterprise' : 'Transport Firm',
+      token: 'auth-session-' + selectedRole.toLowerCase() + '-' + Date.now(),
+      createdAt: new Date().toISOString(),
+      accountStatus: 'APPROVED',
+      isRegistrationComplete: true,
+    };
+    await authService.saveSession(newSession);
+    setSession(newSession);
+    triggerLoginNotification(newSession);
+    routeRoleDestination(selectedRole);
   };
 
   const handleShowTermsNotice = () => {
@@ -1181,6 +1092,7 @@ export default function App() {
       {/* Screen 14 / Screen 25: NOTIFICATIONS SCREEN */}
       {currentScreen === 'NOTIFICATIONS' && (
         <NotificationsScreen
+          role={selectedRole}
           onBack={() =>
             setCurrentScreen(
               selectedRole === 'CLIENT'

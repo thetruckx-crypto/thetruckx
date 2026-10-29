@@ -247,7 +247,15 @@ export class NotificationService {
                   icon: payload.data?.icon || 'notification_icon',
                   color: '#FA5700',
                   sound: payload.sound || 'default',
-                  channelId: payload.channelId || 'default',
+                  channelId:
+                    payload.channelId ||
+                    (String(payload.data?.role || '').toUpperCase() === 'CLIENT'
+                      ? 'thetruckx_client_alerts'
+                      : String(payload.data?.role || '').toUpperCase() === 'VENDOR'
+                      ? 'thetruckx_vendor_alerts'
+                      : String(payload.data?.role || '').toUpperCase() === 'DRIVER'
+                      ? 'thetruckx_driver_alerts'
+                      : 'thetruckx_alerts'),
                 },
               },
               data: Object.fromEntries(

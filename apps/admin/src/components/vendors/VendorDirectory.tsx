@@ -176,7 +176,7 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
   const canApprove = hasPermission('vendors', 'approve');
   const canReject = hasPermission('vendors', 'reject');
   const canExport = hasPermission('vendors', 'export');
-  const canDelete = hasPermission('vendors', 'delete') || adminProfile?.role === 'SUPER_ADMIN' || adminProfile?.role === 'ADMIN';
+  const canDelete = hasPermission('vendors', 'delete');
 
   // Delete User state
   const [deletingVendor, setDeletingVendor] = useState<VendorCompany | null>(null);

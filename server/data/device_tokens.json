@@ -1,26 +1,90 @@
 [
   {
-    "pushToken": "fcm_android_device_sample_token_8899",
-    "userId": "client_sample_01",
+    "pushToken": "fcm_android_client_live_1793253097052",
+    "userId": "usr_client_001",
     "role": "CLIENT",
     "platform": "android",
-    "registeredAt": "2026-10-26T07:47:24.265Z",
-    "lastActiveAt": "2026-10-26T07:47:24.265Z"
+    "registeredAt": "2026-10-29T05:51:37.052Z",
+    "lastActiveAt": "2026-10-29T05:51:37.073Z"
   },
   {
-    "pushToken": "fcm_vendor_sample_1793081522869",
-    "userId": "vendor_test_101",
+    "pushToken": "fcm_android_vendor_live_1793253097073",
+    "userId": "usr_vendor_002",
     "role": "VENDOR",
     "platform": "android",
-    "registeredAt": "2026-10-27T06:12:02.870Z",
-    "lastActiveAt": "2026-10-27T06:12:02.870Z"
+    "registeredAt": "2026-10-29T05:51:37.073Z",
+    "lastActiveAt": "2026-10-29T05:51:37.073Z"
   },
   {
-    "pushToken": "fcm_driver_sample_1793081623489",
-    "userId": "driver_test_202",
+    "pushToken": "fcm_android_driver_live_1793253097073",
+    "userId": "usr_driver_003",
     "role": "DRIVER",
     "platform": "android",
-    "registeredAt": "2026-10-27T06:13:43.489Z",
-    "lastActiveAt": "2026-10-27T06:13:43.489Z"
+    "registeredAt": "2026-10-29T05:51:37.073Z",
+    "lastActiveAt": "2026-10-29T05:51:37.073Z"
+  },
+  {
+    "pushToken": "fcm_web_admin_live_1793253097073",
+    "userId": "usr_admin_004",
+    "role": "ADMIN",
+    "platform": "web",
+    "registeredAt": "2026-10-29T05:51:37.073Z",
+    "lastActiveAt": "2026-10-29T05:51:37.073Z"
+  },
+  {
+    "pushToken": "ExponentPushToken[TestExpoToken123456789]",
+    "userId": "usr_expo_fallback_005",
+    "role": "CLIENT",
+    "platform": "android",
+    "registeredAt": "2026-10-29T05:51:37.073Z",
+    "lastActiveAt": "2026-10-29T05:51:37.073Z"
+  },
+  {
+    "pushToken": "fcm_android_client_live_1793253742042",
+    "userId": "usr_client_001",
+    "role": "CLIENT",
+    "platform": "android",
+    "registeredAt": "2026-10-29T06:02:22.042Z",
+    "lastActiveAt": "2026-10-29T06:02:22.057Z"
+  },
+  {
+    "pushToken": "fcm_android_vendor_live_1793253742057",
+    "userId": "usr_vendor_002",
+    "role": "VENDOR",
+    "platform": "android",
+    "registeredAt": "2026-10-29T06:02:22.057Z",
+    "lastActiveAt": "2026-10-29T06:02:22.057Z"
+  },
+  {
+    "pushToken": "fcm_android_driver_live_1793253742057",
+    "userId": "usr_driver_003",
+    "role": "DRIVER",
+    "platform": "android",
+    "registeredAt": "2026-10-29T06:02:22.057Z",
+    "lastActiveAt": "2026-10-29T06:02:22.057Z"
+  },
+  {
+    "pushToken": "fcm_web_admin_live_1793253742057",
+    "userId": "usr_admin_004",
+    "role": "ADMIN",
+    "platform": "web",
+    "registeredAt": "2026-10-29T06:02:22.057Z",
+    "lastActiveAt": "2026-10-29T06:02:22.057Z"
+  },
+  {
+    "pushToken": "ExponentPushToken[TestExpoToken123456789]",
+    "userId": "usr_expo_fallback_005",
+    "role": "CLIENT",
+    "platform": "android",
+    "registeredAt": "2026-10-29T06:02:22.057Z",
+    "lastActiveAt": "2026-10-29T06:02:22.057Z"
+  },
+  {
+    "pushToken": "dINRCAKpTrKmdJX_QdUXry:APA91bEb1dEWZ73pyxx74odoShIqM68KGCz8LxiX5tbUmgBmO9RwNo3AKJCG2qAlIBnHaFKDVgBFDIi7q9LJl7NPaOYnQ9ezmhbMj_9pLIU1GFok8n-kFpQ",
+    "userId": "59bc7136-024f-46ce-aab6-d21a8da95b2c",
+    "role": "CLIENT",
+    "platform": "android",
+    "registeredAt": "2026-10-29T06:50:50.449Z",
+    "lastActiveAt": "2026-10-29T07:15:38.255Z"
   }
 ]

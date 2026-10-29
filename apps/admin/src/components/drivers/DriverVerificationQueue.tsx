@@ -79,18 +79,9 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
   onNavigateToVehicleDirectory,
 }) => {
   const { hasPermission, adminProfile } = useAuth();
-  const canDelete =
-    hasPermission('drivers', 'delete') ||
-    adminProfile?.role === 'SUPER_ADMIN' ||
-    adminProfile?.role === 'ADMIN';
-  const canEdit =
-    hasPermission('drivers', 'edit') ||
-    adminProfile?.role === 'SUPER_ADMIN' ||
-    adminProfile?.role === 'ADMIN';
-  const canApprove =
-    hasPermission('drivers', 'approve') ||
-    adminProfile?.role === 'SUPER_ADMIN' ||
-    adminProfile?.role === 'ADMIN';
+  const canDelete = hasPermission('drivers', 'delete');
+  const canEdit = hasPermission('drivers', 'edit');
+  const canApprove = hasPermission('drivers', 'approve');
 
   // Core Data State
   const [drivers, setDrivers] = useState<any[]>([]);

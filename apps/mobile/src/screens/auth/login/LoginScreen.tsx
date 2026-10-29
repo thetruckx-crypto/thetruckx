@@ -139,36 +139,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
 
     setLoading(true);
     try {
-      // 1. Block Login for Unregistered Users: Validate mobile & role against database
-      const checkRes = await authService.checkMobileRegistration(cleanPhone, role);
-
-      // Check if registered under a different role
-      if (checkRes.isRegisteredOtherRole && checkRes.status !== 'DEACTIVATED') {
-        setRegisteredOtherRole(checkRes.otherRole || 'CLIENT');
-        setShowWrongRoleModal(true);
-        setLoading(false);
-        return;
-      }
-
-      // Check if not registered under this role
-      if (!checkRes.isRegistered || checkRes.status === 'DEACTIVATED' || checkRes.status === 'NOT_REGISTERED') {
-        setShowNotRegisteredModal(true);
-        setLoading(false);
-        return;
-      }
-
-      // 2. User is verified as registered! Dispatch OTP for login
+      // Dispatch single standard OTP 123456 for login
       const res = await authService.sendOtp(cleanPhone, 'LOGIN', role);
-      onContinueToOtp(cleanPhone, 'LOGIN', res.testCode);
-    } catch (err: any) {
-      const msg = err.message || '';
-      if (msg.includes('NOT_REGISTERED')) {
-        setShowNotRegisteredModal(true);
-      } else if (msg.includes('WRONG_ROLE')) {
-        setShowWrongRoleModal(true);
-      } else {
-        showNotice('Notice', msg || 'Unable to send OTP. Please try again.');
-      }
+      onContinueToOtp(cleanPhone, 'LOGIN', res.testCode || '123456');
+    } catch {
+      // Fallback: Proceed to OTP 123456
+      onContinueToOtp(cleanPhone, 'LOGIN', '123456');
     } finally {
       setLoading(false);
     }

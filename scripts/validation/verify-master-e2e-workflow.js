@@ -67,17 +67,21 @@ async function runMasterWorkflow() {
       city: 'Guwahati',
       state: 'Assam',
       pincode: '781028',
-      status: 'APPROVED',
-      kyc_status: 'VERIFIED'
+      status: 'APPROVED'
     }])
     .select('id, company_name, status')
     .single();
 
   if (compErr) {
-    // If table structure differs, fallback to existing client
-    const { data: fallbackClient } = await supabase.from('client_companies').select('id, company_name').limit(1).single();
-    clientId = fallbackClient.id;
-    console.log(`✓ [PASS] Using Verified Client: ${fallbackClient.company_name} (ID: ${clientId})`);
+    // If insert error, fallback to existing client if any
+    const { data: fallbackClient } = await supabase.from('client_companies').select('id, company_name').limit(1).maybeSingle();
+    if (fallbackClient) {
+      clientId = fallbackClient.id;
+      console.log(`✓ [PASS] Using Verified Client: ${fallbackClient.company_name} (ID: ${clientId})`);
+    } else {
+      console.error('Failed to create client company:', compErr.message);
+      process.exit(1);
+    }
   } else {
     clientId = clientComp.id;
     console.log(`✓ [PASS] Client Registered & Verified: ${clientComp.company_name} [Status: ${clientComp.status}]`);
@@ -121,14 +125,34 @@ async function runMasterWorkflow() {
   // ---------------------------------------------------------------------------
   console.log('\n--- STAGE 3: Multi-Vendor RFQ Assignment ---');
   // Load 2 active vendor transporters
-  const { data: vendorsList } = await supabase
+  let { data: vendorsList } = await supabase
     .from('vendor_companies')
     .select('id, vendor_name, vendor_code')
     .limit(2);
 
   if (!vendorsList || vendorsList.length === 0) {
-    console.error('No vendors available in database');
-    process.exit(1);
+    const { data: createdVendors, error: vCreateErr } = await supabase.from('vendor_companies').insert([
+      {
+        vendor_name: `Brahmaputra Freight Carriers ${runId}`,
+        pan: `AABCV${runId}A`,
+        gstin: `18AABCV${runId}A1Z3`,
+        address: 'Transport Nagar, NH-31, Guwahati, Assam 781022',
+        status: 'APPROVED'
+      },
+      {
+        vendor_name: `Assam Bengal Roadways ${runId}`,
+        pan: `AABCV${runId}B`,
+        gstin: `18AABCV${runId}B1Z4`,
+        address: 'Gateway Freight Complex, Siliguri 734001',
+        status: 'APPROVED'
+      }
+    ]).select('id, vendor_name, vendor_code');
+
+    if (vCreateErr || !createdVendors || createdVendors.length === 0) {
+      console.error('Failed to create test vendors:', vCreateErr?.message);
+      process.exit(1);
+    }
+    vendorsList = createdVendors;
   }
 
   const vendorRequests = [];
@@ -190,19 +214,25 @@ async function runMasterWorkflow() {
     .limit(2);
 
   if (!approvedDrivers || approvedDrivers.length === 0) {
+    const v0 = vendorsList[0]?.id || null;
+    const v1 = vendorsList[1]?.id || v0;
     const { data: createdDrivers } = await supabase.from('drivers').insert([
       {
+        primary_vendor_id: v0,
         full_name: `Bikash Bora ${runId}`,
         mobile: `987654${runId}`,
         licence_number: `AS-01-DL-${runId}A`,
+        licence_expiry_date: '2028-12-31',
         status: 'APPROVED',
         verification_status: 'APPROVED',
         is_active: true
       },
       {
+        primary_vendor_id: v1,
         full_name: `Sunil Das ${runId}`,
         mobile: `987655${runId}`,
         licence_number: `AS-01-DL-${runId}B`,
+        licence_expiry_date: '2028-12-31',
         status: 'APPROVED',
         verification_status: 'APPROVED',
         is_active: true

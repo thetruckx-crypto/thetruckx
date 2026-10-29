@@ -20,7 +20,7 @@ export const config = {
     .filter(origin => origin && origin !== '*'),
   // Mock OTP strictly enabled ONLY in development/testing, NEVER in production
   mockOtpEnabled: process.env.NODE_ENV !== 'production' && (process.env.MOCK_OTP_ENABLED === 'true' || process.env.MOCK_OTP_ENABLED === undefined),
-  mockOtpCode: process.env.MOCK_OTP_CODE || '12345',
+  mockOtpCode: process.env.MOCK_OTP_CODE || '123456',
   jwtSecret: process.env.JWT_SECRET || 'necl_super_secret_jwt_key_2026_dev_env',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
 };

@@ -163,8 +163,9 @@ export const permissionService = {
     // If a module is disabled, all child actions must be disabled
     const sanitized: PermissionsMatrix = {};
     for (const m of SYSTEM_MODULES) {
+      const isSuperAdminOnly = ['superadmin', 'audit_logs', 'settings'].includes(m.key);
       const incoming = newPermissions[m.key];
-      if (!incoming || !incoming.enabled) {
+      if (isSuperAdminOnly || !incoming || !incoming.enabled) {
         const disabledActions: ActionPermissions = {};
         for (const a of m.allowedActions) {
           disabledActions[a] = false;
@@ -225,9 +226,13 @@ export const permissionService = {
     actionKey?: string
   ): boolean {
     if (role === 'SUPER_ADMIN') return true;
+    if (['superadmin', 'audit_logs', 'settings', 'system_settings'].includes(moduleKey)) return false;
+    if (!perms) return false;
     const mod = perms[moduleKey];
     if (!mod || !mod.enabled) return false;
-    if (!actionKey) return true;
+    if (!actionKey || actionKey === 'view') {
+      return Boolean(mod.enabled && (mod.actions?.view !== false));
+    }
     return Boolean(mod.actions?.[actionKey]);
   },
 };

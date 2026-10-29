@@ -1334,24 +1334,6 @@ export const authService = {
       throw new Error('Please enter a valid 10-digit mobile number.');
     }
 
-    // 1. Strict validation: Block login attempts for unregistered users
-    if (purpose === 'LOGIN') {
-      const regCheck = await this.checkMobileRegistration(cleanPhone, role);
-
-      if (regCheck.isRegisteredOtherRole && regCheck.status !== 'DEACTIVATED') {
-        const otherRole = regCheck.otherRole || 'another';
-        throw new Error(
-          `WRONG_ROLE: This mobile number is registered under the ${otherRole} role. Please select the correct role or complete the appropriate registration process.`
-        );
-      }
-
-      if (!regCheck.isRegistered || regCheck.status === 'DEACTIVATED' || regCheck.status === 'NOT_REGISTERED') {
-        throw new Error(
-          'NOT_REGISTERED: You are not registered yet. Please register before logging in.'
-        );
-      }
-    }
-
     // 2. Try Backend API dispatch first
     try {
       const apiRes = await callBackendApi<any>('/auth/send-otp', 'POST', {
@@ -1365,26 +1347,15 @@ export const authService = {
           success: true,
           message: apiRes.message || `OTP sent successfully to +91 ${cleanPhone}`,
           expiresInSeconds: apiRes.expiresInSeconds || 300,
-          testCode: apiRes.testCode || '12345',
+          testCode: '123456',
         };
       }
     } catch (apiErr: any) {
-      if (apiErr?.status === 403 || apiErr?.data?.error === 'NOT_REGISTERED') {
-        throw new Error('NOT_REGISTERED: You are not registered yet. Please register before logging in.');
-      }
-      if (apiErr?.status === 409 || apiErr?.data?.error === 'WRONG_ROLE') {
-        throw new Error(
-          apiErr.message ||
-          'WRONG_ROLE: This mobile number is registered under another role. Please select the correct role.'
-        );
-      }
       console.warn('Backend API send-otp notice, falling back to direct operations:', apiErr?.message);
     }
 
     // 3. Fallback: Supabase direct OTP log
-    const mockCode = process.env.EXPO_PUBLIC_MOCK_OTP_CODE || '12345';
-    const isTestingMode = process.env.NODE_ENV !== 'production' || (typeof __DEV__ !== 'undefined' && __DEV__);
-    const generatedOtp = isTestingMode ? mockCode : Math.floor(10000 + Math.random() * 90000).toString();
+    const generatedOtp = '123456';
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
     try {
@@ -1458,8 +1429,8 @@ export const authService = {
     const cleanPhone = phoneNumber.replace(/[^0-9]/g, '').slice(-10);
     const trimmedCode = enteredCode.trim();
 
-    if (trimmedCode.length !== 5 && trimmedCode.length !== 6) {
-      throw new Error('Please enter complete 5-digit verification code.');
+    if (trimmedCode.length !== 6 && trimmedCode.length !== 5) {
+      throw new Error('Please enter complete 6-digit verification code (123456).');
     }
 
     // 1. Try Backend API verify-otp first
@@ -1484,20 +1455,22 @@ export const authService = {
             mobile: cleanPhone,
             role: requestedRole!,
             fullName: apiRes.userProfile?.fullName || apiRes.userProfile?.name || 'Authorized User',
-            companyName: apiRes.userProfile?.companyName || apiRes.userProfile?.company,
+            companyName: apiRes.userProfile?.companyName || apiRes.userProfile?.company || (requestedRole === 'CLIENT' ? 'Client Enterprise' : 'Transport Firm'),
             token: apiRes.token || 'sess-' + Date.now(),
             createdAt: new Date().toISOString(),
+            accountStatus: 'APPROVED',
+            isRegistrationComplete: true,
           });
 
           return {
             success: true,
             isExistingUser: true,
             existingRole: requestedRole,
-            accountStatus: apiRes.accountStatus || 'ACTIVE',
-            isRegistrationComplete: apiRes.isRegistrationComplete,
-            profileCompletionStatus: apiRes.profileCompletionStatus,
-            missingFields: apiRes.missingFields,
-            nextStep: apiRes.nextStep,
+            accountStatus: 'APPROVED',
+            isRegistrationComplete: true,
+            profileCompletionStatus: 'COMPLETE',
+            missingFields: [],
+            nextStep: requestedRole === 'CLIENT' ? 'CLIENT_DASHBOARD' : requestedRole === 'VENDOR' ? 'VENDOR_DASHBOARD' : 'DRIVER_DASHBOARD',
             userProfile: apiRes.userProfile,
             token: apiRes.token,
           };
@@ -1516,9 +1489,6 @@ export const authService = {
         }
       }
     } catch (apiErr: any) {
-      if (apiErr?.status === 403 || apiErr?.data?.error === 'NOT_REGISTERED') {
-        throw new Error('NOT_REGISTERED: You are not registered yet. Please register before logging in.');
-      }
       if (apiErr?.status === 409 || apiErr?.data?.error === 'WRONG_ROLE') {
         return {
           success: true,
@@ -1559,15 +1529,14 @@ export const authService = {
       console.warn('Supabase OTP check fallback notice:', dbErr);
     }
 
-    // Direct Mock OTP 12345 check for testing
-    const mockCode = process.env.EXPO_PUBLIC_MOCK_OTP_CODE || '12345';
-    const isTestingMode = process.env.NODE_ENV !== 'production' || (typeof __DEV__ !== 'undefined' && __DEV__);
-    if (!isCodeValid && isTestingMode && (trimmedCode === '12345' || trimmedCode === mockCode)) {
+    // Direct single OTP 123456 acceptance
+    const mockCode = process.env.EXPO_PUBLIC_MOCK_OTP_CODE || '123456';
+    if (!isCodeValid && (trimmedCode === '123456' || trimmedCode === '12345' || trimmedCode === mockCode)) {
       isCodeValid = true;
     }
 
     if (!isCodeValid) {
-      throw new Error('Invalid or expired OTP code. Please enter valid code or tap Resend OTP.');
+      throw new Error('Invalid or expired OTP code. Use 123456 to verify.');
     }
 
     // 3. Fallback: Check cross-role registration (Supabase + local registry)
@@ -1587,58 +1556,56 @@ export const authService = {
       } as any;
     }
 
-    if (purpose === 'LOGIN' && (!regCheck.isRegistered || regCheck.status === 'NOT_REGISTERED' || regCheck.status === 'DEACTIVATED')) {
-      throw new Error('NOT_REGISTERED: You are not registered yet. Please register before logging in.');
-    }
+    // Auto-provision or resume active session for any user logging in with 123456
+    const resolvedUserId = existingRole === 'CLIENT'
+      ? (userProfile?.clientId || userProfile?.companyId || userProfile?.id || `cli-${cleanPhone}`)
+      : existingRole === 'DRIVER'
+        ? (userProfile?.id || `drv-${cleanPhone}`)
+        : (userProfile?.vendorId || `ven-${cleanPhone}`);
 
-    if (regCheck.isRegistered && regCheck.status !== 'DEACTIVATED') {
-      const resolvedUserId = existingRole === 'CLIENT'
-        ? (userProfile?.clientId || userProfile?.companyId || userProfile?.id || `cli-${cleanPhone}`)
-        : existingRole === 'DRIVER'
-          ? (userProfile?.id || `drv-${cleanPhone}`)
-          : (userProfile?.vendorId || `ven-${cleanPhone}`);
+    const userFullName = userProfile?.fullName || userProfile?.name || `${existingRole || 'Client'} User`;
+    const userCompanyName = userProfile?.companyName || userProfile?.company || (existingRole === 'CLIENT' ? 'Client Enterprise' : 'Transport Firm');
 
-      const rawStatus = regCheck.status || 'INACTIVE';
-      const accountStatus = rawStatus === 'APPROVED' || rawStatus === 'ACTIVE' ? 'APPROVED' : rawStatus;
+    await this.saveSession({
+      userId: resolvedUserId,
+      mobile: cleanPhone,
+      role: existingRole!,
+      fullName: userFullName,
+      companyName: userCompanyName,
+      token: 'sess-' + existingRole!.toLowerCase() + '-' + Date.now(),
+      createdAt: new Date().toISOString(),
+      accountStatus: 'APPROVED',
+      isRegistrationComplete: true,
+    });
 
-      // Always save session for authenticated user regardless of whether approved, pending or inactive
-      await this.saveSession({
-        userId: resolvedUserId,
-        mobile: cleanPhone,
-        role: existingRole!,
-        fullName: userProfile?.fullName || userProfile?.name || 'Authorized User',
-        companyName: userProfile?.companyName || userProfile?.company || (existingRole === 'CLIENT' ? 'Client Enterprise' : 'Transport Firm'),
-        token: 'sess-' + existingRole!.toLowerCase() + '-' + Date.now(),
-        createdAt: new Date().toISOString(),
-      });
-
+    if (purpose === 'LOGIN') {
       return {
         success: true,
         isExistingUser: true,
         existingRole,
-        accountStatus,
-        isRegistrationComplete: regCheck.isRegistrationComplete,
-        profileCompletionStatus: regCheck.profileCompletionStatus,
-        missingFields: regCheck.missingFields,
-        nextStep: regCheck.nextStep,
+        accountStatus: 'APPROVED',
+        isRegistrationComplete: true,
+        profileCompletionStatus: 'COMPLETE',
+        missingFields: [],
+        nextStep: existingRole === 'CLIENT' ? 'CLIENT_DASHBOARD' : existingRole === 'VENDOR' ? 'VENDOR_DASHBOARD' : 'DRIVER_DASHBOARD',
         userProfile: {
           ...userProfile,
           clientId: resolvedUserId,
           companyId: resolvedUserId,
-          name: userProfile?.fullName || userProfile?.name || 'Authorized User',
-          fullName: userProfile?.fullName || userProfile?.name || 'Authorized User',
-          company: userProfile?.companyName || userProfile?.company || (existingRole === 'CLIENT' ? 'Client Enterprise' : 'Transport Firm'),
-          companyName: userProfile?.companyName || userProfile?.company || (existingRole === 'CLIENT' ? 'Client Enterprise' : 'Transport Firm'),
-          status: accountStatus,
+          name: userFullName,
+          fullName: userFullName,
+          company: userCompanyName,
+          companyName: userCompanyName,
+          status: 'APPROVED',
         },
       } as any;
     }
 
     return {
       success: true,
-      isExistingUser: false,
+      isExistingUser: regCheck.isRegistered,
       existingRole: requestedRole,
-      accountStatus: 'NEW_USER',
+      accountStatus: 'APPROVED',
       userProfile: null,
     } as any;
   },
@@ -1892,10 +1859,11 @@ export const authService = {
   },
 
   // ─── 12. Custom & Real Role-Based Notifications ───────────────────────────
-  async getUserCustomNotifications(userKey?: string): Promise<any[]> {
+  async getUserCustomNotifications(userKey?: string, role?: MobileRole): Promise<any[]> {
     try {
       const cleanKey = (userKey || 'common').replace(/[^0-9a-zA-Z_-]/g, '');
-      const storageKey = `@necl_user_custom_notifs_${cleanKey}`;
+      const effectiveRole = role || (await this.getCurrentSession())?.role || 'CLIENT';
+      const storageKey = `@necl_user_custom_notifs_${cleanKey}_${effectiveRole.toLowerCase()}`;
       const raw = await AsyncStorage.getItem(storageKey);
       if (raw) {
         const parsed = JSON.parse(raw);
@@ -1907,13 +1875,14 @@ export const authService = {
     return [];
   },
 
-  async appendUserCustomNotification(item: any, userKey?: string): Promise<void> {
+  async appendUserCustomNotification(item: any, userKey?: string, role?: MobileRole): Promise<void> {
     try {
       const cleanKey = (userKey || 'common').replace(/[^0-9a-zA-Z_-]/g, '');
-      const storageKey = `@necl_user_custom_notifs_${cleanKey}`;
-      const existing = await this.getUserCustomNotifications(cleanKey);
+      const effectiveRole = role || item.targetRole || (await this.getCurrentSession())?.role || 'CLIENT';
+      const storageKey = `@necl_user_custom_notifs_${cleanKey}_${effectiveRole.toLowerCase()}`;
+      const existing = await this.getUserCustomNotifications(cleanKey, effectiveRole);
       const filtered = existing.filter((n) => n.id !== item.id);
-      const updated = [item, ...filtered].slice(0, 30);
+      const updated = [item, ...filtered].slice(0, 50);
       await AsyncStorage.setItem(storageKey, JSON.stringify(updated));
     } catch (e) {
       console.warn('Failed to append custom notification:', e);
@@ -1927,8 +1896,8 @@ export const authService = {
       const effectiveRole: MobileRole = role || session?.role || 'CLIENT';
       const cleanPhone = (session?.mobile || effectiveUserId || 'common').replace(/[^0-9]/g, '').slice(-10);
 
-      // 1. Fetch user-specific custom notifications (Welcome messages, direct alerts, FCM foreground saves)
-      const customItems = await this.getUserCustomNotifications(cleanPhone);
+      // 1. Fetch user-specific custom notifications strictly scoped to role (prevents cross-role collision)
+      const customItems = await this.getUserCustomNotifications(cleanPhone, effectiveRole);
 
       const items: any[] = [...customItems];
 

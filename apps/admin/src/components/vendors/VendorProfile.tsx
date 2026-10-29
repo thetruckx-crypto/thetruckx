@@ -36,6 +36,7 @@ import { DocumentRejectionModal } from './DocumentRejectionModal';
 import { DocumentPreviewModal } from '../common/DocumentPreviewModal';
 import { EditVendorModal } from './EditVendorModal';
 import { formatDisplayId } from '../../utils/idGenerator';
+import { useAuth } from '../../context/AuthContext';
 
 interface VendorProfileProps {
   vendorId: string;
@@ -60,6 +61,11 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
   userRole = 'ADMIN',
   initialEdit = false,
 }) => {
+  const { hasPermission } = useAuth();
+  const canApprove = hasPermission('vendors', 'approve');
+  const canReject = hasPermission('vendors', 'reject');
+  const canEdit = hasPermission('vendors', 'edit');
+
   const [vendor, setVendor] = useState<any>(null);
   const [primaryContact, setPrimaryContact] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -693,56 +699,62 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
           <div className="title-right-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             {isPending && (
               <>
-                <button
-                  className="btn-approve-action"
-                  onClick={handleApproveVendor}
-                  style={{
-                    backgroundColor: '#10B981',
-                    color: '#ffffff',
-                    border: 'none',
-                    padding: '8px 14px',
-                    borderRadius: '6px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    fontSize: '13px',
-                  }}
-                >
-                  <CheckCircle2 size={15} />
-                  <span>Approve Vendor</span>
-                </button>
-                <button
-                  className="btn-reject-action"
-                  onClick={handleRejectVendor}
-                  style={{
-                    backgroundColor: '#EF4444',
-                    color: '#ffffff',
-                    border: 'none',
-                    padding: '8px 14px',
-                    borderRadius: '6px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    fontSize: '13px',
-                  }}
-                >
-                  <XCircle size={15} />
-                  <span>Reject</span>
-                </button>
+                {canApprove && (
+                  <button
+                    className="btn-approve-action"
+                    onClick={handleApproveVendor}
+                    style={{
+                      backgroundColor: '#10B981',
+                      color: '#ffffff',
+                      border: 'none',
+                      padding: '8px 14px',
+                      borderRadius: '6px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                    }}
+                  >
+                    <CheckCircle2 size={15} />
+                    <span>Approve Vendor</span>
+                  </button>
+                )}
+                {canReject && (
+                  <button
+                    className="btn-reject-action"
+                    onClick={handleRejectVendor}
+                    style={{
+                      backgroundColor: '#EF4444',
+                      color: '#ffffff',
+                      border: 'none',
+                      padding: '8px 14px',
+                      borderRadius: '6px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                    }}
+                  >
+                    <XCircle size={15} />
+                    <span>Reject</span>
+                  </button>
+                )}
               </>
             )}
 
-            <button
-              className="btn-orange-action"
-              onClick={() => setIsEditModalOpen(true)}
-            >
-              <Edit size={15} />
-              <span>Edit Vendor</span>
-            </button>
+            {canEdit && (
+              <button
+                className="btn-orange-action"
+                onClick={() => setIsEditModalOpen(true)}
+              >
+                <Edit size={15} />
+                <span>Edit Vendor</span>
+              </button>
+            )}
             <div className="menu-wrapper">
               <button
                 className="btn-outline-action"
@@ -1216,9 +1228,9 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
                                     <Download size={14} />
                                   </button>
                                 )}
-                                {userRole === 'ADMIN' || userRole === 'SUPER_ADMIN' ? (
+                                {canApprove || canReject ? (
                                   <>
-                                    {doc.verification_status !== 'VERIFIED' && (
+                                    {canApprove && doc.verification_status !== 'VERIFIED' && (
                                       <button
                                         className="btn-row-action"
                                         title="Approve"
@@ -1227,21 +1239,23 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
                                         <CheckCircle2 size={14} />
                                       </button>
                                     )}
-                                    <button
-                                      className="btn-row-action"
-                                      title="Reject"
-                                      onClick={() => {
-                                        setSelectedDocForRejection({
-                                          id: doc.id,
-                                          type: doc.document_type,
-                                          fileName: doc.file_name,
-                                          uploadedAt: new Date(doc.created_at).toLocaleDateString(),
-                                        });
-                                        setIsRejectionModalOpen(true);
-                                      }}
-                                    >
-                                      <XCircle size={14} />
-                                    </button>
+                                    {canReject && (
+                                      <button
+                                        className="btn-row-action"
+                                        title="Reject"
+                                        onClick={() => {
+                                          setSelectedDocForRejection({
+                                            id: doc.id,
+                                            type: doc.document_type,
+                                            fileName: doc.file_name,
+                                            uploadedAt: new Date(doc.created_at).toLocaleDateString(),
+                                          });
+                                          setIsRejectionModalOpen(true);
+                                        }}
+                                      >
+                                        <XCircle size={14} />
+                                      </button>
+                                    )}
                                   </>
                                 ) : null}
                               </div>
@@ -1748,8 +1762,8 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
           uploadedAt={previewDoc.created_at}
           fileSize={previewDoc.file_size}
           mimeType={previewDoc.mime_type}
-          canVerify={userRole === 'ADMIN' || userRole === 'SUPER_ADMIN'}
-          canReject={userRole === 'ADMIN' || userRole === 'SUPER_ADMIN'}
+          canVerify={canApprove}
+          canReject={canReject}
           onVerify={() => {
             handleApproveDocument(previewDoc.id);
             setPreviewDoc(null);

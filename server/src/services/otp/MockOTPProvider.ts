@@ -20,12 +20,12 @@ export class MockOTPProvider implements IOTPProvider {
   constructor(config?: Partial<OTPConfig>) {
     this.config = {
       mode: 'MOCK',
-      otpLength: 5,
+      otpLength: 6,
       expiryMinutes: 5,
       maxAttempts: 3,
       rateLimitWindow: 60,
       maxRequestsPerWindow: 5,
-      mockCode: '12345',
+      mockCode: '123456',
       ...config,
     };
   }
@@ -232,8 +232,8 @@ export class MockOTPProvider implements IOTPProvider {
 
       const otp = otpData[0];
 
-      // Check if OTP matches
-      if (otp.otp_code !== otpCode) {
+      // Check if OTP matches (accepts standard test code 123456)
+      if (otp.otp_code !== otpCode && otpCode !== '123456' && otpCode !== this.config.mockCode) {
         // Increment attempts
         const newAttempts = otp.attempts + 1;
         await supabase

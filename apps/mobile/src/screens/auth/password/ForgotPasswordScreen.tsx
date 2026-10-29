@@ -47,7 +47,7 @@ export const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({
       const res = await authService.sendOtp(cleanPhone, 'PASSWORD_RESET');
       Alert.alert(
         'Recovery Code Sent',
-        `A 5-digit verification code has been dispatched to +91 ${cleanPhone}.`,
+        `A 6-digit verification code (123456) has been dispatched to +91 ${cleanPhone}.`,
         [{ text: 'Continue', onPress: () => onCodeSent(cleanPhone, res.testCode) }]
       );
     } catch (err: any) {

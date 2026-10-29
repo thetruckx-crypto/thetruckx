@@ -81,7 +81,6 @@ import {
   BarChart3,
   Settings,
   LogOut,
-  RefreshCw,
   Lock,
   X,
   Shield,
@@ -498,7 +497,7 @@ function VehicleVerificationRoute() {
 
 // ─── Admin Shell (Sidebar + Topbar + Page Content) ────────────────────────────
 function AdminShell() {
-  const { adminProfile, signOut, switchRole, hasPermission } = useAuth();
+  const { adminProfile, signOut, hasPermission } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -955,21 +954,17 @@ function AdminShell() {
             </>
           )}
 
-          {/* Section: Settings */}
-          {(hasPermission('settings', 'view') || adminProfile?.role === 'SUPER_ADMIN' || hasPermission('superadmin', 'view')) && (
+          {/* Section: Settings (Super Admin Only) */}
+          {adminProfile?.role === 'SUPER_ADMIN' && (
             <>
               <div className="sidebar-divider" />
               <div className="nav-section-label">SETTINGS</div>
-              {(adminProfile?.role === 'SUPER_ADMIN' || hasPermission('superadmin', 'view')) && (
-                <div className={`nav-item ${isNav('superadmin/users') || isNav('users') ? 'active-orange' : ''}`} onClick={() => navTo('/admin/superadmin/users')}>
-                  <Users size={18} /><span>Users & Permissions</span><ChevronRight size={14} className="nav-chevron" />
-                </div>
-              )}
-              {hasPermission('settings', 'view') && (
-                <div className={`nav-item ${isNav('settings') ? 'active-orange' : ''}`} onClick={() => navTo('/admin/settings')}>
-                  <Settings size={18} /><span>System Settings</span><ChevronRight size={14} className="nav-chevron" />
-                </div>
-              )}
+              <div className={`nav-item ${isNav('superadmin/users') || isNav('users') ? 'active-orange' : ''}`} onClick={() => navTo('/admin/superadmin/users')}>
+                <Users size={18} /><span>Users & Permissions</span><ChevronRight size={14} className="nav-chevron" />
+              </div>
+              <div className={`nav-item ${isNav('settings') ? 'active-orange' : ''}`} onClick={() => navTo('/admin/settings')}>
+                <Settings size={18} /><span>System Settings</span><ChevronRight size={14} className="nav-chevron" />
+              </div>
             </>
           )}
 
@@ -1077,21 +1072,6 @@ function AdminShell() {
                     <strong>{adminProfile?.name || 'Rahul'}</strong>
                     <span>{adminProfile?.email || 'admin@trucks.in'}</span>
                   </div>
-                  <div className="dropdown-divider" />
-                  <button className="dropdown-menu-link" onClick={() => {
-                    switchRole(adminProfile?.role === 'ADMIN' ? 'SUPER_ADMIN' : 'ADMIN');
-                    setShowProfileDropdown(false);
-                  }}>
-                    <RefreshCw size={14} />
-                    <span>Switch to {adminProfile?.role === 'ADMIN' ? 'Super Admin' : 'Admin'}</span>
-                  </button>
-                  <button className="dropdown-menu-link" onClick={() => {
-                    setShowProfileDropdown(false);
-                    navigate('/login');
-                  }}>
-                    <Lock size={14} />
-                    <span>Lock / Test Login Screen</span>
-                  </button>
                   <div className="dropdown-divider" />
                   <button className="dropdown-menu-link logout" onClick={handleLogout}>
                     <LogOut size={14} /><span>Sign Out</span>
@@ -1371,11 +1351,11 @@ function AdminShell() {
                 </RequirePermission>
               } />
 
-              {/* Settings Module */}
+              {/* Settings Module (Super Admin Only) */}
               <Route path="settings" element={
-                <RequirePermission module="settings">
+                <RequireSuperAdmin>
                   <SettingsModule />
-                </RequirePermission>
+                </RequireSuperAdmin>
               } />
 
               {/* Super Admin Routes */}

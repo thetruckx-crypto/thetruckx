@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,8 @@ import {
   FlatList,
   RefreshControl,
   ActivityIndicator,
+  Modal,
+  ScrollView,
 } from 'react-native';
 import {
   ArrowLeft,
@@ -18,35 +20,75 @@ import {
   CheckCheck,
   ChevronRight,
   ShieldCheck,
+  FileText,
+  CreditCard,
+  AlertTriangle,
+  Sparkles,
+  X,
+  Play,
 } from 'lucide-react-native';
-import { AppNotificationItem } from '../../../types';
+import { AppNotificationItem, MobileRole } from '../../../types';
 import { authService } from '../../../services/authService';
+import {
+  mobileNotificationService,
+  getRoleNotificationCatalog,
+  NotificationTemplate,
+  buildNotificationItem,
+} from '../../../services/notificationService';
 
 interface NotificationsScreenProps {
   onBack: () => void;
   onSelectNotification: (item: AppNotificationItem) => void;
+  role?: MobileRole;
 }
 
 export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
   onBack,
   onSelectNotification,
+  role: propRole,
 }) => {
+  const [currentRole, setCurrentRole] = useState<MobileRole>(propRole || 'CLIENT');
   const [notifications, setNotifications] = useState<AppNotificationItem[]>([]);
-  const [activeFilter, setActiveFilter] = useState<'all' | 'shipment' | 'booking' | 'system'>('all');
+  const [activeFilter, setActiveFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [testModalVisible, setTestModalVisible] = useState(false);
+  const [dispatchingKey, setDispatchingKey] = useState<string | null>(null);
 
+  // Load session role and notifications
   const loadNotifications = useCallback(async () => {
     try {
-      const data = await authService.fetchRealNotifications();
-      setNotifications(data);
-    } catch {
-      // Fallback
+      const session = await authService.getCurrentSession();
+      const effectiveRole = propRole || session?.role || 'CLIENT';
+      setCurrentRole(effectiveRole);
+
+      let data = await authService.fetchRealNotifications(session?.userId, effectiveRole);
+
+      // If user has zero notifications, seed role-specific operational notifications from catalog
+      if (!data || data.length === 0) {
+        const catalog = getRoleNotificationCatalog(effectiveRole);
+        // Seed first 6 high-value notifications for this role
+        const initialSeeds = catalog.slice(0, 6).map((tpl) =>
+          buildNotificationItem(effectiveRole, tpl.type)
+        );
+        for (const item of initialSeeds) {
+          await authService.appendUserCustomNotification(
+            item,
+            session?.mobile || session?.userId || 'common',
+            effectiveRole
+          );
+        }
+        data = initialSeeds;
+      }
+
+      setNotifications(data || []);
+    } catch (e) {
+      console.warn('Failed to load notifications:', e);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [propRole]);
 
   useEffect(() => {
     loadNotifications();
@@ -61,10 +103,65 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
   };
 
-  const filteredItems = notifications.filter((item) => {
-    if (activeFilter === 'all') return true;
-    return item.category === activeFilter;
-  });
+  // Dispatch a specific notification from catalog and trigger real Android OS push
+  const handleTriggerCatalogNotification = async (template: NotificationTemplate) => {
+    try {
+      setDispatchingKey(template.type);
+      const newItem = await mobileNotificationService.dispatchCatalogNotification(
+        currentRole,
+        template.type
+      );
+      setNotifications((prev) => [newItem, ...prev.filter((n) => n.id !== newItem.id)]);
+      setTimeout(() => {
+        setDispatchingKey(null);
+        setTestModalVisible(false);
+      }, 500);
+    } catch (e: any) {
+      console.warn('Dispatch notification warning:', e);
+      setDispatchingKey(null);
+    }
+  };
+
+  // Filter tabs tailored per role
+  const filterTabs = useMemo(() => {
+    if (currentRole === 'VENDOR') {
+      return [
+        { id: 'all', label: 'All' },
+        { id: 'requirement', label: 'RFQs' },
+        { id: 'quotation', label: 'Quotes' },
+        { id: 'booking', label: 'Bookings' },
+        { id: 'shipment', label: 'Trips' },
+        { id: 'document', label: 'Docs' },
+        { id: 'payment', label: 'Payouts' },
+      ];
+    }
+    if (currentRole === 'DRIVER') {
+      return [
+        { id: 'all', label: 'All' },
+        { id: 'shipment', label: 'Trips & Routes' },
+        { id: 'document', label: 'POD & Docs' },
+        { id: 'system', label: 'Alerts' },
+      ];
+    }
+    // Default Client Role
+    return [
+      { id: 'all', label: 'All' },
+      { id: 'requirement', label: 'Requests' },
+      { id: 'quotation', label: 'Bids' },
+      { id: 'booking', label: 'Bookings' },
+      { id: 'shipment', label: 'Shipments' },
+      { id: 'payment', label: 'Payments' },
+    ];
+  }, [currentRole]);
+
+  const filteredItems = useMemo(() => {
+    if (activeFilter === 'all') return notifications;
+    return notifications.filter((item) => item.category === activeFilter);
+  }, [notifications, activeFilter]);
+
+  const catalogList = useMemo(() => {
+    return getRoleNotificationCatalog(currentRole);
+  }, [currentRole]);
 
   const getCategoryIcon = (category: string) => {
     switch (category) {
@@ -72,6 +169,14 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
         return <Truck size={18} color="#F05A22" />;
       case 'booking':
         return <Package size={18} color="#2563EB" />;
+      case 'quotation':
+        return <Sparkles size={18} color="#D97706" />;
+      case 'requirement':
+        return <Package size={18} color="#4F46E5" />;
+      case 'payment':
+        return <CreditCard size={18} color="#059669" />;
+      case 'document':
+        return <FileText size={18} color="#7C3AED" />;
       case 'system':
       default:
         return <ShieldCheck size={18} color="#16A34A" />;
@@ -84,6 +189,14 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
         return '#FFF5ED';
       case 'booking':
         return '#EFF6FF';
+      case 'quotation':
+        return '#FEF3C7';
+      case 'requirement':
+        return '#EEF2FF';
+      case 'payment':
+        return '#ECFDF5';
+      case 'document':
+        return '#F5F3FF';
       case 'system':
       default:
         return '#F0FDF4';
@@ -101,53 +214,63 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
         >
           <ArrowLeft size={22} color="#172B4D" />
         </TouchableOpacity>
-        <Text style={styles.topBarTitle}>Notifications</Text>
-        <TouchableOpacity
-          style={styles.markReadBtn}
-          onPress={handleMarkAllRead}
-          activeOpacity={0.7}
-        >
-          <CheckCheck size={18} color="#F05A22" />
-        </TouchableOpacity>
+
+        <View style={{ flex: 1, marginLeft: 8 }}>
+          <Text style={styles.topBarTitle}>Notifications</Text>
+          <Text style={styles.topBarSub}>
+            {currentRole === 'CLIENT'
+              ? 'Client Shipper Console'
+              : currentRole === 'VENDOR'
+              ? 'Fleet Partner Portal'
+              : 'Driver Cab Dashboard'}
+          </Text>
+        </View>
+
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          {/* Test Catalog Notifications Button */}
+          <TouchableOpacity
+            style={[styles.testNotifBtn, { marginRight: 8 }]}
+            onPress={() => setTestModalVisible(true)}
+            activeOpacity={0.7}
+            accessibilityLabel="Test Push Notifications"
+          >
+            <Bell size={16} color="#FA5700" />
+            <Text style={styles.testNotifBtnText}>Test Push</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.markReadBtn}
+            onPress={handleMarkAllRead}
+            activeOpacity={0.7}
+            accessibilityLabel="Mark all as read"
+          >
+            <CheckCheck size={18} color="#F05A22" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Filter Tabs */}
-      <View style={styles.filtersRow}>
-        <TouchableOpacity
-          style={[styles.filterPill, activeFilter === 'all' && styles.filterPillActive]}
-          onPress={() => setActiveFilter('all')}
-        >
-          <Text style={[styles.filterPillText, activeFilter === 'all' && styles.filterPillTextActive]}>
-            All ({notifications.length})
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.filterPill, activeFilter === 'shipment' && styles.filterPillActive]}
-          onPress={() => setActiveFilter('shipment')}
-        >
-          <Text style={[styles.filterPillText, activeFilter === 'shipment' && styles.filterPillTextActive]}>
-            Shipments
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.filterPill, activeFilter === 'booking' && styles.filterPillActive]}
-          onPress={() => setActiveFilter('booking')}
-        >
-          <Text style={[styles.filterPillText, activeFilter === 'booking' && styles.filterPillTextActive]}>
-            Bookings
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.filterPill, activeFilter === 'system' && styles.filterPillActive]}
-          onPress={() => setActiveFilter('system')}
-        >
-          <Text style={[styles.filterPillText, activeFilter === 'system' && styles.filterPillTextActive]}>
-            System
-          </Text>
-        </TouchableOpacity>
+      <View style={styles.filtersWrapper}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersScroll}>
+          {filterTabs.map((tab) => {
+            const count =
+              tab.id === 'all'
+                ? notifications.length
+                : notifications.filter((n) => n.category === tab.id).length;
+            const isActive = activeFilter === tab.id;
+            return (
+              <TouchableOpacity
+                key={tab.id}
+                style={[styles.filterPill, isActive && styles.filterPillActive]}
+                onPress={() => setActiveFilter(tab.id)}
+              >
+                <Text style={[styles.filterPillText, isActive && styles.filterPillTextActive]}>
+                  {tab.label} {count > 0 ? `(${count})` : ''}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
       {/* Notifications List */}
@@ -162,51 +285,121 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
             <Bell size={32} color="#94A3B8" />
           </View>
           <Text style={styles.emptyTitle}>All Caught Up</Text>
-          <Text style={styles.emptyDesc}>You have no unread notifications in this category.</Text>
+          <Text style={styles.emptyDesc}>
+            No unread notifications in this category. Tap "Test Push" above to try any of the{' '}
+            {catalogList.length} {currentRole.toLowerCase()} notifications.
+          </Text>
         </View>
       ) : (
         <FlatList
           data={filteredItems}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContainer}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={['#F05A22']}
-              tintColor="#F05A22"
-            />
-          }
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={[styles.notifCard, !item.isRead && styles.notifCardUnread]}
-              onPress={() => onSelectNotification(item)}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.iconSquircle, { backgroundColor: getIconBg(item.category) }]}>
-                {getCategoryIcon(item.category)}
-              </View>
-
-              <View style={styles.cardTextCol}>
-                <View style={styles.cardHeaderRow}>
-                  <Text style={[styles.cardTitle, !item.isRead && styles.cardTitleUnread]}>
-                    {item.title}
-                  </Text>
-                  {!item.isRead && <View style={styles.unreadDot} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#F05A22']} />}
+          renderItem={({ item }) => {
+            const isUnread = !item.isRead;
+            return (
+              <TouchableOpacity
+                style={[styles.notifCard, isUnread && styles.notifCardUnread]}
+                onPress={() => onSelectNotification(item)}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.iconSquircle, { backgroundColor: getIconBg(item.category) }]}>
+                  {getCategoryIcon(item.category)}
                 </View>
 
-                <Text style={styles.cardSubtitle} numberOfLines={2}>
-                  {item.subtitle}
-                </Text>
+                <View style={styles.cardTextCol}>
+                  <View style={styles.cardHeaderRow}>
+                    <Text
+                      style={[styles.cardTitle, isUnread && styles.cardTitleUnread]}
+                      numberOfLines={1}
+                    >
+                      {item.title}
+                    </Text>
+                    {isUnread && <View style={styles.unreadDot} />}
+                  </View>
 
-                <Text style={styles.cardTime}>{item.time}</Text>
-              </View>
+                  <Text style={styles.cardSubtitle} numberOfLines={2}>
+                    {item.subtitle}
+                  </Text>
 
-              <ChevronRight size={16} color="#CBD5E1" />
-            </TouchableOpacity>
-          )}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Text style={styles.cardTime}>{item.time || 'Recently'}</Text>
+                    <View style={styles.roleCategoryTag}>
+                      <Text style={styles.roleCategoryText}>{item.category.toUpperCase()}</Text>
+                    </View>
+                  </View>
+                </View>
+
+                <ChevronRight size={16} color="#94A3B8" />
+              </TouchableOpacity>
+            );
+          }}
         />
       )}
+
+      {/* Test Push Notifications Modal */}
+      <Modal
+        visible={testModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setTestModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>
+                  {currentRole === 'CLIENT'
+                    ? 'Client Notifications (27)'
+                    : currentRole === 'VENDOR'
+                    ? 'Vendor Notifications (34)'
+                    : 'Driver Notifications (33)'}
+                </Text>
+                <Text style={styles.modalSubtitle}>
+                  Tap any item to trigger a real Android push notification
+                </Text>
+              </View>
+              <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setTestModalVisible(false)}>
+                <X size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalScroll} contentContainerStyle={{ paddingBottom: 24 }}>
+              {catalogList.map((tpl, index) => {
+                const isDispatching = dispatchingKey === tpl.type;
+                return (
+                  <TouchableOpacity
+                    key={tpl.type}
+                    style={[styles.catalogItem, isDispatching && styles.catalogItemActive]}
+                    onPress={() => handleTriggerCatalogNotification(tpl)}
+                    activeOpacity={0.7}
+                    disabled={isDispatching}
+                  >
+                    <View style={[styles.catalogIndexCircle, { backgroundColor: getIconBg(tpl.category) }]}>
+                      <Text style={styles.catalogIndexText}>{index + 1}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.catalogItemName}>{tpl.name}</Text>
+                      <Text style={styles.catalogItemPreview} numberOfLines={1}>
+                        {tpl.title}
+                      </Text>
+                    </View>
+                    {isDispatching ? (
+                      <ActivityIndicator size="small" color="#F05A22" />
+                    ) : (
+                      <View style={styles.triggerBadge}>
+                        <Play size={10} color="#FA5700" fill="#FA5700" />
+                        <Text style={styles.triggerBadgeText}>Push</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -214,63 +407,76 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFC',
   },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5EAF0',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 6,
+    marginRight: 4,
   },
   topBarTitle: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '800',
-    color: '#172B4D',
+    color: '#0B192C',
+  },
+  topBarSub: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  testNotifBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFF4EE',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FFD8C2',
+  },
+  testNotifBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FA5700',
   },
   markReadBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
   },
-  filtersRow: {
-    flexDirection: 'row',
+  filtersWrapper: {
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  filtersScroll: {
     paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: '#F8FAFC',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5EAF0',
     gap: 8,
   },
   filterPill: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+    marginRight: 6,
   },
   filterPillActive: {
     backgroundColor: '#F05A22',
-    borderColor: '#F05A22',
   },
   filterPillText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#64748B',
+    color: '#475569',
   },
   filterPillTextActive: {
     color: '#FFFFFF',
@@ -289,10 +495,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5EAF0',
     gap: 12,
+    marginBottom: 8,
   },
   notifCardUnread: {
     borderColor: '#FFD8C2',
     backgroundColor: '#FFFDFB',
+    borderLeftWidth: 4,
+    borderLeftColor: '#F05A22',
   },
   iconSquircle: {
     width: 42,
@@ -314,26 +523,41 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#172B4D',
+    flex: 1,
   },
   cardTitleUnread: {
     fontWeight: '800',
+    color: '#0B192C',
   },
   unreadDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
     backgroundColor: '#F05A22',
+    marginLeft: 6,
   },
   cardSubtitle: {
-    fontSize: 12.5,
-    color: '#64748B',
-    lineHeight: 17,
-    marginBottom: 4,
+    fontSize: 12,
+    color: '#475569',
+    lineHeight: 16,
+    marginBottom: 6,
   },
   cardTime: {
     fontSize: 11,
     color: '#94A3B8',
     fontWeight: '500',
+  },
+  roleCategoryTag: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: '#F1F5F9',
+  },
+  roleCategoryText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#64748B',
+    letterSpacing: 0.5,
   },
   centerContainer: {
     flex: 1,
@@ -365,5 +589,98 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#64748B',
     textAlign: 'center',
+    lineHeight: 18,
+  },
+  // Test Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(11, 25, 44, 0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '85%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0B192C',
+  },
+  modalSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  modalCloseBtn: {
+    padding: 6,
+  },
+  modalScroll: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  catalogItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: '#F8FAFC',
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 12,
+  },
+  catalogItemActive: {
+    borderColor: '#FA5700',
+    backgroundColor: '#FFF5ED',
+  },
+  catalogIndexCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  catalogIndexText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  catalogItemName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0B192C',
+  },
+  catalogItemPreview: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  triggerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#FFF4EE',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#FFD8C2',
+  },
+  triggerBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#FA5700',
   },
 });

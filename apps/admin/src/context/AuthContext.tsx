@@ -248,18 +248,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Super Admin modules are strictly forbidden to Regular Admins
     if (['superadmin', 'audit_logs'].includes(moduleKey)) return false;
+    // System Settings is strictly reserved for Super Admin (Operational Managers denied)
+    if (['settings', 'system_settings'].includes(moduleKey)) return false;
 
     const perms = adminProfile.permissions;
-    if (!perms) {
-      // Default fallback for regular admin: allow standard operational views, deny commercial margin
-      if (actionKey === 'view_margins' || actionKey === 'delete' || actionKey === 'suspend') return false;
-      return true;
-    }
+    // Strict deny-by-default: only permissions explicitly toggled ON by Super Admin reflect
+    if (!perms) return false;
 
     const mod = perms[moduleKey];
     if (!mod || !mod.enabled) return false;
 
-    if (!actionKey) return true;
+    if (!actionKey || actionKey === 'view') {
+      return Boolean(mod.enabled && (mod.actions?.view !== false));
+    }
     return Boolean(mod.actions?.[actionKey]);
   }, [adminProfile]);
 
@@ -267,7 +268,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!adminProfile) return false;
     if (adminProfile.role === 'SUPER_ADMIN') return true;
     if (adminProfile.isActive === false) return false;
-    return Boolean(adminProfile.permissions?.pricing?.actions?.view_margins);
+    return Boolean(
+      adminProfile.permissions?.pricing?.actions?.view_margins ||
+      adminProfile.permissions?.vendor_quotes?.actions?.view_margins ||
+      adminProfile.permissions?.payments?.actions?.view_margins
+    );
   }, [adminProfile]);
 
   useEffect(() => {

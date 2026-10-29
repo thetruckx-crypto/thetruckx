@@ -17,6 +17,7 @@ import {
   Lock,
   Headphones,
   ChevronRight,
+} from 'lucide-react-native';
 import { authService } from '../../../services/authService';
 import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 

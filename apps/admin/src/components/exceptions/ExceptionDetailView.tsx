@@ -95,7 +95,7 @@ export const ExceptionDetailView: React.FC = () => {
         <span className="breadcrumb-link" onClick={() => navigate("/admin/exceptions")} style={{ cursor: "pointer" }}>
           Exceptions
         </span>
-        <span className="breadcrumb-sep">�</span>
+        <span className="breadcrumb-sep">›</span>
         <span className="breadcrumb-current">{exception.exception_reference}</span>
       </div>
 
@@ -154,7 +154,7 @@ export const ExceptionDetailView: React.FC = () => {
             {exception.status === "RESOLVED" && exception.resolution_notes && (
               <div style={{ padding: "1rem", background: "#FEF3EE", borderRadius: "8px", border: "1px solid #86EFAC" }}>
                 <div style={{ fontSize: "0.85rem", color: "#F45325", marginBottom: "0.5rem", fontWeight: 600 }}>
-                  ? Resolution Notes
+                  ✓ Resolution Notes
                 </div>
                 <div style={{ fontSize: "0.95rem", color: "#111111", lineHeight: "1.6" }}>
                   {exception.resolution_notes}
@@ -197,7 +197,7 @@ export const ExceptionDetailView: React.FC = () => {
                   width: "100%"
                 }}
               >
-                View Trip ?
+                View Trip →
               </button>
             </div>
           )}

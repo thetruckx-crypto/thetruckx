@@ -231,7 +231,7 @@ export const ClientDirectory: React.FC<ClientDirectoryProps> = ({
   const canReject = hasPermission("clients", "reject");
   const canSuspend = hasPermission("clients", "suspend");
   const canExport = hasPermission("clients", "export");
-  const canDelete = hasPermission("clients", "delete") || adminProfile?.role === "SUPER_ADMIN" || adminProfile?.role === "ADMIN";
+  const canDelete = hasPermission("clients", "delete");
 
   // Real data state
   const [clients, setClients] = useState<Client[]>([]);

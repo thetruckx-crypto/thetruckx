@@ -20,6 +20,7 @@ const SERVER_DATA_DIR = path.join(PROJECT_ROOT, 'server', 'data');
 const BACKUP_FILE_SERVER = path.join(SERVER_DATA_DIR, `backup_before_cleanup_${TIMESTAMP}.json`);
 const SERVER_REGISTRY_FILE = path.join(SERVER_DATA_DIR, 'server_user_registry.json');
 const SERVER_DRAFTS_FILE = path.join(SERVER_DATA_DIR, 'admin_drafts.json');
+const SERVER_DEVICE_TOKENS_FILE = path.join(SERVER_DATA_DIR, 'device_tokens.json');
 
 const TABLES_TO_CLEAN_IN_ORDER = [
   'admin_registration_drafts',
@@ -30,13 +31,13 @@ const TABLES_TO_CLEAN_IN_ORDER = [
   'weighments',
   'charge_lines',
   'payment_records',
-  'vendor_quotations',
-  'vendor_requests',
-  'client_quotes',
+  'documents',
   'trips',
   'bookings',
+  'client_quotes',
+  'vendor_quotations',
+  'vendor_requests',
   'requirements',
-  'documents',
   'vendor_vehicle_links',
   'drivers',
   'vehicles',
@@ -180,6 +181,14 @@ async function main() {
       console.log('✅ admin_drafts.json successfully reset to empty array [].');
     } catch (e) {
       console.warn('⚠️ admin_drafts.json reset warning:', e.message);
+    }
+  }
+  if (fs.existsSync(SERVER_DEVICE_TOKENS_FILE)) {
+    try {
+      fs.writeFileSync(SERVER_DEVICE_TOKENS_FILE, JSON.stringify([], null, 2), 'utf-8');
+      console.log('✅ device_tokens.json successfully reset to empty array [].');
+    } catch (e) {
+      console.warn('⚠️ device_tokens.json reset warning:', e.message);
     }
   }
 

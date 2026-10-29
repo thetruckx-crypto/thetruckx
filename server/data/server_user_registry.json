@@ -1,1 +1,11 @@
-[]
+[
+  {
+    "mobile": "9876543210",
+    "role": "CLIENT",
+    "fullName": "Pavani",
+    "email": "abc.logistics@example.com",
+    "companyName": "ABC Logistics Pvt Ltd",
+    "status": "APPROVED",
+    "registeredAt": "2026-10-29T07:17:07.842Z"
+  }
+]

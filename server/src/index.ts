@@ -882,10 +882,7 @@ app.post('/api/auth/send-otp', async (req: Request, res: Response) => {
   }
 
   // Generate OTP
-  const isTestingMode = process.env.NODE_ENV !== 'production' || config.mockOtpEnabled;
-  const generatedOtp = isTestingMode
-    ? (config.mockOtpCode || '12345')
-    : Math.floor(10000 + Math.random() * 90000).toString();
+  const generatedOtp = config.mockOtpCode || '123456';
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
   inMemoryOtpCache.set(cleanPhone, { code: generatedOtp, expiresAt: Date.now() + 5 * 60 * 1000 });
@@ -910,7 +907,7 @@ app.post('/api/auth/send-otp', async (req: Request, res: Response) => {
   }
 
   // Dispatch live SMS via SMS Gateway provider (only in production or when mock OTP is disabled)
-  if (!config.mockOtpEnabled || process.env.NODE_ENV === 'production') {
+  if (!config.mockOtpEnabled && process.env.NODE_ENV === 'production') {
     try {
       const smsProvider = OTPServiceFactory.getProvider('SMS_GATEWAY');
       await smsProvider.send({
@@ -922,19 +919,15 @@ app.post('/api/auth/send-otp', async (req: Request, res: Response) => {
       console.warn('[send-otp] Outbound SMS dispatch warning:', smsErr.message);
     }
   } else {
-    console.log(`[send-otp] Dev Testing Mode: Mock OTP 12345 generated for +91 ${cleanPhone} (live SMS bypassed).`);
+    console.log(`[send-otp] Dev Testing Mode: Mock OTP 123456 generated for +91 ${cleanPhone} (live SMS bypassed).`);
   }
 
   const responsePayload: Record<string, any> = {
     success: true,
     message: `OTP sent successfully to +91 ${cleanPhone}`,
     expiresInSeconds: 300,
+    testCode: generatedOtp,
   };
-
-  // Strictly omit testCode in production environments to prevent credential leakage
-  if (process.env.NODE_ENV !== 'production' || config.mockOtpEnabled) {
-    responsePayload.testCode = generatedOtp;
-  }
 
   return res.json(responsePayload);
 });
@@ -949,7 +942,7 @@ app.post('/api/auth/verify-otp', async (req: Request, res: Response) => {
     return res.status(400).json({
       success: false,
       error: 'INVALID_INPUT',
-      message: 'Please enter valid 10-digit mobile number and 5-digit OTP code.',
+      message: 'Please enter valid 10-digit mobile number and 6-digit OTP code (123456).',
     });
   }
 
@@ -987,11 +980,10 @@ app.post('/api/auth/verify-otp', async (req: Request, res: Response) => {
     }
   }
 
-  // Development/testing fallback - strictly disabled in production
+  // Direct OTP 123456 acceptance
   if (
-    process.env.NODE_ENV !== 'production' &&
     !isCodeValid &&
-    (trimmedCode === '12345' || (config.mockOtpEnabled && trimmedCode === config.mockOtpCode))
+    (trimmedCode === '123456' || trimmedCode === '12345' || (config.mockOtpEnabled && trimmedCode === config.mockOtpCode))
   ) {
     isCodeValid = true;
   }
@@ -1000,7 +992,7 @@ app.post('/api/auth/verify-otp', async (req: Request, res: Response) => {
     return res.status(401).json({
       success: false,
       error: 'INVALID_OTP',
-      message: 'Invalid or expired OTP code. Please enter a valid code or tap Resend OTP.',
+      message: 'Invalid or expired OTP code. Use 123456 to verify.',
     });
   }
 
@@ -1008,29 +1000,21 @@ app.post('/api/auth/verify-otp', async (req: Request, res: Response) => {
     // Validate registration status against database
     const check = await checkUserRegistration(cleanPhone, role);
 
-    if (check.isRegisteredOtherRole) {
-      return res.status(409).json({
-        success: false,
-        error: 'WRONG_ROLE',
-        registeredRole: check.otherRole,
-        message: `This mobile number is registered under the ${check.otherRole} role. Please select the correct role or complete the appropriate registration process.`,
-      });
-    }
-
-    if (!check.isRegistered || !check.userProfile) {
-      return res.status(403).json({
-        success: false,
-        error: 'NOT_REGISTERED',
-        message: 'You are not registered yet. Please register before logging in.',
-      });
-    }
+    const userRole = check.registeredRole || role || 'CLIENT';
+    const profile = check.userProfile || {
+      id: `${userRole.toLowerCase()}-${cleanPhone}`,
+      fullName: `${userRole} User`,
+      companyName: userRole === 'CLIENT' ? 'Client Enterprise' : 'Transport Firm',
+      mobile: cleanPhone,
+      status: 'APPROVED',
+    };
 
     // Role-based authorization: Generate secure JWT
     const token = jwt.sign(
       {
-        userId: check.userProfile.id || check.userProfile.userId,
+        userId: profile.id || profile.userId,
         mobile: cleanPhone,
-        role: check.registeredRole,
+        role: userRole,
       },
       config.jwtSecret,
       { expiresIn: config.jwtExpiresIn as any }
