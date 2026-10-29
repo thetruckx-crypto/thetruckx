@@ -224,6 +224,7 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
     total: 0,
     verified: 0,
     pending: 0,
+    rejected: 0,
     inactive: 0,
   });
 
@@ -451,21 +452,23 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
 
       // Exact database counts - separate verification status from account status
       const totalCount = enriched.length;
-      const verifiedCount = enriched.filter((v) => v.status === 'APPROVED').length;
-      const pendingCount = enriched.filter((v) => v.status === 'PENDING' || v.status === 'PENDING_APPROVAL').length;
-      const inactiveCount = enriched.filter((v) => v.status === 'INACTIVE' || v.status === 'REJECTED' || v.status === 'SUSPENDED').length;
+      const verifiedCount = enriched.filter((v) => (v.status as any) === 'APPROVED' || (v.status as any) === 'ACTIVE').length;
+      const pendingCount = enriched.filter((v) => (v.status as any) === 'PENDING' || (v.status as any) === 'PENDING_APPROVAL' || (v.status as any) === 'UNDER_REVIEW').length;
+      const rejectedCount = enriched.filter((v) => (v.status as any) === 'REJECTED').length;
+      const inactiveCount = enriched.filter((v) => (v.status as any) === 'INACTIVE' || (v.status as any) === 'SUSPENDED').length;
 
       setCounts({
         total: totalCount,
         verified: verifiedCount,
         pending: pendingCount,
+        rejected: rejectedCount,
         inactive: inactiveCount,
       });
     } catch (err: any) {
       console.warn('Vendor database query error:', err.message);
       setError(err.message || 'Failed to load vendor records');
       setVendors([]);
-      setCounts({ total: 0, verified: 0, pending: 0, inactive: 0 });
+      setCounts({ total: 0, verified: 0, pending: 0, rejected: 0, inactive: 0 });
     } finally {
       setLoading(false);
     }
@@ -522,9 +525,10 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
   const filteredVendors = useMemo(() => {
     return vendors.filter((v) => {
       // 1. Status Tabs
-      if (activeTab === 'verified' && v.status !== 'APPROVED' && v.status !== 'ACTIVE') return false;
-      if (activeTab === 'pending' && v.status !== 'PENDING' && v.status !== 'PENDING_APPROVAL') return false;
-      if (activeTab === 'inactive' && v.status !== 'INACTIVE' && v.status !== 'REJECTED' && v.status !== 'SUSPENDED') return false;
+      if (activeTab === 'verified' && (v.status as any) !== 'APPROVED' && (v.status as any) !== 'ACTIVE') return false;
+      if (activeTab === 'pending' && (v.status as any) !== 'PENDING' && (v.status as any) !== 'PENDING_APPROVAL' && (v.status as any) !== 'UNDER_REVIEW') return false;
+      if (activeTab === 'rejected' && (v.status as any) !== 'REJECTED') return false;
+      if (activeTab === 'inactive' && (v.status as any) !== 'INACTIVE' && (v.status as any) !== 'SUSPENDED') return false;
 
       // 2. Account Status Filter Dropdown
       if (statusFilter !== 'all') {
@@ -1238,6 +1242,15 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
             }}
           >
             Pending Verification ({counts.pending})
+          </button>
+          <button
+            className={`status-tab-btn ${activeTab === 'rejected' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveTab('rejected');
+              setCurrentPage(1);
+            }}
+          >
+            Rejected ({counts.rejected})
           </button>
           <button
             className={`status-tab-btn ${activeTab === 'inactive' ? 'active' : ''}`}

@@ -83,6 +83,12 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
   const [activities, setActivities] = useState<any[]>([]);
   const [loadedTabs, setLoadedTabs] = useState<Set<string>>(new Set(['overview']));
   const [fleetConfigs, setFleetConfigs] = useState<any[]>([]);
+  const [initialCounts, setInitialCounts] = useState<{
+    vehicles: number;
+    drivers: number;
+    trips: number;
+    documents: number;
+  }>({ vehicles: 0, drivers: 0, trips: 0, documents: 0 });
   
   // UI state
   const [previewDoc, setPreviewDoc] = useState<any | null>(null);
@@ -179,6 +185,46 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
         console.warn('Could not load audit log for vendor fleet configs:', auditErr);
       }
 
+      // Authoritative database counts for overview stats
+      try {
+        const [vLinkRes, drvRes, tripRes] = await Promise.all([
+          supabase.from('vendor_vehicle_links').select('vehicle_id', { count: 'exact' }).eq('vendor_id', compData.id),
+          supabase.from('drivers').select('id', { count: 'exact' }).eq('primary_vendor_id', compData.id),
+          supabase.from('trips').select('id', { count: 'exact' }).eq('vendor_id', compData.id),
+        ]);
+
+        const vehicleIds = (vLinkRes.data || []).map((l: any) => l.vehicle_id).filter(Boolean);
+        const driverIds = (drvRes.data || []).map((d: any) => d.id).filter(Boolean);
+        const allRefIds = [compData.id, ...vehicleIds, ...driverIds];
+
+        const { data: allDocs } = await supabase
+          .from('documents')
+          .select('*')
+          .in('reference_id', allRefIds)
+          .order('created_at', { ascending: false });
+
+        // Deduplicate documents by reference_id + document_type + file_name
+        const seenDocs = new Map<string, any>();
+        (allDocs || []).forEach((doc: any) => {
+          const key = `${doc.reference_id}_${doc.document_type}_${doc.file_name || ''}`;
+          if (!seenDocs.has(key)) {
+            seenDocs.set(key, doc);
+          }
+        });
+        const uniqueDocs = Array.from(seenDocs.values());
+
+        setInitialCounts({
+          vehicles: vLinkRes.count || (vLinkRes.data ? vLinkRes.data.length : 0),
+          drivers: drvRes.count || (drvRes.data ? drvRes.data.length : 0),
+          trips: tripRes.count || (tripRes.data ? tripRes.data.length : 0),
+          documents: uniqueDocs.length,
+        });
+
+        setDocuments(uniqueDocs);
+      } catch (cntErr) {
+        console.warn('Could not load initial database counts:', cntErr);
+      }
+
     } catch (err: any) {
       console.error('Failed to load vendor profile:', err);
       setError(err.message || 'Error fetching vendor profile from database.');
@@ -214,7 +260,17 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
             .select('*')
             .in('reference_id', allRefIds)
             .order('created_at', { ascending: false });
-          setDocuments(docData || []);
+
+          // Deduplicate by reference_id + document_type + file_name
+          const seen = new Map<string, any>();
+          (docData || []).forEach((doc: any) => {
+            const key = `${doc.reference_id}_${doc.document_type}_${doc.file_name || ''}`;
+            if (!seen.has(key)) {
+              seen.set(key, doc);
+            }
+          });
+
+          setDocuments(Array.from(seen.values()));
           break;
         }
 
@@ -611,11 +667,15 @@ export const VendorProfile: React.FC<VendorProfileProps> = ({
   const isRejected = vendor.status === 'REJECTED';
   const isInactive = vendor.status === 'INACTIVE';
 
-  const activeDriversCount = drivers.filter(d => d.status === 'APPROVED' || d.status === 'ACTIVE').length;
+  const activeDriversCount = drivers.length > 0
+    ? drivers.filter(d => d.status === 'APPROVED' || d.status === 'ACTIVE').length
+    : initialCounts.drivers;
   const completedTripsCount = trips.filter(t => t.trip_status === 'COMPLETED').length;
-  const activeTripsCount = trips.filter(t => t.trip_status !== 'COMPLETED' && t.trip_status !== 'CANCELLED').length;
-  const totalVehiclesCount = vehicles.length;
-  const documentsCount = documents.length;
+  const activeTripsCount = trips.length > 0
+    ? trips.filter(t => t.trip_status !== 'COMPLETED' && t.trip_status !== 'CANCELLED').length
+    : initialCounts.trips;
+  const totalVehiclesCount = vehicles.length > 0 ? vehicles.length : initialCounts.vehicles;
+  const documentsCount = documents.length > 0 ? documents.length : initialCounts.documents;
   const fleetConfigsCount = fleetConfigs.reduce((acc, c) => acc + (Number(c.quantity) || 0), 0);
   const effectiveFleetStrength = Number(vendor.fleet_size) || (fleetConfigsCount > 0 ? fleetConfigsCount : totalVehiclesCount);
 

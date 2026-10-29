@@ -62,7 +62,7 @@ export const SettingsModule: React.FC = () => {
 
       if (adminRecord) {
         setAdminUser(adminRecord);
-        setName(adminRecord.name || "Rahul (Admin)");
+        setName(adminRecord.name || sessionUser?.user?.user_metadata?.full_name || "Admin");
         setRole(adminRecord.role || "SUPER_ADMIN");
         if (adminRecord.phone) setPhone(adminRecord.phone);
       }

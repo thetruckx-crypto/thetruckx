@@ -18,8 +18,6 @@ import {
   ArrowRight,
   Package,
 } from 'lucide-react-native';
-import { ScenicHeroBanner } from '../../../components/ScenicHeroBanner';
-import { BottomGoldWings } from '../../../components/BottomGoldWings';
 import { vendorService } from '../../../services/vendorService';
 
 interface VendorQuotationsListScreenProps {
@@ -74,13 +72,15 @@ export const VendorQuotationsListScreen: React.FC<VendorQuotationsListScreenProp
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#F05A22" />
         }
       >
-        {/* Top Banner */}
-        <View style={styles.topWrap}>
-          <ScenicHeroBanner height={180} />
+        {/* Header Bar */}
+        <View style={styles.headerBar}>
           <TouchableOpacity style={styles.backBtn} onPress={onBack} accessibilityLabel="Back">
-            <ChevronLeft size={22} color="#172B4D" />
+            <ChevronLeft size={22} color="#0F172A" />
           </TouchableOpacity>
-          
+          <View style={styles.headerTextWrap}>
+            <Text style={styles.headerTitle}>My Freight Quotations</Text>
+            <Text style={styles.headerSubtitle}>Track bids, client review & awarded bookings</Text>
+          </View>
         </View>
 
         {/* Content */}
@@ -196,7 +196,6 @@ export const VendorQuotationsListScreen: React.FC<VendorQuotationsListScreenProp
           )}
         </View>
       </ScrollView>
-      <BottomGoldWings />
     </SafeAreaView>
   );
 };
@@ -210,27 +209,36 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingBottom: 40,
   },
-  topWrap: {
-    position: 'relative',
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
   },
   backBtn: {
-    position: 'absolute',
-    top: 16,
-    left: 16,
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 10,
+    marginRight: 12,
   },
-  logoWrap: {
-    position: 'absolute',
-    bottom: 6,
-    alignSelf: 'center',
+  headerTextWrap: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
   },
   contentWrap: {
     paddingHorizontal: 16,

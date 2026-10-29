@@ -24,6 +24,8 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { supabase, ensureAdminSession } from '../../utils/supabase';
+import { useAuth } from '../../context/AuthContext';
+import { formatDisplayId } from '../../utils/idGenerator';
 
 interface DocumentApprovalsProps {
   initialVendorId?: string;
@@ -34,6 +36,9 @@ export const VendorDocumentApprovals: React.FC<DocumentApprovalsProps> = ({
   initialVendorId,
   onNavigateToVendorProfile,
 }) => {
+  const { adminProfile } = useAuth();
+  const currentAdminName = adminProfile?.name ? `${adminProfile.name} (Admin)` : 'Admin';
+
   const [documents, setDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -68,7 +73,7 @@ export const VendorDocumentApprovals: React.FC<DocumentApprovalsProps> = ({
       // 1. Fetch metadata mappings first
       const { data: vendors } = await supabase
         .from('vendor_companies')
-        .select('id, vendor_name, gstin, pan, status');
+        .select('id, vendor_name, vendor_code, gstin, pan, status');
       const vendorMap = new Map<string, any>();
       (vendors || []).forEach((v) => vendorMap.set(v.id, v));
 
@@ -142,7 +147,7 @@ export const VendorDocumentApprovals: React.FC<DocumentApprovalsProps> = ({
 
         const vendorName = v?.vendor_name || (vehInfo ? 'Vendor Fleet Partner' : drvInfo ? 'Vendor Driver Partner' : 'Vendor Partner');
         const resolvedVendorId = v?.id || vehInfo?.vendorId || drvInfo?.vendorId || d.reference_id;
-        const vendorIdDisplay = `VEN-${(resolvedVendorId || d.id).substring(0, 8).toUpperCase()}`;
+        const vendorIdDisplay = v?.vendor_code || (resolvedVendorId ? formatDisplayId('VD', resolvedVendorId) : `VEN-${(resolvedVendorId || d.id).substring(0, 8).toUpperCase()}`);
 
         // Determine friendly document name and related entity
         let friendlyType = 'Business Registration';
@@ -222,13 +227,23 @@ export const VendorDocumentApprovals: React.FC<DocumentApprovalsProps> = ({
           expiryDate: expiryStr,
           referenceNo: v?.gstin ? `GSTIN-${v.gstin}` : v?.pan ? `PAN-${v.pan}` : `REF-${d.id.substring(0, 10).toUpperCase()}`,
           status: normStatus,
-          verifiedBy: d.verified_by || 'Rahul (Admin)',
+          verifiedBy: d.verified_by || 'Admin',
           verifiedAt: (d as any).verified_at ? `${new Date((d as any).verified_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}, ${new Date((d as any).verified_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}` : null,
           rejectionReason: d.rejection_reason || null,
         };
       });
 
-      setDocuments(mapped);
+      // Deduplicate documents by reference_id + document_type + file_name
+      const seen = new Map<string, any>();
+      mapped.forEach((doc) => {
+        const key = `${doc.referenceId || doc.id}_${doc.documentType || (doc as any).type}_${doc.fileName || ''}`;
+        if (!seen.has(key)) {
+          seen.set(key, doc);
+        }
+      });
+      const deduplicatedDocs = Array.from(seen.values());
+
+      setDocuments(deduplicatedDocs);
 
       // Auto-select first doc for review drawer if none selected
       setSelectedDoc((prev: any) => {
@@ -352,7 +367,7 @@ export const VendorDocumentApprovals: React.FC<DocumentApprovalsProps> = ({
         .from('documents')
         .update({
           verification_status: 'VERIFIED',
-          verified_by: 'Rahul (Admin)',
+          verified_by: currentAdminName,
           rejection_reason: null,
           verified_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -374,7 +389,7 @@ export const VendorDocumentApprovals: React.FC<DocumentApprovalsProps> = ({
             .from('vendor_companies')
             .update({
               status: 'APPROVED',
-              approved_by: 'Rahul (Admin)',
+              approved_by: currentAdminName,
               approved_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
             })
@@ -386,7 +401,7 @@ export const VendorDocumentApprovals: React.FC<DocumentApprovalsProps> = ({
       setSelectedDoc({
         ...selectedDoc,
         status: 'Verified',
-        verifiedBy: 'Rahul (Admin)',
+        verifiedBy: currentAdminName,
         verifiedAt: `${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}, ${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`,
       });
       loadDocuments();
@@ -411,7 +426,7 @@ export const VendorDocumentApprovals: React.FC<DocumentApprovalsProps> = ({
         .from('documents')
         .update({
           verification_status: 'REJECTED',
-          verified_by: 'Rahul (Admin)',
+          verified_by: currentAdminName,
           rejection_reason: remarks.trim(),
           updated_at: new Date().toISOString(),
         })

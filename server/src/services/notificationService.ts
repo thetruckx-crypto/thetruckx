@@ -45,6 +45,8 @@ function initFirebaseAdmin(): boolean {
 export class NotificationService {
   private static tokens: DeviceTokenRecord[] = [];
   private static initialized = false;
+  private static recentDispatches = new Map<string, number>();
+  private static DEDUP_WINDOW_MS = 60 * 1000; // 60 seconds cooldown per recipient per event
 
   private static init() {
     if (this.initialized) return;
@@ -209,8 +211,54 @@ export class NotificationService {
       return { success: false, dispatchedCount: 0, tickets: [] };
     }
 
-    const expoTokens = validTokens.filter((t) => t.startsWith('ExponentPushToken') || t.startsWith('ExpoPushToken'));
-    const fcmTokens = validTokens.filter((t) => !t.startsWith('ExponentPushToken') && !t.startsWith('ExpoPushToken'));
+    const now = Date.now();
+    // Prune stale deduplication entries periodically
+    if (this.recentDispatches.size > 500) {
+      for (const [key, timestamp] of this.recentDispatches.entries()) {
+        if (now - timestamp > 300000) {
+          this.recentDispatches.delete(key);
+        }
+      }
+    }
+
+    // Filter out duplicate dispatches for the same recipient & event within cooldown window
+    const nonDuplicateTokens = validTokens.filter((token) => {
+      const eventKey =
+        payload.data?.eventId ||
+        payload.data?.refId ||
+        payload.data?.tripId ||
+        payload.data?.bookingId ||
+        `${payload.title}_${payload.body}`;
+      const dispatchSignature = `${token}:${eventKey}`;
+      const lastDispatch = this.recentDispatches.get(dispatchSignature);
+      if (lastDispatch && now - lastDispatch < this.DEDUP_WINDOW_MS) {
+        console.log(
+          `[NotificationService] Suppressed duplicate push for token ${token.substring(0, 15)}... event: "${eventKey}"`
+        );
+        return false;
+      }
+      this.recentDispatches.set(dispatchSignature, now);
+      return true;
+    });
+
+    if (nonDuplicateTokens.length === 0) {
+      console.log(
+        '[NotificationService] All recipients already notified for this event within cooldown window. Suppressing duplicate dispatch.'
+      );
+      return {
+        success: true,
+        dispatchedCount: 0,
+        tickets: [
+          {
+            status: 'suppressed_duplicate',
+            message: 'Notification already dispatched to recipient for this event.',
+          },
+        ],
+      };
+    }
+
+    const expoTokens = nonDuplicateTokens.filter((t) => t.startsWith('ExponentPushToken') || t.startsWith('ExpoPushToken'));
+    const fcmTokens = nonDuplicateTokens.filter((t) => !t.startsWith('ExponentPushToken') && !t.startsWith('ExpoPushToken'));
 
     const allTickets: any[] = [];
     let totalDispatched = 0;

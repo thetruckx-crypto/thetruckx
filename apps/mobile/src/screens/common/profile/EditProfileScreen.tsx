@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -23,6 +23,8 @@ import {
   Camera,
 } from 'lucide-react-native';
 import { AuthSessionData, authService } from '../../../services/authService';
+import { clientService } from '../../../services/clientService';
+import { formatDisplayId } from '../../../utils/idGenerator';
 
 interface EditProfileScreenProps {
   session: AuthSessionData | null;
@@ -35,13 +37,63 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({
   onBack,
   onProfileUpdated,
 }) => {
+  const clientId =
+    session?.clientCode ||
+    session?.clientId ||
+    (session?.role === 'CLIENT' && session?.userId
+      ? (session.userId.startsWith('CLI-') || session.userId.startsWith('NECL-')
+          ? session.userId
+          : formatDisplayId('CL', session.userId, session.createdAt))
+      : session?.userId || 'CLI-2026');
+
   const [fullName, setFullName] = useState(session?.fullName || '');
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(session?.email || '');
   const [companyName, setCompanyName] = useState(session?.companyName || '');
-  const [designation, setDesignation] = useState('');
-  const [department, setDepartment] = useState('');
-  const [address, setAddress] = useState('');
+  const [designation, setDesignation] = useState(session?.designation || '');
+  const [department, setDepartment] = useState(session?.department || '');
+  const [address, setAddress] = useState(
+    session?.address ||
+    (session?.city ? `${session.city}${session.state ? ', ' + session.state : ''}${session.pincode ? ' - ' + session.pincode : ''}` : '')
+  );
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!session?.mobile) return;
+        const cleanPhone = session.mobile.replace(/[^0-9]/g, '').slice(-10);
+
+        // 1. Check local registry first (saved upon client registration)
+        const registry = await authService.getLocalRegistry();
+        const localRec = registry.find((u) => u.mobile === cleanPhone);
+        if (localRec) {
+          setFullName((prev) => prev || localRec.fullName || '');
+          setEmail((prev) => prev || localRec.email || '');
+          setCompanyName((prev) => prev || localRec.companyName || '');
+          if (localRec.designation) setDesignation((prev) => prev || localRec.designation || '');
+          if (localRec.department) setDepartment((prev) => prev || localRec.department || '');
+          const localAddr = localRec.address || (localRec.city ? `${localRec.city}${localRec.state ? ', ' + localRec.state : ''}${localRec.pincode ? ' - ' + localRec.pincode : ''}` : '');
+          if (localAddr) setAddress((prev) => prev || localAddr);
+        }
+
+        // 2. Also check live client status service
+        if (session.role === 'CLIENT') {
+          const status = await clientService.getClientAccountStatus(cleanPhone, true);
+          if (status) {
+            setFullName((prev) => prev || status.fullName || '');
+            setEmail((prev) => prev || status.email || '');
+            setCompanyName((prev) => prev || status.companyName || '');
+            if ((status as any).designation) setDesignation((prev) => prev || (status as any).designation);
+            if ((status as any).department) setDepartment((prev) => prev || (status as any).department);
+            const serverAddr = status.registeredAddress || (status.city ? `${status.city}${status.state ? ', ' + status.state : ''}${status.pincode ? ' - ' + status.pincode : ''}` : '');
+            if (serverAddr) setAddress((prev) => prev || serverAddr);
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to load registered profile details:', e);
+      }
+    })();
+  }, [session?.mobile]);
 
   const handleSave = async () => {
     if (!fullName.trim()) {
@@ -51,23 +103,32 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({
 
     setSaving(true);
     try {
-      const res = await authService.updateUserProfile(
-        session?.userId || 'usr-default',
+      const updatedFields = {
+        fullName: fullName.trim(),
+        email: email.trim(),
+        companyName: companyName.trim(),
+        designation: designation.trim(),
+        department: department.trim(),
+        address: address.trim(),
+      };
+
+      await authService.updateUserProfile(
+        session?.userId || clientId || 'usr-default',
         session?.role || 'CLIENT',
-        {
-          fullName: fullName.trim(),
-          email: email.trim(),
-          companyName: companyName.trim(),
-          designation: designation.trim(),
-          department: department.trim(),
-          address: address.trim(),
-        }
+        updatedFields
       );
 
       const refreshed = await authService.checkExistingSession();
-      if (refreshed) {
-        onProfileUpdated(refreshed);
-      }
+      const updatedSession: AuthSessionData = {
+        ...(refreshed || session!),
+        ...updatedFields,
+        userId: session?.role === 'CLIENT' ? clientId : (refreshed?.userId || session?.userId || 'usr-default'),
+        clientCode: session?.role === 'CLIENT' ? clientId : (refreshed?.clientCode || session?.clientCode),
+        clientId: session?.role === 'CLIENT' ? clientId : (refreshed?.clientId || session?.clientId),
+      };
+
+      await authService.saveSession(updatedSession);
+      onProfileUpdated(updatedSession);
 
       Alert.alert('Profile Saved', 'Your profile details have been updated successfully.', [
         { text: 'OK', onPress: onBack },
@@ -131,7 +192,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({
                 <Camera size={14} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
-            <Text style={styles.avatarHint}>Account ID: {session?.userId || 'USR-2026'}</Text>
+            <Text style={styles.avatarHint}>Account ID: {clientId}</Text>
           </View>
 
           {/* Form Fields */}
@@ -199,6 +260,20 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({
                 value={designation}
                 onChangeText={setDesignation}
                 placeholder="Your Role / Designation"
+                placeholderTextColor="#94A3B8"
+              />
+            </View>
+          </View>
+
+          <View style={styles.formGroup}>
+            <Text style={styles.fieldLabel}>Department</Text>
+            <View style={styles.inputContainer}>
+              <Briefcase size={18} color="#94A3B8" style={styles.leadingIcon} />
+              <TextInput
+                style={styles.textInput}
+                value={department}
+                onChangeText={setDepartment}
+                placeholder="Department (e.g. Logistics, Supply Chain)"
                 placeholderTextColor="#94A3B8"
               />
             </View>

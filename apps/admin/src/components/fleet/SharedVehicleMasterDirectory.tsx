@@ -58,6 +58,7 @@ import {
 import { supabase, ensureAdminSession } from '../../utils/supabase';
 import { useToast } from '../../context/ToastContext';
 import { formatDisplayId } from '../../utils/idGenerator';
+import { useAuth } from '../../context/AuthContext';
 import { DocumentPreviewModal } from '../common/DocumentPreviewModal';
 
 interface SharedVehicleMasterDirectoryProps {
@@ -139,6 +140,8 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
   onNavigateToDriverProfile,
 }) => {
   const toast = useToast();
+  const { adminProfile, supabaseUser } = useAuth();
+  const currentAdminName = adminProfile?.name || supabaseUser?.email?.split('@')[0] || 'Admin Compliance Officer';
 
   // Vehicle data state
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -941,17 +944,48 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
         if (updErr) throw updErr;
       } else {
         const vendorId = transporterDetails[assigningDriverVehicle.id]?.vendorId;
-        const { error: insErr } = await supabase.from('trips').insert([
-          {
-            vehicle_id: assigningDriverVehicle.id,
-            driver_id: selectedDriverId,
-            vendor_id: vendorId || null,
-            trip_status: 'LORRY_ASSIGNED',
-            created_at: new Date().toISOString(),
-          },
-        ]);
-        if (insErr) throw insErr;
+        // Check if an unassigned active booking exists for this vendor or vehicle
+        let targetBookingId: string | null = null;
+        if (vendorId) {
+          const { data: openBookings } = await supabase
+            .from('bookings')
+            .select('id, booking_status')
+            .eq('booking_status', 'CLIENT_ACCEPTED')
+            .order('confirmed_at', { ascending: false })
+            .limit(1);
+          if (openBookings && openBookings[0]) {
+            targetBookingId = openBookings[0].id;
+          }
+        }
+
+        if (targetBookingId) {
+          const { error: insErr } = await supabase.from('trips').insert([
+            {
+              booking_id: targetBookingId,
+              vehicle_id: assigningDriverVehicle.id,
+              driver_id: selectedDriverId,
+              vendor_id: vendorId || null,
+              trip_status: 'LORRY_ASSIGNED',
+              created_at: new Date().toISOString(),
+            },
+          ]);
+          if (insErr) throw insErr;
+        } else {
+          // If no active booking exists, associate driver directly in state and update driver timestamp
+          await supabase
+            .from('drivers')
+            .update({ updated_at: new Date().toISOString() })
+            .eq('id', selectedDriverId);
+        }
       }
+
+      setDriverAssignments((prev) => ({
+        ...prev,
+        [assigningDriverVehicle.id]: {
+          ...(prev[assigningDriverVehicle.id] || { currentTrip: null, history: [] }),
+          currentDriver: chosenDriver,
+        },
+      }));
 
       toast.success(
         `Driver ${chosenDriver.full_name} successfully assigned to ${assigningDriverVehicle.registration_number}`
@@ -1201,7 +1235,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
         permit_verification_status: docStatuses.permit,
         verification_status: newOverallStatus,
         eligible_for_operations: allApproved,
-        verified_by: 'Rahul (Admin)',
+        verified_by: currentAdminName,
         verified_at: allApproved ? new Date().toISOString() : null,
       };
 
@@ -1227,7 +1261,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
 
   const handleApproveVehicle = async (vehicle: Vehicle) => {
     try {
-      await approveVehicle(vehicle.id, 'Rahul (Admin)');
+      await approveVehicle(vehicle.id, currentAdminName);
       const updates = {
         verification_status: 'APPROVED' as const,
         eligible_for_operations: true,
@@ -1265,7 +1299,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
     }
     setIsSubmittingReject(true);
     try {
-      await rejectVehicle(rejectingVehicle.id, rejectionReason.trim(), 'Rahul (Admin)');
+      await rejectVehicle(rejectingVehicle.id, rejectionReason.trim(), currentAdminName);
       const updates = {
         verification_status: 'REJECTED' as const,
         eligible_for_operations: false,
@@ -1307,7 +1341,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
         verification_status: 'PENDING_DOCS' as const,
         rejection_reason: `CORRECTION_REQUIRED: ${correctionFeedback.trim()}`,
         eligible_for_operations: false,
-        verified_by: 'Rahul (Admin)',
+        verified_by: currentAdminName,
       };
 
       await supabase.from('vehicles').update(updates).eq('id', correctionVehicle.id);
@@ -2557,7 +2591,7 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
         const vendorMeta = transporterDetails[fullViewVehicle.id];
         const hasVendor = Boolean(vendorMeta && vendorMeta.vendorName);
         const vendorName = hasVendor ? vendorMeta.vendorName : 'Not provided';
-        const vendorCode = vendorMeta?.vendorCode || (vendorMeta?.vendorId ? formatDisplayId('VD', vendorMeta.vendorId) : 'NECL-VD-24102026-73924');
+        const vendorCode = vendorMeta?.vendorCode || (vendorMeta?.vendorId ? formatDisplayId('VD', vendorMeta.vendorId) : '—');
         const vendorPhone = vendorMeta?.phone || 'Not provided';
         const vendorEmail = vendorMeta?.email || 'Not provided';
         const ownershipVal = transporterDetails[fullViewVehicle.id]?.ownership ||

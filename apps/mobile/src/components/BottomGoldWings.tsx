@@ -6,7 +6,7 @@ const { width } = Dimensions.get('window');
 
 export const BottomGoldWings: React.FC = () => {
   return (
-    <View style={styles.container}>
+    <View style={styles.container} pointerEvents="none">
       <Svg width={width} height={36} viewBox={`0 0 ${width} 36`}>
         <Defs>
           <LinearGradient id="wingGrad" x1="0" y1="0" x2="1" y2="0">

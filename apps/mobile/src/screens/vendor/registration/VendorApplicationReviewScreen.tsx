@@ -74,7 +74,28 @@ export const VendorApplicationReviewScreen: React.FC<VendorApplicationReviewScre
 
     if (!formData) return;
 
-    // 1. Mandatory Business Rules & Field Validation prior to submission
+    // 1. Resolve effective 10-digit mobile number from formData or props
+    const rawMobile = (formData.phone || initialMobile || formData.altPhone || '').trim();
+    const cleanMobile = rawMobile.replace(/[^0-9]/g, '').slice(-10);
+
+    if (cleanMobile.length !== 10) {
+      Alert.alert(
+        'Missing Mobile Number',
+        'Please enter a valid 10-digit mobile number in Enterprise Profile (Step 1).',
+        [
+          { text: 'Go to Step 1', onPress: () => onEditSection(1) },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+      return;
+    }
+
+    const finalFormData: VendorRegistrationFormData = {
+      ...formData,
+      phone: cleanMobile,
+    };
+
+    // 2. Mandatory Business Rules & Field Validation prior to submission
     const validation = vendorService.validateVendorRegistrationData(formData);
     if (!validation.isAllComplete) {
       const firstIncomplete = validation.firstIncompleteStep;
@@ -101,8 +122,8 @@ export const VendorApplicationReviewScreen: React.FC<VendorApplicationReviewScre
     isSubmittingRef.current = true;
     setLoading(true);
     try {
-      // 2. Role Change Detection: Verify against database only upon submission
-      const roleCheck = await authService.checkExistingRoleInDatabase(initialMobile, 'VENDOR');
+      // 3. Role Change Detection: Verify against database only upon submission
+      const roleCheck = await authService.checkExistingRoleInDatabase(cleanMobile, 'VENDOR');
       if (roleCheck.hasExistingDifferentRole) {
         setLoading(false);
         isSubmittingRef.current = false;
@@ -113,19 +134,19 @@ export const VendorApplicationReviewScreen: React.FC<VendorApplicationReviewScre
         return;
       }
 
-      // 3. Send OTP only after reviewing application; submit happens after OTP verification
+      // 4. Send OTP only after reviewing application; submit happens after OTP verification
       if (onProceedToOtp) {
-        const otpRes = await authService.sendOtp(initialMobile, 'REGISTRATION', 'VENDOR');
+        const otpRes = await authService.sendOtp(cleanMobile, 'REGISTRATION', 'VENDOR');
         onProceedToOtp({
-          targetPhone: initialMobile,
-          testCode: otpRes.testCode,
-          formData,
+          targetPhone: cleanMobile,
+          testCode: otpRes.testCode || '123456',
+          formData: finalFormData,
         });
         return;
       }
 
       // Direct submission fallback
-      const res = await vendorService.submitVendorRegistration(formData, initialMobile);
+      const res = await vendorService.submitVendorRegistration(finalFormData, cleanMobile);
       if (res.success) {
         onSubmitSuccess(res);
       } else {
@@ -176,23 +197,12 @@ export const VendorApplicationReviewScreen: React.FC<VendorApplicationReviewScre
               Review your full transporter profile before final submission to TRUCKS Compliance Committee.
             </Text>
             <TouchableOpacity
-              style={{
-                marginTop: 10,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 6,
-                backgroundColor: '#FFF7ED',
-                borderWidth: 1,
-                borderColor: '#FFEDD5',
-                paddingHorizontal: 12,
-                paddingVertical: 7,
-                borderRadius: 8,
-              }}
+              style={styles.allStepsBtn}
               onPress={() => onEditSection(1)}
               activeOpacity={0.8}
             >
               <Edit2 size={13} color="#F05A22" />
-              <Text style={{ fontSize: 12, fontWeight: '700', color: '#F05A22' }}>
+              <Text style={styles.allStepsBtnText}>
                 View All Steps / Edit Completed Details
               </Text>
             </TouchableOpacity>
@@ -222,7 +232,9 @@ export const VendorApplicationReviewScreen: React.FC<VendorApplicationReviewScre
               </View>
               <View style={styles.detailRow}>
                 <Text style={styles.label}>Mobile:</Text>
-                <Text style={styles.value}>+91 {formData.phone || initialMobile}</Text>
+                <Text style={styles.value}>
+                  +91 {((formData.phone || initialMobile || '').replace(/[^0-9]/g, '').slice(-10)) || 'Not Provided'}
+                </Text>
               </View>
               <View style={styles.detailRow}>
                 <Text style={styles.label}>PAN:</Text>
@@ -571,7 +583,7 @@ const styles = StyleSheet.create({
   },
   scrollContainer: {
     flexGrow: 1,
-    paddingBottom: 40,
+    paddingBottom: 90,
   },
   topBar: {
     flexDirection: 'row',
@@ -599,7 +611,7 @@ const styles = StyleSheet.create({
     width: 38,
   },
   contentWrap: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingTop: 12,
   },
   headingWrap: {
@@ -622,6 +634,26 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 17,
   },
+  allStepsBtn: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FFEDD5',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    maxWidth: '100%',
+  },
+  allStepsBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#F05A22',
+    textAlign: 'center',
+  },
   reviewCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
@@ -643,12 +675,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flex: 1,
+    marginRight: 8,
   },
   cardHeaderTitle: {
     color: '#F05A22',
     fontSize: 12,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
+    flex: 1,
+    flexWrap: 'wrap',
   },
   editBtn: {
     flexDirection: 'row',
@@ -657,7 +693,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF7ED',
     borderRadius: 6,
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 5,
+    flexShrink: 0,
   },
   editText: {
     color: '#F05A22',
@@ -670,8 +707,9 @@ const styles = StyleSheet.create({
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 3,
+    alignItems: 'flex-start',
+    paddingVertical: 4,
+    minHeight: 24,
   },
   label: {
     color: '#64748B',
@@ -679,6 +717,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     flex: 1,
     paddingRight: 8,
+    lineHeight: 18,
   },
   value: {
     color: '#172B4D',
@@ -686,6 +725,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     flex: 1.4,
     textAlign: 'right',
+    lineHeight: 18,
   },
   stackedBlock: {
     marginTop: 4,
@@ -728,13 +768,14 @@ const styles = StyleSheet.create({
     padding: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   docItemHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 4,
+    gap: 8,
   },
   docItemTitle: {
     fontSize: 11,
@@ -742,6 +783,8 @@ const styles = StyleSheet.create({
     color: '#334155',
     textTransform: 'uppercase',
     letterSpacing: 0.4,
+    flex: 1,
+    marginRight: 6,
   },
   docStatusOk: {
     fontSize: 11,
@@ -751,6 +794,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
+    flexShrink: 0,
   },
   docStatusMissing: {
     fontSize: 11,
@@ -760,6 +804,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
+    flexShrink: 0,
   },
   docStatusOptional: {
     fontSize: 11,
@@ -769,23 +814,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
+    flexShrink: 0,
   },
   docFileName: {
     fontSize: 12,
     color: '#0F172A',
     fontWeight: '500',
+    lineHeight: 17,
   },
   declarationWrap: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
     borderRadius: 12,
     padding: 12,
-    marginTop: 6,
+    marginTop: 8,
     marginBottom: 16,
+    shadowColor: '#64748B',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   declarationText: {
     flex: 1,

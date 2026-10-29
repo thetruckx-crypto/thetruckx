@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { VendorQuotationsModule } from './VendorQuotationsModule';
 import {
   Search,
   Plus,
@@ -113,7 +114,13 @@ interface QuotationsModuleProps {
 
 export const QuotationsModule: React.FC<QuotationsModuleProps> = ({ onNavigateToComparison }) => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const toast = useToast();
+
+  // If user navigates to tab=vendor-quotes, render the dedicated Vendor Quotations Directory
+  if (searchParams.get('tab') === 'vendor-quotes') {
+    return <VendorQuotationsModule />;
+  }
 
   // State management
   const [requirements, setRequirements] = useState<Requirement[]>([]);
@@ -843,6 +850,51 @@ export const QuotationsModule: React.FC<QuotationsModuleProps> = ({ onNavigateTo
         <span>Operations</span>
         <ChevronRight size={13} />
         <span style={{ color: '#0F172A', fontWeight: 600 }}>Sourcing & RFQ</span>
+      </div>
+
+      {/* ── Top Module Mode Switcher Tabs ── */}
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', borderBottom: '1px solid #E2E8F0', paddingBottom: '12px' }}>
+        <button
+          onClick={() => navigate('/admin/quotations?tab=rfq')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '9px 18px',
+            borderRadius: '8px',
+            fontSize: '13.5px',
+            fontWeight: 700,
+            cursor: 'pointer',
+            border: '1px solid #F05A22',
+            background: '#FFF7ED',
+            color: '#F05A22',
+            transition: 'all 0.15s ease',
+          }}
+        >
+          <Layers size={16} />
+          <span>Sourcing & RFQ Management</span>
+        </button>
+
+        <button
+          onClick={() => navigate('/admin/vendor-quotations')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '9px 18px',
+            borderRadius: '8px',
+            fontSize: '13.5px',
+            fontWeight: 500,
+            cursor: 'pointer',
+            border: '1px solid #E2E8F0',
+            background: '#FFFFFF',
+            color: '#475569',
+            transition: 'all 0.15s ease',
+          }}
+        >
+          <DollarSign size={16} />
+          <span>Vendor Submitted Quotations</span>
+        </button>
       </div>
 
       {/* ── Hero Banner (Deep Navy + Truck Visual) Matching Screenshot 2 ── */}

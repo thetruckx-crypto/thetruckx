@@ -152,7 +152,35 @@ export const VendorBookingDetailsScreen: React.FC<VendorBookingDetailsScreenProp
     );
   }
 
-  if (!booking) return null;
+  if (!booking) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' }}>
+          <TouchableOpacity style={styles.backBtn} onPress={onBack} accessibilityLabel="Back">
+            <ChevronLeft size={22} color="#172B4D" />
+          </TouchableOpacity>
+          <Text style={{ fontSize: 16, fontWeight: '700', color: '#0F172A', marginLeft: 8 }}>Booking Details</Text>
+        </View>
+        <View style={[styles.loadingCenter, { paddingHorizontal: 32 }]}>
+          <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: '#FEF2F2', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+            <AlertTriangle size={32} color="#EF4444" />
+          </View>
+          <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 8, textAlign: 'center' }}>
+            Booking Record Not Found
+          </Text>
+          <Text style={{ fontSize: 13, color: '#64748B', textAlign: 'center', lineHeight: 20, marginBottom: 24 }}>
+            The requested booking details could not be retrieved or is no longer assigned.
+          </Text>
+          <TouchableOpacity
+            style={{ backgroundColor: '#F05A22', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 10 }}
+            onPress={onBack}
+          >
+            <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 14 }}>Back to Bookings</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const hasTrip = !!booking.trip;
   const isDriverConfirmed = weighbillDoc && (weighbillDoc.metadata?.driverConfirmed || weighbillDoc.uploaderRole === 'DRIVER');

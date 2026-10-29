@@ -88,6 +88,18 @@ export interface AuthSessionData {
   accountStatus?: string;
   isRegistrationComplete?: boolean;
   profileCompletionStatus?: 'COMPLETE' | 'INCOMPLETE';
+  clientCode?: string;
+  clientId?: string;
+  email?: string;
+  designation?: string;
+  department?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  gstin?: string;
+  pan?: string;
+  businessType?: string;
 }
 
 export interface RegisteredUserRecord {
@@ -96,6 +108,17 @@ export interface RegisteredUserRecord {
   fullName: string;
   email?: string;
   companyName?: string;
+  designation?: string;
+  department?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  gstin?: string;
+  pan?: string;
+  businessType?: string;
+  clientId?: string;
+  clientCode?: string;
   status:
   | 'ACTIVE'
   | 'PENDING'
@@ -1051,13 +1074,23 @@ export const authService = {
       const vId = userProfile?.vendorId || userProfile?.id;
       const statusRes = await vendorService.getVendorVerificationStatus(vId, cleanPhone);
 
-      if (statusRes.status === 'APPROVED') {
+      if (statusRes.status === 'APPROVED' || (statusRes as any).status === 'ACTIVE') {
         return {
           isComplete: true,
           accountStatus: 'APPROVED',
           profileCompletionStatus: 'COMPLETE',
           missingFields: [],
           nextScreen: 'VENDOR_DASHBOARD',
+        };
+      }
+
+      if (statusRes.status === 'PENDING' || (statusRes as any).status === 'UNDER_REVIEW') {
+        return {
+          isComplete: true,
+          accountStatus: 'PENDING',
+          profileCompletionStatus: 'COMPLETE',
+          missingFields: [],
+          nextScreen: 'VENDOR_VERIFICATION_STATUS',
         };
       }
 
@@ -1172,26 +1205,86 @@ export const authService = {
       if (!parsed.mobile || !parsed.role) return null;
 
       // Verify that the user actually exists in the database
-      const cleanPhone = parsed.mobile.replace(/[^0-9]/g, '').slice(-10);
-      const reg = await this.checkMobileRegistration(cleanPhone, parsed.role);
-      if (!reg.isRegistered || reg.status === 'DEACTIVATED') {
-        // Stale or deleted user session -> wipe local session and cached data
-        await this.clearSession();
-        await this.resetAllLocalData();
-        return null;
-      }
+      try {
+        const cleanPhone = parsed.mobile.replace(/[^0-9]/g, '').slice(-10);
+        const reg = await this.checkMobileRegistration(cleanPhone, parsed.role);
+        if (reg.status === 'DEACTIVATED') {
+          // Explicitly deactivated by admin -> terminate session
+          await this.clearSession();
+          return null;
+        }
 
-      // Update session attributes without wiping pending/inactive sessions
-      if (parsed.role === 'CLIENT') {
-        if (reg.userProfile?.clientId) {
-          parsed.userId = reg.userProfile.clientId;
+        if (reg.isRegistered) {
+          if (parsed.role === 'CLIENT') {
+            const resolvedClientCode = reg.userProfile?.clientCode || reg.userProfile?.clientId || parsed.clientCode || parsed.clientId;
+            if (resolvedClientCode) {
+              parsed.clientCode = resolvedClientCode;
+              parsed.clientId = resolvedClientCode;
+              parsed.userId = resolvedClientCode;
+            } else if (reg.userProfile?.clientId) {
+              parsed.userId = reg.userProfile.clientId;
+              parsed.clientId = reg.userProfile.clientId;
+            }
+            if (reg.userProfile?.company) {
+              parsed.companyName = reg.userProfile.company;
+            }
+            if (reg.userProfile?.name || reg.userProfile?.fullName) {
+              parsed.fullName = reg.userProfile.name || reg.userProfile.fullName;
+            }
+            if (reg.userProfile?.email && !parsed.email) parsed.email = reg.userProfile.email;
+            if (reg.userProfile?.designation && !parsed.designation) parsed.designation = reg.userProfile.designation;
+            if (reg.userProfile?.department && !parsed.department) parsed.department = reg.userProfile.department;
+            if (reg.userProfile?.address && !parsed.address) parsed.address = reg.userProfile.address;
+            if (reg.userProfile?.city && !parsed.city) parsed.city = reg.userProfile.city;
+            if (reg.userProfile?.state && !parsed.state) parsed.state = reg.userProfile.state;
+            if (reg.userProfile?.pincode && !parsed.pincode) parsed.pincode = reg.userProfile.pincode;
+            if (reg.userProfile?.gstin && !parsed.gstin) parsed.gstin = reg.userProfile.gstin;
+            if (reg.userProfile?.pan && !parsed.pan) parsed.pan = reg.userProfile.pan;
+          } else if (parsed.role === 'VENDOR') {
+            if (reg.userProfile?.vendorId) {
+              parsed.userId = reg.userProfile.vendorId;
+            }
+            if (reg.userProfile?.company) {
+              parsed.companyName = reg.userProfile.company;
+            }
+          }
+          if (reg.status) {
+            parsed.accountStatus = reg.status;
+          }
+          if (typeof reg.isRegistrationComplete === 'boolean') {
+            parsed.isRegistrationComplete = reg.isRegistrationComplete;
+          }
         }
-        if (reg.userProfile?.company) {
-          parsed.companyName = reg.userProfile.company;
-        }
+
+        // Restore missing registered fields from local registry if needed
+        try {
+          const registry = await this.getLocalRegistry();
+          const localRec = registry.find((u) => u.mobile === cleanPhone);
+          if (localRec) {
+            if (!parsed.fullName && localRec.fullName) parsed.fullName = localRec.fullName;
+            if (!parsed.email && localRec.email) parsed.email = localRec.email;
+            if (!parsed.companyName && localRec.companyName) parsed.companyName = localRec.companyName;
+            if (!parsed.designation && localRec.designation) parsed.designation = localRec.designation;
+            if (!parsed.department && localRec.department) parsed.department = localRec.department;
+            if (!parsed.address && localRec.address) parsed.address = localRec.address;
+            if (!parsed.city && localRec.city) parsed.city = localRec.city;
+            if (!parsed.state && localRec.state) parsed.state = localRec.state;
+            if (!parsed.pincode && localRec.pincode) parsed.pincode = localRec.pincode;
+            if (!parsed.gstin && localRec.gstin) parsed.gstin = localRec.gstin;
+            if (!parsed.pan && localRec.pan) parsed.pan = localRec.pan;
+            if (parsed.role === 'CLIENT' && localRec.clientCode) {
+              parsed.clientCode = localRec.clientCode;
+              parsed.clientId = localRec.clientId || localRec.clientCode;
+              parsed.userId = localRec.clientCode;
+            }
+          }
+        } catch {}
+
+        await this.saveSession(parsed);
+      } catch (checkErr) {
+        // Network or API failure: preserve existing local session
+        console.warn('Network notice during session check, preserving cached session:', checkErr);
       }
-      parsed.accountStatus = reg.status;
-      parsed.isRegistrationComplete = reg.isRegistrationComplete;
 
       return parsed;
     } catch {
@@ -1450,6 +1543,10 @@ export const authService = {
               ? (apiRes.userProfile?.id || `drv-${cleanPhone}`)
               : (apiRes.userProfile?.vendorId || apiRes.userProfile?.id || `ven-${cleanPhone}`);
 
+          const rawStatus = apiRes.accountStatus || 'PENDING';
+          const normalizedStatus = (rawStatus === 'ACTIVE' || rawStatus === 'APPROVED') ? 'APPROVED' : rawStatus;
+          const isComp = apiRes.isRegistrationComplete ?? true;
+
           await this.saveSession({
             userId: resolvedUserId,
             mobile: cleanPhone,
@@ -1458,19 +1555,21 @@ export const authService = {
             companyName: apiRes.userProfile?.companyName || apiRes.userProfile?.company || (requestedRole === 'CLIENT' ? 'Client Enterprise' : 'Transport Firm'),
             token: apiRes.token || 'sess-' + Date.now(),
             createdAt: new Date().toISOString(),
-            accountStatus: 'APPROVED',
-            isRegistrationComplete: true,
+            accountStatus: normalizedStatus,
+            isRegistrationComplete: isComp,
           });
 
           return {
             success: true,
             isExistingUser: true,
             existingRole: requestedRole,
-            accountStatus: 'APPROVED',
-            isRegistrationComplete: true,
-            profileCompletionStatus: 'COMPLETE',
-            missingFields: [],
-            nextStep: requestedRole === 'CLIENT' ? 'CLIENT_DASHBOARD' : requestedRole === 'VENDOR' ? 'VENDOR_DASHBOARD' : 'DRIVER_DASHBOARD',
+            accountStatus: normalizedStatus,
+            isRegistrationComplete: isComp,
+            profileCompletionStatus: apiRes.profileCompletionStatus || (isComp ? 'COMPLETE' : 'INCOMPLETE'),
+            missingFields: apiRes.missingFields || [],
+            nextStep: apiRes.nextStep || (normalizedStatus === 'APPROVED'
+              ? (requestedRole === 'CLIENT' ? 'CLIENT_DASHBOARD' : requestedRole === 'VENDOR' ? 'VENDOR_DASHBOARD' : 'DRIVER_DASHBOARD')
+              : (requestedRole === 'VENDOR' ? 'VENDOR_VERIFICATION_STATUS' : 'REGISTRATION_STATUS')),
             userProfile: apiRes.userProfile,
             token: apiRes.token,
           };
@@ -1566,6 +1665,10 @@ export const authService = {
     const userFullName = userProfile?.fullName || userProfile?.name || `${existingRole || 'Client'} User`;
     const userCompanyName = userProfile?.companyName || userProfile?.company || (existingRole === 'CLIENT' ? 'Client Enterprise' : 'Transport Firm');
 
+    const rawFbStatus = regCheck.status || userProfile?.status || 'PENDING';
+    const normalizedFbStatus = (rawFbStatus === 'ACTIVE' || rawFbStatus === 'APPROVED') ? 'APPROVED' : rawFbStatus;
+    const isFbComp = regCheck.isRegistrationComplete ?? true;
+
     await this.saveSession({
       userId: resolvedUserId,
       mobile: cleanPhone,
@@ -1574,8 +1677,8 @@ export const authService = {
       companyName: userCompanyName,
       token: 'sess-' + existingRole!.toLowerCase() + '-' + Date.now(),
       createdAt: new Date().toISOString(),
-      accountStatus: 'APPROVED',
-      isRegistrationComplete: true,
+      accountStatus: normalizedFbStatus,
+      isRegistrationComplete: isFbComp,
     });
 
     if (purpose === 'LOGIN') {
@@ -1583,11 +1686,13 @@ export const authService = {
         success: true,
         isExistingUser: true,
         existingRole,
-        accountStatus: 'APPROVED',
-        isRegistrationComplete: true,
-        profileCompletionStatus: 'COMPLETE',
-        missingFields: [],
-        nextStep: existingRole === 'CLIENT' ? 'CLIENT_DASHBOARD' : existingRole === 'VENDOR' ? 'VENDOR_DASHBOARD' : 'DRIVER_DASHBOARD',
+        accountStatus: normalizedFbStatus,
+        isRegistrationComplete: isFbComp,
+        profileCompletionStatus: isFbComp ? 'COMPLETE' : 'INCOMPLETE',
+        missingFields: regCheck.missingFields || [],
+        nextStep: normalizedFbStatus === 'APPROVED'
+          ? (existingRole === 'CLIENT' ? 'CLIENT_DASHBOARD' : existingRole === 'VENDOR' ? 'VENDOR_DASHBOARD' : 'DRIVER_DASHBOARD')
+          : (existingRole === 'VENDOR' ? 'VENDOR_VERIFICATION_STATUS' : 'REGISTRATION_STATUS'),
         userProfile: {
           ...userProfile,
           clientId: resolvedUserId,
@@ -1596,7 +1701,7 @@ export const authService = {
           fullName: userFullName,
           company: userCompanyName,
           companyName: userCompanyName,
-          status: 'APPROVED',
+          status: normalizedFbStatus,
         },
       } as any;
     }
@@ -1605,7 +1710,7 @@ export const authService = {
       success: true,
       isExistingUser: regCheck.isRegistered,
       existingRole: requestedRole,
-      accountStatus: 'APPROVED',
+      accountStatus: normalizedFbStatus,
       userProfile: null,
     } as any;
   },
@@ -1820,8 +1925,30 @@ export const authService = {
       if (current) {
         current.fullName = updates.fullName;
         if (updates.companyName) current.companyName = updates.companyName;
+        if (updates.email !== undefined) current.email = updates.email;
+        if (updates.designation !== undefined) current.designation = updates.designation;
+        if (updates.department !== undefined) current.department = updates.department;
+        if (updates.address !== undefined) current.address = updates.address;
         await this.saveSession(current);
       }
+
+      // Synchronize with local registry
+      try {
+        const cleanPhone = (current?.mobile || '').replace(/[^0-9]/g, '').slice(-10);
+        if (cleanPhone) {
+          const registry = await this.getLocalRegistry();
+          const target = registry.find((u) => u.mobile === cleanPhone);
+          if (target) {
+            target.fullName = updates.fullName;
+            if (updates.companyName) target.companyName = updates.companyName;
+            if (updates.email !== undefined) target.email = updates.email;
+            if (updates.designation !== undefined) target.designation = updates.designation;
+            if (updates.department !== undefined) target.department = updates.department;
+            if (updates.address !== undefined) target.address = updates.address;
+            await this.saveLocalRegistry(registry);
+          }
+        }
+      } catch {}
 
       // Persist to Supabase based on role
       if (role === 'CLIENT') {
@@ -1835,6 +1962,17 @@ export const authService = {
             department: updates.department,
           })
           .eq('mobile', cleanPhone);
+
+        if (current?.clientId || current?.userId) {
+          const compRef = current.clientId || current.userId;
+          await supabase
+            .from('client_companies')
+            .update({
+              company_name: updates.companyName,
+              registered_address: updates.address,
+            })
+            .or(`id.eq.${compRef},client_code.eq.${compRef}`);
+        }
       } else if (role === 'VENDOR') {
         await supabase
           .from('vendor_companies')
@@ -1881,7 +2019,21 @@ export const authService = {
       const effectiveRole = role || item.targetRole || (await this.getCurrentSession())?.role || 'CLIENT';
       const storageKey = `@necl_user_custom_notifs_${cleanKey}_${effectiveRole.toLowerCase()}`;
       const existing = await this.getUserCustomNotifications(cleanKey, effectiveRole);
-      const filtered = existing.filter((n) => n.id !== item.id);
+
+      // Generate a normalized event signature to prevent duplicate notifications for the same event
+      const itemSig = item.refId
+        ? `${item.category || ''}_${item.refId}_${(item.title || '').trim().toLowerCase()}`
+        : `${(item.title || '').trim().toLowerCase()}_${(item.content || item.subtitle || '').trim().toLowerCase()}`;
+
+      // Deduplicate: filter out any existing notification with the same ID OR the same event signature
+      const filtered = existing.filter((n) => {
+        if (n.id === item.id) return false;
+        const nSig = n.refId
+          ? `${n.category || ''}_${n.refId}_${(n.title || '').trim().toLowerCase()}`
+          : `${(n.title || '').trim().toLowerCase()}_${(n.content || n.subtitle || '').trim().toLowerCase()}`;
+        return nSig !== itemSig;
+      });
+
       const updated = [item, ...filtered].slice(0, 50);
       await AsyncStorage.setItem(storageKey, JSON.stringify(updated));
     } catch (e) {
@@ -2069,11 +2221,20 @@ export const authService = {
         });
       }
 
-      // Deduplicate items by ID
+      // Deduplicate items strictly by both unique ID and event signature (category + refId + title)
+      // Ensures exactly one notification per valid event per recipient with no duplicate noise
       const seenIds = new Set<string>();
+      const seenSignatures = new Set<string>();
       return items.filter((item) => {
         if (!item?.id || seenIds.has(item.id)) return false;
         seenIds.add(item.id);
+
+        const sig = item.refId
+          ? `${item.category || ''}_${item.refId}_${(item.title || '').trim().toLowerCase()}`
+          : `${(item.title || '').trim().toLowerCase()}_${(item.subtitle || '').trim().toLowerCase()}`;
+        if (seenSignatures.has(sig)) return false;
+        seenSignatures.add(sig);
+
         return true;
       });
     } catch {

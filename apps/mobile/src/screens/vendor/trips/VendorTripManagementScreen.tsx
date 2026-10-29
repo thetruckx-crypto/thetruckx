@@ -8,6 +8,7 @@ import {
   ScrollView,
   RefreshControl,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import {
   ChevronLeft,
@@ -19,20 +20,21 @@ import {
   ArrowRight,
   Package,
 } from 'lucide-react-native';
-import { ScenicHeroBanner } from '../../../components/ScenicHeroBanner';
-import { BottomGoldWings } from '../../../components/BottomGoldWings';
 import { vendorService } from '../../../services/vendorService';
+import { VendorBottomNavBar, VendorNavTab } from '../../../components/VendorBottomNavBar';
 
 interface VendorTripManagementScreenProps {
   vendorId: string;
   onBack: () => void;
   onSelectTrip: (tripId: string) => void;
+  onSelectNavTab?: (tab: VendorNavTab) => void;
 }
 
 export const VendorTripManagementScreen: React.FC<VendorTripManagementScreenProps> = ({
   vendorId,
   onBack,
   onSelectTrip,
+  onSelectNavTab,
 }) => {
   const [trips, setTrips] = useState<any[]>([]);
   const [activeFilter, setActiveFilter] = useState<'ALL' | 'ACTIVE' | 'COMPLETED'>('ALL');
@@ -72,6 +74,17 @@ export const VendorTripManagementScreen: React.FC<VendorTripManagementScreenProp
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      {/* Compact Top Header Bar */}
+      <View style={styles.compactHeaderBar}>
+        <TouchableOpacity style={styles.headerBackCircle} onPress={onBack} accessibilityLabel="Back">
+          <ChevronLeft size={22} color="#172B4D" />
+        </TouchableOpacity>
+        <Text style={styles.compactHeaderTitle}>
+          Trip <Text style={{ color: '#FF5A1F' }}>Management</Text>
+        </Text>
+        <View style={{ width: 38 }} />
+      </View>
+
       <ScrollView
         contentContainerStyle={styles.scrollContainer}
         bounces={false}
@@ -79,14 +92,6 @@ export const VendorTripManagementScreen: React.FC<VendorTripManagementScreenProp
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#F05A22" />
         }
       >
-        {/* Top Banner */}
-        <View style={styles.topWrap}>
-          <ScenicHeroBanner height={180} />
-          <TouchableOpacity style={styles.backBtn} onPress={onBack} accessibilityLabel="Back">
-            <ChevronLeft size={22} color="#172B4D" />
-          </TouchableOpacity>
-          
-        </View>
 
         {/* Content */}
         <View style={styles.contentWrap}>
@@ -211,7 +216,19 @@ export const VendorTripManagementScreen: React.FC<VendorTripManagementScreenProp
           )}
         </View>
       </ScrollView>
-      <BottomGoldWings />
+
+      <VendorBottomNavBar
+        activeTab="TRIPS"
+        onSelectTab={(tab) => {
+          if (tab === 'TRIPS') {
+            onRefresh();
+          } else if (onSelectNavTab) {
+            onSelectNavTab(tab);
+          } else {
+            onBack();
+          }
+        }}
+      />
     </SafeAreaView>
   );
 };
@@ -221,31 +238,40 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8FAFC',
   },
-  scrollContainer: {
-    flexGrow: 1,
-    paddingBottom: 40,
+  compactHeaderBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'android' ? 12 : 6,
+    paddingBottom: 10,
+    backgroundColor: '#F8FAFC',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
   },
-  topWrap: {
-    position: 'relative',
-  },
-  backBtn: {
-    position: 'absolute',
-    top: 16,
-    left: 16,
+  headerBackCircle: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E6EAF0',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 10,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
   },
-  logoWrap: {
-    position: 'absolute',
-    bottom: 6,
-    alignSelf: 'center',
+  compactHeaderTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#172B4D',
+  },
+  scrollContainer: {
+    flexGrow: 1,
+    paddingBottom: 90,
   },
   contentWrap: {
     paddingHorizontal: 16,

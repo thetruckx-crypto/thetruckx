@@ -42,11 +42,13 @@ export const ClientBottomNavBar: React.FC<ClientBottomNavBarProps> = ({
         accessibilityState={{ selected: activeTab === 'HOME' }}
         accessibilityLabel="Home Tab"
       >
-        <Home
-          size={22}
-          color={activeTab === 'HOME' ? '#F15A24' : '#64748B'}
-          strokeWidth={activeTab === 'HOME' ? 2.5 : 1.8}
-        />
+        <View style={[styles.tabIconWrap, activeTab === 'HOME' && styles.tabIconWrapActive]}>
+          <Home
+            size={21}
+            color={activeTab === 'HOME' ? '#F15A24' : '#64748B'}
+            strokeWidth={activeTab === 'HOME' ? 2.4 : 1.8}
+          />
+        </View>
         <Text style={[styles.tabLabel, activeTab === 'HOME' && styles.tabLabelActive]}>
           Home
         </Text>
@@ -62,11 +64,13 @@ export const ClientBottomNavBar: React.FC<ClientBottomNavBarProps> = ({
         accessibilityState={{ selected: isShipmentsActive }}
         accessibilityLabel="Shipments Tab"
       >
-        <Package
-          size={22}
-          color={isShipmentsActive ? '#F15A24' : '#64748B'}
-          strokeWidth={isShipmentsActive ? 2.5 : 1.8}
-        />
+        <View style={[styles.tabIconWrap, isShipmentsActive && styles.tabIconWrapActive]}>
+          <Package
+            size={21}
+            color={isShipmentsActive ? '#F15A24' : '#64748B'}
+            strokeWidth={isShipmentsActive ? 2.4 : 1.8}
+          />
+        </View>
         <Text style={[styles.tabLabel, isShipmentsActive && styles.tabLabelActive]}>
           Shipments
         </Text>
@@ -82,11 +86,13 @@ export const ClientBottomNavBar: React.FC<ClientBottomNavBarProps> = ({
         accessibilityState={{ selected: activeTab === 'REQUIREMENTS' }}
         accessibilityLabel="My Requirements Tab"
       >
-        <FileText
-          size={22}
-          color={activeTab === 'REQUIREMENTS' ? '#F15A24' : '#64748B'}
-          strokeWidth={activeTab === 'REQUIREMENTS' ? 2.5 : 1.8}
-        />
+        <View style={[styles.tabIconWrap, activeTab === 'REQUIREMENTS' && styles.tabIconWrapActive]}>
+          <FileText
+            size={21}
+            color={activeTab === 'REQUIREMENTS' ? '#F15A24' : '#64748B'}
+            strokeWidth={activeTab === 'REQUIREMENTS' ? 2.4 : 1.8}
+          />
+        </View>
         <Text style={[styles.tabLabel, activeTab === 'REQUIREMENTS' && styles.tabLabelActive]}>
           My Requirements
         </Text>
@@ -102,11 +108,13 @@ export const ClientBottomNavBar: React.FC<ClientBottomNavBarProps> = ({
         accessibilityState={{ selected: activeTab === 'PROFILE' }}
         accessibilityLabel="Profile Tab"
       >
-        <User
-          size={22}
-          color={activeTab === 'PROFILE' ? '#F15A24' : '#64748B'}
-          strokeWidth={activeTab === 'PROFILE' ? 2.5 : 1.8}
-        />
+        <View style={[styles.tabIconWrap, activeTab === 'PROFILE' && styles.tabIconWrapActive]}>
+          <User
+            size={21}
+            color={activeTab === 'PROFILE' ? '#F15A24' : '#64748B'}
+            strokeWidth={activeTab === 'PROFILE' ? 2.4 : 1.8}
+          />
+        </View>
         <Text style={[styles.tabLabel, activeTab === 'PROFILE' && styles.tabLabelActive]}>
           Profile
         </Text>
@@ -119,17 +127,17 @@ export const ClientBottomNavBar: React.FC<ClientBottomNavBarProps> = ({
 const styles = StyleSheet.create({
   bottomTabBar: {
     flexDirection: 'row',
-    height: Platform.OS === 'ios' ? 76 : 64,
+    height: Platform.OS === 'ios' ? 78 : 66,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: '#F1F5F9',
     paddingBottom: Platform.OS === 'ios' ? 20 : 6,
     paddingTop: 6,
-    elevation: 12,
-    shadowColor: '#000',
+    elevation: 10,
+    shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: -3 },
     shadowOpacity: 0.06,
-    shadowRadius: 6,
+    shadowRadius: 8,
   },
   tabItem: {
     flex: 1,
@@ -137,11 +145,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     position: 'relative',
   },
+  tabIconWrap: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabIconWrapActive: {
+    backgroundColor: '#FFF7ED',
+  },
   tabLabel: {
-    fontSize: 10.5,
+    fontSize: 11,
     color: '#64748B',
     marginTop: 2,
     fontWeight: '600',
+    letterSpacing: -0.2,
   },
   tabLabelActive: {
     color: '#F15A24',

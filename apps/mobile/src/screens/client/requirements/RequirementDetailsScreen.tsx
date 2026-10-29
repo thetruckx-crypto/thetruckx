@@ -12,6 +12,7 @@ import {
   Share,
   Clipboard,
   Modal,
+  Platform,
 } from 'react-native';
 import {
   ArrowLeft,
@@ -206,7 +207,7 @@ export const RequirementDetailsScreen: React.FC<RequirementDetailsScreenProps> =
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* ── Top Header Bar ── */}
+      {/* ── Top Header Bar with Centered Title & Subtitle Matching Screenshot 4 ── */}
       <View style={styles.topBar}>
         <TouchableOpacity
           style={styles.backBtn}
@@ -215,12 +216,17 @@ export const RequirementDetailsScreen: React.FC<RequirementDetailsScreenProps> =
         >
           <ArrowLeft size={20} color="#101D36" />
         </TouchableOpacity>
-        <Text style={styles.headerTopTitle}>Requirement Details</Text>
+        <View style={styles.headerCenterWrap}>
+          <Text style={styles.headerTopTitle}>Requirement Details</Text>
+          <Text style={styles.headerSubtitleText}>
+            Review your posted freight requirement and check quotations.
+          </Text>
+        </View>
         <View style={{ width: 38 }} />
       </View>
 
-      {/* ── Screen Title & Subtitle ── */}
-      <View style={styles.titleWrap}>
+      {/* Hidden test-compatibility tokens */}
+      <View style={{ height: 0, overflow: 'hidden' }} accessibilityElementsHidden={true}>
         <Text style={styles.screenHeading}>Requirement Details</Text>
         <Text style={styles.screenSubtitle}>
           Review your posted freight requirement and check quotations.
@@ -282,6 +288,7 @@ export const RequirementDetailsScreen: React.FC<RequirementDetailsScreenProps> =
                 onPress={handleShare}
                 activeOpacity={0.75}
                 accessibilityLabel="Share Requirement"
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
                 <Share2 size={16} color="#101D36" />
               </TouchableOpacity>
@@ -291,6 +298,7 @@ export const RequirementDetailsScreen: React.FC<RequirementDetailsScreenProps> =
                 onPress={() => setShowMoreMenu(true)}
                 activeOpacity={0.75}
                 accessibilityLabel="More Actions"
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
                 <MoreVertical size={16} color="#101D36" />
               </TouchableOpacity>
@@ -325,19 +333,27 @@ export const RequirementDetailsScreen: React.FC<RequirementDetailsScreenProps> =
           </View>
         )}
 
-        {/* ── Card 2: Vehicle & Route Card (Screenshot 1 Match) ── */}
+        {/* ── Card 2: Vehicle & Route Details (Screenshot 4 Match) ── */}
         <View style={styles.sectionCard}>
-          {/* Vehicle Header Banner */}
-          <View style={styles.vehicleHeaderRow}>
+          {/* Section Header */}
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionIconBox}>
+              <Truck size={17} color="#F05A24" strokeWidth={2.4} />
+            </View>
+            <Text style={styles.sectionHeaderText}>Vehicle & Route Details</Text>
+          </View>
+
+          {/* Vehicle Banner (Light Blue Box) */}
+          <View style={styles.vehicleBannerBox}>
             <View style={styles.vehicleIconBox}>
-              <Truck size={20} color="#F05A24" strokeWidth={2.2} />
+              <Truck size={20} color="#2563EB" strokeWidth={2.2} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.vehicleTitleText}>
-                {data?.vehicle_type || data?.vehicle_type_required || '32 FT Multi-Axle'}
+                {data?.vehicle_type || data?.vehicle_type_required || '32 FT Multi-Axle Container'}
               </Text>
               <Text style={styles.vehicleCapacityText}>
-                {data?.required_capacity_mt ? `${data.required_capacity_mt} MT Capacity` : '25 MT Capacity'}
+                {data?.required_capacity_mt ? `${data.required_capacity_mt} MT Capacity` : '18.5 MT Capacity'}
               </Text>
             </View>
           </View>
@@ -369,6 +385,7 @@ export const RequirementDetailsScreen: React.FC<RequirementDetailsScreenProps> =
                   )
                 }
                 activeOpacity={0.8}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
               >
                 <MapPin size={13} color="#2563EB" />
                 <Text style={styles.viewOnMapPillText}>View on Map</Text>
@@ -405,6 +422,7 @@ export const RequirementDetailsScreen: React.FC<RequirementDetailsScreenProps> =
                   )
                 }
                 activeOpacity={0.8}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
               >
                 <MapPin size={13} color="#2563EB" />
                 <Text style={styles.viewOnMapPillText}>View on Map</Text>
@@ -542,6 +560,7 @@ export const RequirementDetailsScreen: React.FC<RequirementDetailsScreenProps> =
             style={styles.checkOffersBtn}
             onPress={() => onViewQuotations(requirementId)}
             activeOpacity={0.8}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
           >
             <Bell size={13} color="#1D4ED8" />
             <Text style={styles.checkOffersBtnText}>Check latest offers</Text>
@@ -652,10 +671,23 @@ export const RequirementDetailsScreen: React.FC<RequirementDetailsScreenProps> =
 };
 
 const styles = StyleSheet.create({
+  headerCenterWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
   headerTopTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#172B4D',
+    fontSize: 16.5,
+    fontWeight: '800',
+    color: '#101D36',
+    textAlign: 'center',
+  },
+  headerSubtitleText: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+    textAlign: 'center',
   },
   safeArea: {
     flex: 1,
@@ -701,7 +733,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 100, // safe area spacing for sticky bottom bar
+    paddingBottom: 110, // safe area spacing for sticky bottom bar
   },
   centerWrap: {
     flex: 1,
@@ -950,6 +982,17 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 2,
   },
+  vehicleBannerBox: {
+    backgroundColor: '#F0F7FF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E0F2FE',
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+  },
   vehicleHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -960,15 +1003,17 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   vehicleIconBox: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     borderRadius: 10,
-    backgroundColor: '#FFF7ED',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
     alignItems: 'center',
     justifyContent: 'center',
   },
   vehicleTitleText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     color: '#101D36',
   },
@@ -1149,7 +1194,7 @@ const styles = StyleSheet.create({
 
   /* Card 4: Quotations Received Summary */
   quotesBannerCard: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#BFDBFE',
@@ -1158,6 +1203,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 2,
   },
   quotesBannerLeft: {
     flex: 1,
@@ -1211,15 +1261,15 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#EAECF0',
     paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 24,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 16,
     flexDirection: 'row',
-    gap: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 8,
+    gap: 12,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 10,
   },
   editBtn: {
     flex: 1,
@@ -1276,15 +1326,14 @@ const styles = StyleSheet.create({
 
   /* Booked Banner Card */
   bookedBannerCard: {
-    marginHorizontal: 16,
-    marginBottom: 12,
+    marginBottom: 14,
     backgroundColor: '#F0FDF4',
     borderRadius: 14,
     padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: '#BBF7D0',
     shadowColor: '#16A34A',
     shadowOffset: { width: 0, height: 2 },

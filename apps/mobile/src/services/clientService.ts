@@ -177,6 +177,7 @@ export interface ClientAccountStatusResult {
   | 'ROLE_CONFLICT'
   | 'INVALID_PHONE';
   companyId?: string;
+  clientId?: string;
   companyName?: string;
   clientCode?: string;
   fullName?: string;
@@ -196,6 +197,10 @@ export interface ClientAccountStatusResult {
   city?: string;
   state?: string;
   registeredAddress?: string;
+  address?: string;
+  designation?: string;
+  department?: string;
+  gstin?: string;
 }
 
 function generateUuid(): string {
@@ -628,6 +633,17 @@ export const clientService = {
           fullName: params.fullName.trim(),
           email: params.email.trim(),
           companyName: params.companyName.trim(),
+          designation: params.designation?.trim(),
+          department: params.department?.trim(),
+          address: params.registeredAddress?.trim(),
+          city: params.city?.trim(),
+          state: params.state?.trim(),
+          pincode: params.pincode?.trim(),
+          gstin: params.gstin?.trim(),
+          pan: params.pan?.trim(),
+          businessType: params.businessType,
+          clientId: targetCompanyId,
+          clientCode: generatedCode,
           status: 'PENDING_APPROVAL',
           registeredAt: new Date().toISOString(),
         });
@@ -928,6 +944,10 @@ export const clientService = {
           city: comp?.city,
           state: comp?.state,
           registeredAddress: comp?.registered_address,
+          address: comp?.registered_address,
+          designation: user?.designation,
+          department: user?.department,
+          gstin: comp?.gstin,
         };
         accountStatusCache.set(cacheKey, { data: result, timestamp: Date.now() });
         return result;
@@ -982,7 +1002,17 @@ export const clientService = {
             fullName: found.fullName,
             email: found.email,
             mobile: found.mobile,
-            clientCode: `CLI-${cleanPhone.slice(-6)}`,
+            clientCode: found.clientCode || `CLI-${cleanPhone.slice(-6)}`,
+            clientId: found.clientId || found.clientCode || `CLI-${cleanPhone.slice(-6)}`,
+            designation: found.designation,
+            department: found.department,
+            registeredAddress: found.address,
+            address: found.address,
+            city: found.city,
+            state: found.state,
+            pincode: found.pincode,
+            gstin: found.gstin,
+            pan: found.pan,
           };
         }
       } catch { }

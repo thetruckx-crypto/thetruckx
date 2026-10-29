@@ -396,7 +396,7 @@ class MobileNotificationService {
     }
 
     const notificationItem = {
-      id: `welcome-${cleanPhone}-${effectiveRole.toLowerCase()}-${isFirstTime ? 'first' : 'back'}-${Date.now()}`,
+      id: `welcome-${cleanPhone}-${effectiveRole.toLowerCase()}-${isFirstTime ? 'first' : 'back'}`,
       category: 'system' as const,
       title,
       subtitle,
@@ -416,7 +416,7 @@ class MobileNotificationService {
       const cooldownMs = 10 * 60 * 1000; // 10 minutes
 
       if (!lastWelcomeTime || now - parseInt(lastWelcomeTime, 10) > cooldownMs) {
-        await authService.appendUserCustomNotification(notificationItem, cleanPhone);
+        await authService.appendUserCustomNotification(notificationItem, cleanPhone, effectiveRole);
         await AsyncStorage.setItem(sessionCooldownKey, now.toString());
         wasAdded = true;
 

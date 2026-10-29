@@ -15,10 +15,10 @@ export const BRANDING = {
     accent: '#FD5C15',
   },
   assets: {
-    logo: require('../../assets/trucks-logo-header.png'),
+    logo: require('../../assets/trucks-logo-header-transparent.png'),
     logoTransparent: require('../../assets/trucks-logo-header-transparent.png'),
-    logoSquare: require('../../assets/trucks-logo.png'),
-    logoMark: require('../../assets/trucks-logo-mark.png'),
+    logoSquare: require('../../assets/trucks-logo-transparent.png'),
+    logoMark: require('../../assets/trucks-logo-mark-transparent.png'),
     logoMarkTransparent: require('../../assets/trucks-logo-mark-transparent.png'),
   },
 

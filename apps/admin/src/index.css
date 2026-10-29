@@ -293,20 +293,50 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: #64748B;
-  padding: 16px 12px 6px;
+  padding: 14px 12px 6px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.nav-section-label.clickable {
+  cursor: pointer;
+  user-select: none;
+  transition: color var(--dur-fast, 0.15s) var(--ease);
+}
+
+.nav-section-label.clickable:hover {
+  color: #F05A22;
+}
+
+.section-chevron {
+  flex-shrink: 0;
+  color: #94A3B8;
+  transition: transform var(--dur-fast, 0.2s) var(--ease), color var(--dur-fast, 0.15s) var(--ease);
+}
+
+.nav-section-label.clickable:hover .section-chevron {
+  color: #F05A22;
+}
+
+.section-chevron.rotated {
+  transform: rotate(-90deg);
+}
+
+.nav-section-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 9px 12px;
+  padding: 8.5px 12px;
   border-radius: var(--r-md, 10px);
   color: #172B4D;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   border: 1px solid transparent;
@@ -338,7 +368,7 @@ body {
 }
 
 .nav-item.active-orange {
-  background: #FFF1E8 !important;
+  background: #FFF7ED !important;
   color: #F05A22 !important;
   border-left: 3px solid #F05A22 !important;
   border-radius: 0 var(--r-md, 10px) var(--r-md, 10px) 0;

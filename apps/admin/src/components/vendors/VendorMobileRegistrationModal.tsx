@@ -316,7 +316,7 @@ export const VendorMobileRegistrationModal: React.FC<VendorMobileRegistrationMod
         .from('documents')
         .update({
           verification_status: 'VERIFIED',
-          verified_by: 'Rahul (Admin)',
+          verified_by: 'Admin',
           verified_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })

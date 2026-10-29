@@ -424,16 +424,32 @@ export async function checkUserRegistration(phoneNumber: string, requestedRole?:
           vendorMissing.push('KYC Documents');
         }
 
-        const isVendorApproved = compStatus === 'APPROVED';
-        const vendorIsComplete = isVendorApproved || (vendorMissing.length === 0 && compStatus !== 'INACTIVE');
+        const isVendorApproved = compStatus === 'APPROVED' || compStatus === 'ACTIVE';
+        const isVendorSubmitted = compStatus === 'PENDING' || compStatus === 'UNDER_REVIEW';
         
+        let vendorIsComplete = false;
         let nextStep = 'VENDOR_APPLICATION_REVIEW';
-        if (!comp?.vendor_name || comp.vendor_name === 'Active Registration' || !comp?.pan || comp.pan === 'NOT_PROVIDED' || comp.pan.length !== 10) {
-          nextStep = 'VENDOR_REGISTRATION';
-        } else if (!comp?.address) {
-          nextStep = 'VENDOR_ADDRESS_CONTACT';
-        } else if (!hasPanDoc || !hasChequeDoc || hasRejectedDocs) {
-          nextStep = 'VENDOR_DOC_UPLOAD';
+
+        if (isVendorApproved) {
+          vendorIsComplete = true;
+          vendorMissing.length = 0;
+          nextStep = 'VENDOR_DASHBOARD';
+        } else if (isVendorSubmitted) {
+          vendorIsComplete = true;
+          vendorMissing.length = 0;
+          nextStep = 'VENDOR_VERIFICATION_STATUS';
+        } else if (compStatus === 'REJECTED' || compStatus === 'ACTION_REQUIRED') {
+          vendorIsComplete = true;
+          nextStep = 'VENDOR_VERIFICATION_STATUS';
+        } else {
+          vendorIsComplete = vendorMissing.length === 0 && compStatus !== 'INACTIVE';
+          if (!comp?.vendor_name || comp.vendor_name === 'Active Registration' || !comp?.pan || comp.pan === 'NOT_PROVIDED' || comp.pan.length !== 10) {
+            nextStep = 'VENDOR_REGISTRATION';
+          } else if (!comp?.address) {
+            nextStep = 'VENDOR_ADDRESS_CONTACT';
+          } else if (!hasPanDoc || !hasChequeDoc || hasRejectedDocs) {
+            nextStep = 'VENDOR_DOC_UPLOAD';
+          }
         }
 
         if (!activeRoles.some((r) => r.role === 'VENDOR')) {
@@ -489,16 +505,32 @@ export async function checkUserRegistration(phoneNumber: string, requestedRole?:
             vendorMissing.push('KYC Documents');
           }
 
-          const isVendorApproved = compStatus === 'APPROVED';
-          const vendorIsComplete = isVendorApproved || (vendorMissing.length === 0 && compStatus !== 'INACTIVE');
+          const isVendorApproved = compStatus === 'APPROVED' || compStatus === 'ACTIVE';
+          const isVendorSubmitted = compStatus === 'PENDING' || compStatus === 'UNDER_REVIEW';
 
+          let vendorIsComplete = false;
           let nextStep = 'VENDOR_APPLICATION_REVIEW';
-          if (!directComp.vendor_name || directComp.vendor_name === 'Active Registration' || !directComp.pan || directComp.pan === 'NOT_PROVIDED' || directComp.pan.length !== 10) {
-            nextStep = 'VENDOR_REGISTRATION';
-          } else if (!directComp.address) {
-            nextStep = 'VENDOR_ADDRESS_CONTACT';
-          } else if (!hasPanDoc || !hasChequeDoc || hasRejectedDocs) {
-            nextStep = 'VENDOR_DOC_UPLOAD';
+
+          if (isVendorApproved) {
+            vendorIsComplete = true;
+            vendorMissing.length = 0;
+            nextStep = 'VENDOR_DASHBOARD';
+          } else if (isVendorSubmitted) {
+            vendorIsComplete = true;
+            vendorMissing.length = 0;
+            nextStep = 'VENDOR_VERIFICATION_STATUS';
+          } else if (compStatus === 'REJECTED' || compStatus === 'ACTION_REQUIRED') {
+            vendorIsComplete = true;
+            nextStep = 'VENDOR_VERIFICATION_STATUS';
+          } else {
+            vendorIsComplete = vendorMissing.length === 0 && compStatus !== 'INACTIVE';
+            if (!directComp.vendor_name || directComp.vendor_name === 'Active Registration' || !directComp.pan || directComp.pan === 'NOT_PROVIDED' || directComp.pan.length !== 10) {
+              nextStep = 'VENDOR_REGISTRATION';
+            } else if (!directComp.address) {
+              nextStep = 'VENDOR_ADDRESS_CONTACT';
+            } else if (!hasPanDoc || !hasChequeDoc || hasRejectedDocs) {
+              nextStep = 'VENDOR_DOC_UPLOAD';
+            }
           }
 
           activeRoles.push({
@@ -4254,6 +4286,271 @@ app.get('/api/vendor/quotes/:requirementId', async (req: Request, res: Response)
     });
   } catch (err: any) {
     return res.status(500).json({ error: err.message || 'Failed to fetch vendor quotations' });
+  }
+});
+
+// 3b. Authoritative Vendor Quotation Submission with Automatic Versioning and Bidding Deadlines
+app.post('/api/vendor/submit-quotation', async (req: Request, res: Response) => {
+  try {
+    const {
+      vendorId,
+      requirementId,
+      vehicleId,
+      driverId,
+      quotedRate,
+      transitDays,
+      remarks,
+    } = req.body;
+
+    if (!vendorId || !requirementId) {
+      return res.status(400).json({ success: false, error: 'Transporter ID and Requirement ID are required.' });
+    }
+
+    const rateNum = parseFloat(quotedRate);
+    if (!rateNum || isNaN(rateNum) || rateNum < 1000) {
+      return res.status(400).json({ success: false, error: 'Quoted rate must be at least ₹1,000.' });
+    }
+
+    // 1. Resolve vendor company ID
+    let resolvedVendorCompId = vendorId;
+    let { data: vComp } = await supabase
+      .from('vendor_companies')
+      .select('id, vendor_name, status')
+      .eq('id', vendorId)
+      .maybeSingle();
+
+    if (!vComp) {
+      // Check if vendorId is a vendor_code or mobile in vendor_users
+      const { data: vUser } = await supabase
+        .from('vendor_users')
+        .select('vendor_id')
+        .or(`mobile.eq.${vendorId},vendor_id.eq.${vendorId}`)
+        .limit(1)
+        .maybeSingle();
+      if (vUser?.vendor_id) {
+        resolvedVendorCompId = vUser.vendor_id;
+        const compRes = await supabase
+          .from('vendor_companies')
+          .select('id, vendor_name, status')
+          .eq('id', resolvedVendorCompId)
+          .maybeSingle();
+        vComp = compRes.data;
+      }
+    }
+
+    if (!vComp) {
+      // Fallback: search vendor_companies by vendor_code
+      const { data: vByCode } = await supabase
+        .from('vendor_companies')
+        .select('id, vendor_name, status')
+        .eq('vendor_code', vendorId)
+        .maybeSingle();
+      if (vByCode) {
+        resolvedVendorCompId = vByCode.id;
+        vComp = vByCode;
+      }
+    }
+
+    if (!vComp) {
+      return res.status(404).json({ success: false, error: 'Transporter company profile not found in database.' });
+    }
+
+    if (vComp.status !== 'APPROVED') {
+      return res.status(403).json({
+        success: false,
+        error: 'Your transporter account is currently under compliance review. Quotation submission is enabled once approved by TRUCKS Admin.',
+      });
+    }
+
+    // 2. Validate and Resolve Vehicle (Schema requires not-null vehicle_id)
+    let resolvedVehicleId = vehicleId;
+    if (resolvedVehicleId) {
+      const { data: veh } = await supabase
+        .from('vehicles')
+        .select('id, registration_number, verification_status, eligible_for_operations')
+        .eq('id', resolvedVehicleId)
+        .maybeSingle();
+      if (veh && (veh.verification_status !== 'APPROVED' || !veh.eligible_for_operations)) {
+        return res.status(400).json({
+          success: false,
+          error: `Selected vehicle ${veh.registration_number} is pending compliance verification. Only approved vehicles can be bid.`,
+        });
+      }
+    } else {
+      // Auto-resolve first verified vehicle linked to this vendor
+      const { data: vLinks } = await supabase
+        .from('vendor_vehicle_links')
+        .select('vehicle_id, vehicles(id, verification_status, eligible_for_operations)')
+        .eq('vendor_id', resolvedVendorCompId)
+        .order('created_at', { ascending: false });
+
+      const approvedLink = (vLinks || []).find((l: any) => {
+        const v = Array.isArray(l.vehicles) ? l.vehicles[0] : l.vehicles;
+        return v?.verification_status === 'APPROVED' || v?.eligible_for_operations;
+      }) || vLinks?.[0];
+
+      if (approvedLink?.vehicle_id) {
+        resolvedVehicleId = approvedLink.vehicle_id;
+      }
+    }
+
+    if (!resolvedVehicleId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please register and link an approved commercial vehicle to your fleet before submitting quotations.',
+      });
+    }
+
+    // 3. Validate and Resolve Driver (Schema requires not-null driver_id)
+    let resolvedDriverId = driverId;
+    if (resolvedDriverId) {
+      const { data: drv } = await supabase
+        .from('drivers')
+        .select('id, full_name, verification_status, is_active, licence_expiry_date')
+        .eq('id', resolvedDriverId)
+        .maybeSingle();
+      if (drv && (drv.verification_status !== 'APPROVED' || !drv.is_active)) {
+        return res.status(400).json({
+          success: false,
+          error: `Selected driver ${drv.full_name || 'Driver'} is pending verification or inactive.`,
+        });
+      }
+      if (drv?.licence_expiry_date && new Date(drv.licence_expiry_date) < new Date()) {
+        return res.status(400).json({
+          success: false,
+          error: `Driver ${drv.full_name}'s driving licence expired on ${drv.licence_expiry_date}. Assignment blocked.`,
+        });
+      }
+    } else {
+      // Auto-resolve first active/approved driver belonging to this vendor
+      const { data: dList } = await supabase
+        .from('drivers')
+        .select('id, verification_status, is_active')
+        .eq('primary_vendor_id', resolvedVendorCompId)
+        .order('created_at', { ascending: false });
+
+      const approvedDriver = (dList || []).find((d: any) => d.verification_status === 'APPROVED' || d.is_active) || dList?.[0];
+      if (approvedDriver?.id) {
+        resolvedDriverId = approvedDriver.id;
+      }
+    }
+
+    if (!resolvedDriverId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please register and link an approved driver to your fleet roster before submitting quotations.',
+      });
+    }
+
+    // 4. Verify requirement exists
+    const { data: reqRecord } = await supabase
+      .from('requirements')
+      .select('id, status, pickup_address, destination_address')
+      .eq('id', requirementId)
+      .maybeSingle();
+
+    if (!reqRecord) {
+      return res.status(404).json({ success: false, error: `Transport requirement ${requirementId} was not found.` });
+    }
+
+    // 5. Find or create vendor_requests entry
+    let vrId = '';
+    const { data: existingVR } = await supabase
+      .from('vendor_requests')
+      .select('id, deadline_at, status')
+      .eq('requirement_id', requirementId)
+      .eq('vendor_id', resolvedVendorCompId)
+      .maybeSingle();
+
+    if (existingVR) {
+      if (existingVR.status === 'DECLINED') {
+        return res.status(400).json({
+          success: false,
+          error: 'This transport requirement participation was previously declined. Cannot place quotation.',
+        });
+      }
+      if (existingVR.deadline_at && new Date(existingVR.deadline_at).getTime() < Date.now()) {
+        return res.status(400).json({
+          success: false,
+          error: `The bidding deadline for this RFQ closed on ${new Date(existingVR.deadline_at).toLocaleString('en-IN')}.`,
+        });
+      }
+      vrId = existingVR.id;
+      await supabase
+        .from('vendor_requests')
+        .update({ status: 'QUOTED' })
+        .eq('id', vrId);
+    } else {
+      const { data: newVR, error: vrErr } = await supabase
+        .from('vendor_requests')
+        .insert({
+          requirement_id: requirementId,
+          vendor_id: resolvedVendorCompId,
+          deadline_at: new Date(Date.now() + 86400000 * 3).toISOString(),
+          status: 'QUOTED',
+        })
+        .select('id')
+        .single();
+
+      if (vrErr) {
+        console.error('vendor_requests insert error:', vrErr);
+        return res.status(500).json({ success: false, error: vrErr.message || 'Failed to initialize vendor request.' });
+      }
+      vrId = newVR.id;
+    }
+
+    // 6. Check existing quotation revision
+    const { data: existingQuote } = await supabase
+      .from('vendor_quotations')
+      .select('id, version, is_locked')
+      .eq('vendor_request_id', vrId)
+      .order('version', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existingQuote?.is_locked) {
+      return res.status(400).json({
+        success: false,
+        quotationId: existingQuote.id,
+        error: 'Quotation revision is locked while under client cost evaluation.',
+      });
+    }
+
+    const nextVersion = existingQuote ? (existingQuote.version || 1) + 1 : 1;
+
+    // 7. Insert vendor quotation with backend service/admin privileges
+    const { data: vqData, error: vqErr } = await supabase
+      .from('vendor_quotations')
+      .insert({
+        vendor_request_id: vrId,
+        vehicle_id: resolvedVehicleId,
+        driver_id: resolvedDriverId,
+        quoted_rate: rateNum,
+        version: nextVersion,
+        is_locked: false,
+        submitted_at: new Date().toISOString(),
+      })
+      .select('id')
+      .single();
+
+    if (vqErr) {
+      console.error('vendor_quotations insert error:', vqErr);
+      return res.status(500).json({ success: false, error: vqErr.message || 'Failed to insert vendor quotation.' });
+    }
+
+    console.log(`[VENDOR QUOTATION] Recorded bid ${vqData.id} (v${nextVersion}) of ₹${rateNum} for req ${requirementId} by vendor ${vComp.vendor_name}`);
+
+    return res.json({
+      success: true,
+      quotationId: vqData.id,
+      quotedRate: rateNum,
+      transitDays: parseInt(transitDays, 10) || 3,
+      version: nextVersion,
+      message: 'Quotation submitted successfully.',
+    });
+  } catch (err: any) {
+    console.error('submit-quotation exception:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Internal server error submitting quotation.' });
   }
 });
 

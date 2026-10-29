@@ -95,7 +95,8 @@ export const VendorVehicleTieupApproval: React.FC<VendorVehicleTieupApprovalProp
   const [authDocument, setAuthDocument] = useState<any | null>(null);
   const [loadingReview, setLoadingReview] = useState(false);
 
-  // Rejection modal
+  // Modals
+  const [showApproveModal, setShowApproveModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
   const [saving, setSaving] = useState(false);
@@ -235,14 +236,11 @@ export const VendorVehicleTieupApproval: React.FC<VendorVehicleTieupApprovalProp
       return;
     }
 
-    if (!window.confirm('Are you sure you want to approve this vendor-vehicle tie-up?')) {
-      return;
-    }
-
     try {
       setSaving(true);
       await approveVendorVehicleTieup(reviewingTieup.id, 'Admin');
       showSuccess('Vendor-vehicle tie-up approved successfully');
+      setShowApproveModal(false);
       setReviewingTieup(null);
       setAuthDocument(null);
       await fetchStats();
@@ -640,262 +638,376 @@ export const VendorVehicleTieupApproval: React.FC<VendorVehicleTieupApprovalProp
         )}
       </div>
 
-      {/* Review Drawer */}
+      {/* Review Drawer - Premium Enterprise UI/UX */}
       {reviewingTieup && (
         <div
-          className="drawer-overlay"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.45)',
+            zIndex: 1000,
+            display: 'flex',
+            justifyContent: 'flex-end',
+            animation: 'fadeIn 0.2s ease'
+          }}
           onClick={() => {
             setReviewingTieup(null);
             setAuthDocument(null);
           }}
         >
           <div
-            className="tieup-review-drawer"
+            style={{
+              width: '580px',
+              maxWidth: '100vw',
+              height: '100vh',
+              backgroundColor: '#FFFFFF',
+              boxShadow: '-10px 0 35px rgba(15, 23, 42, 0.15)',
+              display: 'flex',
+              flexDirection: 'column',
+              position: 'relative',
+              animation: 'slideDrawer 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             {loadingReview ? (
-              <div className="flex items-center justify-center h-full" style={{ padding: '80px', textAlign: 'center' }}>
-                <RefreshCw size={32} className="text-[#F45325] animate-spin" />
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '16px' }}>
+                <RefreshCw size={36} className="text-[#F45325] animate-spin" />
+                <span style={{ fontSize: '14px', color: '#64748B', fontWeight: 600 }}>Loading tie-up details...</span>
               </div>
             ) : (
               <>
                 {/* Header */}
-                <div className="tieup-drawer-header">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-2xl font-semibold text-[#111111]">Review Vendor–Vehicle Tie-up</h2>
-                    <button
-                      onClick={() => {
-                        setReviewingTieup(null);
-                        setAuthDocument(null);
-                      }}
-                      className="p-2 hover:bg-white rounded-lg transition-colors"
-                    >
-                      <X size={20} className="text-[rgba(17,17,17,0.60)]" />
-                    </button>
-                  </div>
-                  <div
-                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm border ${
-                      reviewingTieup.status === 'APPROVED'
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        : reviewingTieup.status === 'REJECTED'
-                        ? 'bg-rose-50 text-rose-700 border-rose-200'
-                        : 'bg-amber-50 text-amber-700 border-amber-200'
-                    }`}
-                  >
-                    {reviewingTieup.status === 'APPROVED' && <CheckCircle size={16} />}
-                    {reviewingTieup.status === 'REJECTED' && <XCircle size={16} />}
-                    {reviewingTieup.status === 'PENDING' && <Clock size={16} />}
-                    {reviewingTieup.status}
-                  </div>
-                </div>
-
-                {/* Content */}
-                <div className="tieup-drawer-content">
-                  {/* Vendor Details */}
-                  <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-6">
-                    <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
-                      <Building2 size={20} className="text-[#F45325]" />
-                      Vendor Information
-                    </h3>
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500">Vendor Name</span>
-                        <span className="text-slate-900 font-semibold">
-                          {reviewingTieup.vendor?.vendor_name || '-'}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500">PAN</span>
-                        <span className="text-slate-800 font-mono text-sm">{reviewingTieup.vendor?.pan || '-'}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500">GSTIN</span>
-                        <span className="text-slate-800 font-mono text-sm">{reviewingTieup.vendor?.gstin || '-'}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500">Vendor Status</span>
-                        <span
-                          className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${
-                            reviewingTieup.vendor?.status === 'APPROVED'
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : 'bg-amber-50 text-amber-700 border-amber-200'
-                          }`}
-                        >
-                          {reviewingTieup.vendor?.status || '-'}
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => onNavigateToVendorProfile(reviewingTieup.vendor_id)}
-                        className="w-full mt-3 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg transition-colors font-medium text-sm flex items-center justify-center gap-2"
+                <div style={{ padding: '20px 24px', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFFFFF', position: 'sticky', top: 0, zIndex: 10 }}>
+                  <div>
+                    <h2 style={{ fontSize: '19px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
+                      Vendor–Vehicle Tie-up Review
+                    </h2>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                      <span style={{ fontSize: '12px', fontFamily: 'monospace', color: '#64748B', fontWeight: 600 }}>
+                        TIE-#{reviewingTieup.id?.substring(0, 8).toUpperCase()}
+                      </span>
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '2px 8px',
+                          borderRadius: '999px',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          backgroundColor: reviewingTieup.status === 'APPROVED' ? '#ECFDF5' : reviewingTieup.status === 'REJECTED' ? '#FEF2F2' : '#FFFBEB',
+                          color: reviewingTieup.status === 'APPROVED' ? '#059669' : reviewingTieup.status === 'REJECTED' ? '#DC2626' : '#D97706',
+                          border: `1px solid ${reviewingTieup.status === 'APPROVED' ? '#A7F3D0' : reviewingTieup.status === 'REJECTED' ? '#FECACA' : '#FDE68A'}`
+                        }}
                       >
-                        <ExternalLink size={16} />
-                        <span>View Vendor Profile</span>
-                      </button>
+                        {reviewingTieup.status === 'APPROVED' && <CheckCircle size={12} />}
+                        {reviewingTieup.status === 'REJECTED' && <XCircle size={12} />}
+                        {reviewingTieup.status === 'PENDING' && <Clock size={12} />}
+                        <span>{reviewingTieup.status}</span>
+                      </span>
                     </div>
                   </div>
 
-                  {/* Vehicle Details */}
-                  <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-6">
-                    <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
-                      <Truck size={20} className="text-[#F45325]" />
-                      Vehicle Information
-                    </h3>
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500">Registration Number</span>
-                        <span className="text-slate-900 font-bold font-mono">
+                  <button
+                    type="button"
+                    title="Close Drawer"
+                    onClick={() => {
+                      setReviewingTieup(null);
+                      setAuthDocument(null);
+                    }}
+                    style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '8px',
+                      border: '1px solid #E2E8F0',
+                      backgroundColor: '#FFFFFF',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#64748B',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease'
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#F8FAFC'; e.currentTarget.style.color = '#0F172A'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#FFFFFF'; e.currentTarget.style.color = '#64748B'; }}
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                {/* Content - Scrollable */}
+                <div style={{ padding: '24px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  {/* Card 1: Vendor Information */}
+                  <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '18px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', borderBottom: '1px solid #F1F5F9', paddingBottom: '10px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Building2 size={18} style={{ color: '#F45325' }} />
+                        <span style={{ fontSize: '14.5px', fontWeight: 700, color: '#0F172A' }}>Transporter Information</span>
+                      </div>
+                      <span
+                        style={{
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          padding: '2px 8px',
+                          borderRadius: '999px',
+                          backgroundColor: reviewingTieup.vendor?.status === 'APPROVED' ? '#ECFDF5' : '#FFFBEB',
+                          color: reviewingTieup.vendor?.status === 'APPROVED' ? '#059669' : '#D97706',
+                          border: `1px solid ${reviewingTieup.vendor?.status === 'APPROVED' ? '#A7F3D0' : '#FDE68A'}`
+                        }}
+                      >
+                        {reviewingTieup.vendor?.status || 'PENDING'}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '13px' }}>
+                      <div style={{ gridColumn: 'span 2' }}>
+                        <div style={{ fontSize: '11.5px', color: '#64748B', fontWeight: 500 }}>Vendor Company</div>
+                        <div style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A' }}>
+                          {reviewingTieup.vendor?.vendor_name || '-'}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '11.5px', color: '#64748B', fontWeight: 500 }}>Vendor Code</div>
+                        <div style={{ fontFamily: 'monospace', fontWeight: 600, color: '#334155' }}>
+                          {reviewingTieup.vendor?.vendor_code || '-'}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '11.5px', color: '#64748B', fontWeight: 500 }}>PAN Number</div>
+                        <div style={{ fontFamily: 'monospace', fontWeight: 600, color: '#334155' }}>
+                          {reviewingTieup.vendor?.pan || '-'}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '11.5px', color: '#64748B', fontWeight: 500 }}>GSTIN</div>
+                        <div style={{ fontFamily: 'monospace', fontWeight: 600, color: '#334155' }}>
+                          {reviewingTieup.vendor?.gstin || '-'}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '11.5px', color: '#64748B', fontWeight: 500 }}>Hub / Location</div>
+                        <div style={{ fontWeight: 600, color: '#334155' }}>
+                          {reviewingTieup.vendor?.city ? `${reviewingTieup.vendor.city}, ${reviewingTieup.vendor.state || ''}` : '-'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => onNavigateToVendorProfile(reviewingTieup.vendor_id)}
+                      style={{
+                        width: '100%',
+                        marginTop: '16px',
+                        padding: '9px 14px',
+                        backgroundColor: '#F8FAFC',
+                        border: '1px solid #CBD5E1',
+                        borderRadius: '8px',
+                        color: '#0F172A',
+                        fontWeight: 600,
+                        fontSize: '12.5px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#F1F5F9'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#F8FAFC'; }}
+                    >
+                      <ExternalLink size={14} />
+                      <span>View Transporter Profile</span>
+                    </button>
+                  </div>
+
+                  {/* Card 2: Vehicle Information */}
+                  <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '18px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', borderBottom: '1px solid #F1F5F9', paddingBottom: '10px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Truck size={18} style={{ color: '#F45325' }} />
+                        <span style={{ fontSize: '14.5px', fontWeight: 700, color: '#0F172A' }}>Vehicle Information</span>
+                      </div>
+                      <span
+                        style={{
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          padding: '2px 8px',
+                          borderRadius: '999px',
+                          backgroundColor: reviewingTieup.vehicle?.verification_status === 'APPROVED' ? '#ECFDF5' : reviewingTieup.vehicle?.verification_status === 'REJECTED' ? '#FEF2F2' : '#FFFBEB',
+                          color: reviewingTieup.vehicle?.verification_status === 'APPROVED' ? '#059669' : reviewingTieup.vehicle?.verification_status === 'REJECTED' ? '#DC2626' : '#D97706',
+                          border: `1px solid ${reviewingTieup.vehicle?.verification_status === 'APPROVED' ? '#A7F3D0' : reviewingTieup.vehicle?.verification_status === 'REJECTED' ? '#FECACA' : '#FDE68A'}`
+                        }}
+                      >
+                        {reviewingTieup.vehicle?.verification_status || 'PENDING'}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '13px' }}>
+                      <div style={{ gridColumn: 'span 2' }}>
+                        <div style={{ fontSize: '11.5px', color: '#64748B', fontWeight: 500 }}>Registration Number</div>
+                        <div style={{ fontSize: '16px', fontWeight: 800, fontFamily: 'monospace', color: '#0F172A', letterSpacing: '0.04em' }}>
                           {reviewingTieup.vehicle?.registration_number || '-'}
-                        </span>
+                        </div>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500">Vehicle Type</span>
-                        <span className="text-slate-800 font-medium">{reviewingTieup.vehicle?.vehicle_type || '-'}</span>
+                      <div>
+                        <div style={{ fontSize: '11.5px', color: '#64748B', fontWeight: 500 }}>Vehicle Type</div>
+                        <div style={{ fontWeight: 600, color: '#334155' }}>
+                          {reviewingTieup.vehicle?.vehicle_type || '-'}
+                        </div>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500">Make & Model</span>
-                        <span className="text-slate-800 font-medium">
+                      <div>
+                        <div style={{ fontSize: '11.5px', color: '#64748B', fontWeight: 500 }}>Make & Model</div>
+                        <div style={{ fontWeight: 600, color: '#334155' }}>
                           {reviewingTieup.vehicle?.make && reviewingTieup.vehicle?.model
                             ? `${reviewingTieup.vehicle.make} ${reviewingTieup.vehicle.model}`
                             : '-'}
-                        </span>
+                        </div>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500">Rated Capacity</span>
-                        <span className="text-slate-800 font-semibold">{reviewingTieup.vehicle?.rated_capacity_mt || '-'} MT</span>
+                      <div>
+                        <div style={{ fontSize: '11.5px', color: '#64748B', fontWeight: 500 }}>Rated Capacity</div>
+                        <div style={{ fontWeight: 700, color: '#0F172A' }}>
+                          {reviewingTieup.vehicle?.rated_capacity_mt ? `${reviewingTieup.vehicle.rated_capacity_mt} MT` : '-'}
+                        </div>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500">Minimum Capacity</span>
-                        <span className="text-slate-800 font-semibold">
-                          {reviewingTieup.vehicle?.minimum_capacity_mt || '-'} MT
-                        </span>
+                      <div>
+                        <div style={{ fontSize: '11.5px', color: '#64748B', fontWeight: 500 }}>Min Capacity</div>
+                        <div style={{ fontWeight: 600, color: '#334155' }}>
+                          {reviewingTieup.vehicle?.minimum_capacity_mt ? `${reviewingTieup.vehicle.minimum_capacity_mt} MT` : '-'}
+                        </div>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500">Vehicle Status</span>
-                        <span
-                          className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${
-                            reviewingTieup.vehicle?.verification_status === 'APPROVED'
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : reviewingTieup.vehicle?.verification_status === 'REJECTED'
-                              ? 'bg-rose-50 text-rose-700 border-rose-200'
-                              : 'bg-amber-50 text-amber-700 border-amber-200'
-                          }`}
-                        >
-                          {reviewingTieup.vehicle?.verification_status || '-'}
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => onNavigateToVehicleVerification(reviewingTieup.vehicle_id)}
-                        className="w-full mt-3 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg transition-colors font-medium text-sm flex items-center justify-center gap-2"
-                      >
-                        <ExternalLink size={16} />
-                        <span>View Vehicle Details</span>
-                      </button>
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={() => onNavigateToVehicleVerification(reviewingTieup.vehicle_id)}
+                      style={{
+                        width: '100%',
+                        marginTop: '16px',
+                        padding: '9px 14px',
+                        backgroundColor: '#F8FAFC',
+                        border: '1px solid #CBD5E1',
+                        borderRadius: '8px',
+                        color: '#0F172A',
+                        fontWeight: 600,
+                        fontSize: '12.5px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#F1F5F9'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#F8FAFC'; }}
+                    >
+                      <ExternalLink size={14} />
+                      <span>View Vehicle Details & Verification</span>
+                    </button>
                   </div>
 
-                  {/* Authorization Document */}
-                  {authDocument && (
-                    <div className="bg-white border border-slate-200 rounded-xl p-6">
-                      <h3 className="text-lg font-semibold text-[#111111] mb-4 flex items-center gap-2">
-                        <FileText size={20} className="text-[#F45325]" />
-                        Authorization Document
-                      </h3>
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[rgba(17,17,17,0.60)]">Document Type</span>
-                          <span className="text-[#111111]">Tie-up Authorization</span>
+                  {/* Card 3: Tie-up Proof / Authorization Document */}
+                  <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '18px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px', borderBottom: '1px solid #F1F5F9', paddingBottom: '10px' }}>
+                      <FileText size={18} style={{ color: '#F45325' }} />
+                      <span style={{ fontSize: '14.5px', fontWeight: 700, color: '#0F172A' }}>Authorization Document</span>
+                    </div>
+
+                    {authDocument ? (
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', marginBottom: '6px' }}>
+                          <span style={{ color: '#64748B' }}>Document Type</span>
+                          <span style={{ fontWeight: 600, color: '#0F172A' }}>Tie-up Agreement Letter</span>
                         </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-[rgba(17,17,17,0.60)]">Uploaded</span>
-                          <span className="text-[#111111]">{formatDateTime(authDocument.created_at)}</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', marginBottom: '12px' }}>
+                          <span style={{ color: '#64748B' }}>Uploaded Timestamp</span>
+                          <span style={{ fontWeight: 600, color: '#0F172A' }}>{formatDateTime(authDocument.created_at)}</span>
                         </div>
-                        <div className="flex gap-2 mt-4">
+                        <div style={{ display: 'flex', gap: '8px' }}>
                           <button
+                            type="button"
                             onClick={() => setPreviewDocUrl(authDocument.file_url)}
-                            className="flex-1 px-4 py-2 bg-white text-[#111111] rounded-lg hover:bg-[#3A3A3C] transition-colors flex items-center justify-center gap-2"
+                            style={{ flex: 1, padding: '8px 12px', backgroundColor: '#FFFFFF', border: '1px solid #CBD5E1', borderRadius: '6px', color: '#0F172A', fontWeight: 600, fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer' }}
                           >
-                            <Eye size={16} />
-                            <span>View</span>
+                            <Eye size={14} />
+                            <span>Preview</span>
                           </button>
                           <a
                             href={authDocument.file_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex-1 px-4 py-2 bg-white text-[#111111] rounded-lg hover:bg-[#3A3A3C] transition-colors flex items-center justify-center gap-2"
+                            style={{ flex: 1, padding: '8px 12px', backgroundColor: '#FFFFFF', border: '1px solid #CBD5E1', borderRadius: '6px', color: '#0F172A', fontWeight: 600, fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', textDecoration: 'none' }}
                           >
-                            <Download size={16} />
+                            <Download size={14} />
                             <span>Download</span>
                           </a>
                         </div>
                       </div>
-                    </div>
-                  )}
-
-                  {reviewingTieup.tie_up_proof_url && !authDocument && (
-                    <div className="bg-white border border-slate-200 rounded-xl p-6">
-                      <h3 className="text-lg font-semibold text-[#111111] mb-4 flex items-center gap-2">
-                        <FileText size={20} className="text-[#F45325]" />
-                        Tie-up Proof
-                      </h3>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => setPreviewDocUrl(reviewingTieup.tie_up_proof_url)}
-                          className="flex-1 px-4 py-2 bg-white text-[#111111] rounded-lg hover:bg-[#3A3A3C] transition-colors flex items-center justify-center gap-2"
-                        >
-                          <Eye size={16} />
-                          <span>View Document</span>
-                        </button>
-                        <a
-                          href={reviewingTieup.tie_up_proof_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex-1 px-4 py-2 bg-white text-[#111111] rounded-lg hover:bg-[#3A3A3C] transition-colors flex items-center justify-center gap-2"
-                        >
-                          <Download size={16} />
-                          <span>Download</span>
-                        </a>
+                    ) : reviewingTieup.tie_up_proof_url ? (
+                      <div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button
+                            type="button"
+                            onClick={() => setPreviewDocUrl(reviewingTieup.tie_up_proof_url)}
+                            style={{ flex: 1, padding: '8px 12px', backgroundColor: '#FFFFFF', border: '1px solid #CBD5E1', borderRadius: '6px', color: '#0F172A', fontWeight: 600, fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer' }}
+                          >
+                            <Eye size={14} />
+                            <span>Preview Document</span>
+                          </button>
+                          <a
+                            href={reviewingTieup.tie_up_proof_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ flex: 1, padding: '8px 12px', backgroundColor: '#FFFFFF', border: '1px solid #CBD5E1', borderRadius: '6px', color: '#0F172A', fontWeight: 600, fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', textDecoration: 'none' }}
+                          >
+                            <Download size={14} />
+                            <span>Download</span>
+                          </a>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    ) : (
+                      <div style={{ padding: '14px', backgroundColor: '#F8FAFC', borderRadius: '8px', border: '1px dashed #CBD5E1', fontSize: '12.5px', color: '#64748B', textAlign: 'center' }}>
+                        No physical tie-up letter attached with this request.
+                      </div>
+                    )}
+                  </div>
 
-                  {/* Request Details */}
-                  <div className="bg-white border border-slate-200 rounded-xl p-6">
-                    <h3 className="text-lg font-semibold text-[#111111] mb-4 flex items-center gap-2">
-                      <History size={20} className="text-[#F45325]" />
-                      Request Timeline
-                    </h3>
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[rgba(17,17,17,0.60)]">Requested At</span>
-                        <span className="text-[#111111]">{formatDateTime(reviewingTieup.requested_at)}</span>
+                  {/* Card 4: Request Timeline */}
+                  <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '18px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px', borderBottom: '1px solid #F1F5F9', paddingBottom: '10px' }}>
+                      <History size={18} style={{ color: '#F45325' }} />
+                      <span style={{ fontSize: '14.5px', fontWeight: 700, color: '#0F172A' }}>Request Timeline</span>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '12.5px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: '#64748B' }}>Requested At:</span>
+                        <span style={{ fontWeight: 600, color: '#0F172A' }}>{formatDateTime(reviewingTieup.requested_at)}</span>
                       </div>
                       {reviewingTieup.approved_at && (
                         <>
-                          <div className="flex items-center justify-between">
-                            <span className="text-[rgba(17,17,17,0.60)]">Approved At</span>
-                            <span className="text-[#111111]">{formatDateTime(reviewingTieup.approved_at)}</span>
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ color: '#64748B' }}>Approved At:</span>
+                            <span style={{ fontWeight: 600, color: '#059669' }}>{formatDateTime(reviewingTieup.approved_at)}</span>
                           </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-[rgba(17,17,17,0.60)]">Approved By</span>
-                            <span className="text-[#111111]">{reviewingTieup.approved_by || '-'}</span>
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ color: '#64748B' }}>Approved By:</span>
+                            <span style={{ fontWeight: 600, color: '#0F172A' }}>{reviewingTieup.approved_by || 'Admin'}</span>
                           </div>
                         </>
                       )}
                       {reviewingTieup.rejected_at && (
                         <>
-                          <div className="flex items-center justify-between">
-                            <span className="text-[rgba(17,17,17,0.60)]">Rejected At</span>
-                            <span className="text-[#111111]">{formatDateTime(reviewingTieup.rejected_at)}</span>
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ color: '#64748B' }}>Rejected At:</span>
+                            <span style={{ fontWeight: 600, color: '#DC2626' }}>{formatDateTime(reviewingTieup.rejected_at)}</span>
                           </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-[rgba(17,17,17,0.60)]">Rejected By</span>
-                            <span className="text-[#111111]">{reviewingTieup.rejected_by || '-'}</span>
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ color: '#64748B' }}>Rejected By:</span>
+                            <span style={{ fontWeight: 600, color: '#0F172A' }}>{reviewingTieup.rejected_by || 'Admin'}</span>
                           </div>
                           {reviewingTieup.rejection_reason && (
-                            <div className="mt-3 p-3 bg-rose-50 border border-rose-200 rounded-lg">
-                              <p className="text-sm text-rose-700">
-                                <span className="font-semibold">Rejection Reason:</span> {reviewingTieup.rejection_reason}
-                              </p>
+                            <div style={{ marginTop: '6px', padding: '10px 12px', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', color: '#B91C1C', fontSize: '12px', lineHeight: 1.5 }}>
+                              <strong>Rejection Reason:</strong> {reviewingTieup.rejection_reason}
                             </div>
                           )}
                         </>
@@ -903,64 +1015,221 @@ export const VendorVehicleTieupApproval: React.FC<VendorVehicleTieupApprovalProp
                     </div>
                   </div>
 
-                  {/* Validation Messages */}
+                  {/* Pre-requisite Warnings (if PENDING) */}
                   {reviewingTieup.status === 'PENDING' && (
-                    <div className="space-y-3">
+                    <>
                       {reviewingTieup.vehicle?.verification_status !== 'APPROVED' && (
-                        <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3">
-                          <AlertTriangle size={20} className="text-amber-600 flex-shrink-0 mt-0.5" />
+                        <div style={{ padding: '12px 16px', backgroundColor: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '10px', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                          <AlertTriangle size={18} style={{ color: '#D97706', flexShrink: 0, marginTop: '2px' }} />
                           <div>
-                            <p className="text-amber-800 font-semibold mb-1">Vehicle Not Approved</p>
-                            <p className="text-sm text-amber-700">
-                              The vehicle must be verified and approved before this tie-up can be approved.
-                            </p>
+                            <div style={{ fontSize: '13px', fontWeight: 700, color: '#92400E' }}>Vehicle Verification Pending</div>
+                            <div style={{ fontSize: '12px', color: '#B45309', marginTop: '2px' }}>
+                              The vehicle must be verified and approved in Vehicle Master before this tie-up can be approved.
+                            </div>
                           </div>
                         </div>
                       )}
                       {reviewingTieup.vendor?.status !== 'APPROVED' && (
-                        <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3">
-                          <AlertTriangle size={20} className="text-amber-600 flex-shrink-0 mt-0.5" />
+                        <div style={{ padding: '12px 16px', backgroundColor: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '10px', display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                          <AlertTriangle size={18} style={{ color: '#D97706', flexShrink: 0, marginTop: '2px' }} />
                           <div>
-                            <p className="text-amber-800 font-semibold mb-1">Vendor Not Approved</p>
-                            <p className="text-sm text-amber-700">
-                              The vendor must be approved before this tie-up can be approved.
-                            </p>
+                            <div style={{ fontSize: '13px', fontWeight: 700, color: '#92400E' }}>Transporter Not Approved</div>
+                            <div style={{ fontSize: '12px', color: '#B45309', marginTop: '2px' }}>
+                              The vendor must have approved KYC status before linking fleet vehicles.
+                            </div>
                           </div>
                         </div>
                       )}
-                    </div>
+                    </>
                   )}
                 </div>
 
-                {/* Actions */}
-                {reviewingTieup.status === 'PENDING' && (
-                  <div className="tieup-drawer-footer">
-                    <div className="flex items-center gap-4">
+                {/* Fixed Footer Actions */}
+                <div
+                  style={{
+                    padding: '16px 24px',
+                    borderTop: '1px solid #E2E8F0',
+                    backgroundColor: '#FFFFFF',
+                    display: 'flex',
+                    gap: '12px',
+                    alignItems: 'center'
+                  }}
+                >
+                  {reviewingTieup.status === 'PENDING' ? (
+                    <>
                       <button
-                        onClick={handleApproveTieup}
+                        type="button"
+                        onClick={() => setShowApproveModal(true)}
                         disabled={
                           saving ||
                           reviewingTieup.vehicle?.verification_status !== 'APPROVED' ||
                           reviewingTieup.vendor?.status !== 'APPROVED'
                         }
-                        className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                        style={{
+                          flex: 1,
+                          height: '44px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '8px',
+                          backgroundColor: '#059669',
+                          color: '#FFFFFF',
+                          border: 'none',
+                          borderRadius: '8px',
+                          fontWeight: 700,
+                          fontSize: '13.5px',
+                          cursor: (saving || reviewingTieup.vehicle?.verification_status !== 'APPROVED' || reviewingTieup.vendor?.status !== 'APPROVED') ? 'not-allowed' : 'pointer',
+                          opacity: (saving || reviewingTieup.vehicle?.verification_status !== 'APPROVED' || reviewingTieup.vendor?.status !== 'APPROVED') ? 0.5 : 1,
+                          boxShadow: '0 2px 6px rgba(5, 150, 105, 0.25)',
+                          transition: 'all 0.15s ease'
+                        }}
                       >
-                        <CheckCircle size={20} />
-                        <span>{saving ? 'Approving...' : 'Approve Transporter Link'}</span>
+                        <CheckCircle size={17} />
+                        <span>{saving ? 'Approving...' : 'Approve Tie-up'}</span>
                       </button>
+
                       <button
+                        type="button"
                         onClick={() => setShowRejectModal(true)}
                         disabled={saving}
-                        className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-rose-50 text-rose-700 border border-rose-300 hover:bg-rose-100 rounded-lg transition-colors disabled:opacity-50 font-medium"
+                        style={{
+                          flex: 1,
+                          height: '44px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '8px',
+                          backgroundColor: '#FEF2F2',
+                          color: '#DC2626',
+                          border: '1px solid #FECACA',
+                          borderRadius: '8px',
+                          fontWeight: 700,
+                          fontSize: '13.5px',
+                          cursor: saving ? 'not-allowed' : 'pointer',
+                          transition: 'all 0.15s ease'
+                        }}
                       >
-                        <XCircle size={20} />
+                        <XCircle size={17} />
                         <span>Reject Tie-up</span>
                       </button>
-                    </div>
-                  </div>
-                )}
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReviewingTieup(null);
+                        setAuthDocument(null);
+                      }}
+                      style={{
+                        width: '100%',
+                        height: '42px',
+                        backgroundColor: '#F8FAFC',
+                        border: '1px solid #CBD5E1',
+                        borderRadius: '8px',
+                        color: '#0F172A',
+                        fontWeight: 600,
+                        fontSize: '13px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Close Details
+                    </button>
+                  )}
+                </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal for Tie-up Approval */}
+      {showApproveModal && reviewingTieup && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.55)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1100,
+            padding: '24px'
+          }}
+          onClick={() => setShowApproveModal(false)}
+        >
+          <div
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: '16px',
+              maxWidth: '480px',
+              width: '100%',
+              padding: '24px',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <div style={{ width: '44px', height: '44px', borderRadius: '50%', backgroundColor: '#ECFDF5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <CheckCircle size={24} />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '17px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
+                  Approve Vendor–Vehicle Tie-up
+                </h3>
+                <p style={{ fontSize: '13px', color: '#64748B', margin: '2px 0 0 0' }}>
+                  Confirm linking this vehicle to the transporter in active fleet.
+                </p>
+              </div>
+            </div>
+
+            <div style={{ backgroundColor: '#F8FAFC', borderRadius: '10px', padding: '14px', marginBottom: '20px', fontSize: '13px', border: '1px solid #E2E8F0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <span style={{ color: '#64748B' }}>Transporter:</span>
+                <span style={{ fontWeight: 700, color: '#0F172A' }}>{reviewingTieup.vendor?.vendor_name}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#64748B' }}>Vehicle Reg:</span>
+                <span style={{ fontWeight: 800, fontFamily: 'monospace', color: '#0F172A' }}>{reviewingTieup.vehicle?.registration_number}</span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={() => setShowApproveModal(false)}
+                style={{
+                  flex: 1,
+                  padding: '10px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid #CBD5E1',
+                  backgroundColor: '#FFFFFF',
+                  color: '#475569',
+                  fontWeight: 600,
+                  fontSize: '13.5px',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={handleApproveTieup}
+                style={{
+                  flex: 1,
+                  padding: '10px 16px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  backgroundColor: '#059669',
+                  color: '#FFFFFF',
+                  fontWeight: 700,
+                  fontSize: '13.5px',
+                  cursor: saving ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {saving ? 'Approving...' : 'Confirm Approval'}
+              </button>
+            </div>
           </div>
         </div>
       )}

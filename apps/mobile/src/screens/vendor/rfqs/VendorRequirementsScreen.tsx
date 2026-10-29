@@ -214,7 +214,7 @@ export const VendorRequirementsScreen: React.FC<VendorRequirementsScreenProps> =
     }
   };
 
-  const isRegistrationPending = vendorStatus === 'PENDING' || vendorStatus === 'INCOMPLETE';
+  const isRegistrationPending = vendorStatus === 'INCOMPLETE' || vendorStatus === 'INACTIVE';
 
   return (
     <SafeAreaView style={styles.safeArea}>

@@ -14,8 +14,6 @@ import {
   ArrowRight,
   Package,
 } from 'lucide-react-native';
-import { ScenicHeroBanner } from '../../../components/ScenicHeroBanner';
-import { BottomGoldWings } from '../../../components/BottomGoldWings';
 
 interface VendorQuotationConfirmationScreenProps {
   quotationId: string;
@@ -35,11 +33,8 @@ export const VendorQuotationConfirmationScreen: React.FC<VendorQuotationConfirma
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.scrollContainer} bounces={false}>
-        {/* Top Banner */}
-        <View style={styles.topWrap}>
-          <ScenicHeroBanner height={190} />
-          
-        </View>
+        {/* Top Header Spacing */}
+        <View style={styles.topSpacing} />
 
         {/* Content */}
         <View style={styles.contentWrap}>
@@ -96,7 +91,6 @@ export const VendorQuotationConfirmationScreen: React.FC<VendorQuotationConfirma
           </TouchableOpacity>
         </View>
       </ScrollView>
-      <BottomGoldWings />
     </SafeAreaView>
   );
 };
@@ -110,13 +104,8 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingBottom: 40,
   },
-  topWrap: {
-    position: 'relative',
-  },
-  logoWrap: {
-    position: 'absolute',
-    bottom: 8,
-    alignSelf: 'center',
+  topSpacing: {
+    height: 40,
   },
   contentWrap: {
     paddingHorizontal: 20,

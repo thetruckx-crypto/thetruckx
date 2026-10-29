@@ -37,6 +37,7 @@ const DriverVerificationQueue = React.lazy(() => import('./components/drivers/Dr
 const PricingModule = React.lazy(() => import('./components/pricing/PricingModule').then(m => ({ default: m.PricingModule })));
 const RequirementsModule = React.lazy(() => import('./components/requirements/RequirementsModule').then(m => ({ default: m.RequirementsModule })));
 const QuotationsModule = React.lazy(() => import('./components/quotations/QuotationsModule').then(m => ({ default: m.QuotationsModule })));
+const VendorQuotationsModule = React.lazy(() => import('./components/quotations/VendorQuotationsModule').then(m => ({ default: m.VendorQuotationsModule })));
 const BookingsModule = React.lazy(() => import('./components/bookings/BookingsModule').then(m => ({ default: m.BookingsModule })));
 const DocumentClearanceModule = React.lazy(() => import('./components/documents/DocumentClearanceModule').then(m => ({ default: m.DocumentClearanceModule })));
 const TrackingModule = React.lazy(() => import('./components/tracking/TrackingModule').then(m => ({ default: m.TrackingModule })));
@@ -86,6 +87,8 @@ import {
   Shield,
   Sliders,
   FileText,
+  TrendingUp,
+  DollarSign,
 } from 'lucide-react';
 import { supabase } from './utils/supabase';
 
@@ -527,17 +530,58 @@ function AdminShell() {
     if (isSmallScreen) setSidebarOpen(false);
   }, [location.pathname, isSmallScreen]);
 
-  // Vendor sub-menu open state
-  const [vendorSubOpen, setVendorSubOpen] = useState(activeNavKey === 'vendors');
-  useEffect(() => {
-    if (activeNavKey === 'vendors') setVendorSubOpen(true);
-  }, [activeNavKey]);
+  // Expandable/Collapsible navigation sections (A through H)
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
+    overview: false,
+    client: false,
+    vendor: false,
+    operations: false,
+    exceptions: false,
+    reports: false,
+    access: false,
+    superadmin: false,
+  });
 
-  // Fleet sub-menu open state
-  const [fleetSubOpen, setFleetSubOpen] = useState(activeNavKey === 'fleet');
+  const toggleSection = (sectionKey: string) => {
+    setCollapsedSections(prev => ({
+      ...prev,
+      [sectionKey]: !prev[sectionKey],
+    }));
+  };
+
+  // Automatically expand the section corresponding to the current URL route
   useEffect(() => {
-    if (activeNavKey === 'fleet') setFleetSubOpen(true);
-  }, [activeNavKey]);
+    const segments = location.pathname.split('/').filter(Boolean);
+    const mod = segments[1] || 'dashboard';
+    const sub = segments[2] || '';
+    const searchParams = new URLSearchParams(location.search);
+    const queryTab = searchParams.get('tab');
+
+    if (mod === 'dashboard') {
+      setCollapsedSections(prev => ({ ...prev, overview: false }));
+    } else if (['clients', 'requirements', 'pricing', 'bookings'].includes(mod) || (mod === 'payments' && queryTab !== 'vendor')) {
+      setCollapsedSections(prev => ({ ...prev, client: false }));
+    } else if (
+      mod === 'vendors' ||
+      mod === 'drivers' ||
+      mod === 'fleet' ||
+      mod === 'quotations' ||
+      mod === 'vendor-quotations' ||
+      (mod === 'payments' && queryTab === 'vendor')
+    ) {
+      setCollapsedSections(prev => ({ ...prev, vendor: false }));
+    } else if (['documents', 'tracking', 'weighbridge', 'pod'].includes(mod)) {
+      setCollapsedSections(prev => ({ ...prev, operations: false }));
+    } else if (['exceptions', 'communications'].includes(mod)) {
+      setCollapsedSections(prev => ({ ...prev, exceptions: false }));
+    } else if (mod === 'reports' || (mod === 'superadmin' && sub === 'analytics')) {
+      setCollapsedSections(prev => ({ ...prev, reports: false }));
+    } else if (['settings'].includes(mod) || (mod === 'superadmin' && ['users', 'rbac', 'system-parameters'].includes(sub))) {
+      setCollapsedSections(prev => ({ ...prev, access: false }));
+    } else if (mod === 'superadmin' && ['audit-logs'].includes(sub)) {
+      setCollapsedSections(prev => ({ ...prev, superadmin: false }));
+    }
+  }, [location.pathname, location.search]);
 
   // Modals/drawers
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -713,34 +757,78 @@ function AdminShell() {
     if (isSmallScreen) setSidebarOpen(false);
   };
 
-  const isNav = (key: string) => activeNavKey === key;
+  const isNav = (key: string) => {
+    const segments = location.pathname.split('/').filter(Boolean);
+    const mod = segments[1] || 'dashboard';
+    const sub = segments[2] || '';
+    const searchParams = new URLSearchParams(location.search);
+    const queryTab = searchParams.get('tab');
 
-  const operationsModules = [
-    { key: 'requirements', label: 'Requirements', Icon: FileSpreadsheet },
-    { key: 'quotations', label: 'Sourcing & RFQ', Icon: Layers },
-    { key: 'pricing', label: 'Pricing & Quotes', Icon: Receipt },
-    { key: 'bookings', label: 'Bookings', Icon: CalendarCheck },
-    { key: 'documents', label: 'Pre-Trip & Docs', Icon: ShieldCheck },
-    { key: 'tracking', label: 'Trip Tracking', Icon: Compass },
-    { key: 'weighbridge', label: 'Weighbridge & Freight', Icon: Scale },
-    { key: 'pod', label: 'POD & Closure', Icon: CheckSquare },
-  ].filter(m => hasPermission(m.key, 'view'));
+    switch (key) {
+      case 'dashboard':
+        return mod === 'dashboard';
+      case 'clients':
+        return mod === 'clients';
+      case 'requirements':
+        return mod === 'requirements';
+      case 'client-quotations':
+        return mod === 'pricing' || mod === 'client-quotations';
+      case 'bookings':
+        return mod === 'bookings';
+      case 'client-payments':
+        return mod === 'payments' && queryTab !== 'vendor';
+      case 'vendors':
+        return mod === 'vendors' && !sub;
+      case 'vendor-verification':
+        return mod === 'vendors' && sub === 'verification-requests';
+      case 'sourcing-rfq':
+        return (mod === 'quotations' && queryTab !== 'vendor-quotes') || mod === 'sourcing';
+      case 'vendor-quotations':
+        return mod === 'vendor-quotations' || (mod === 'quotations' && queryTab === 'vendor-quotes');
+      case 'fleet':
+        return mod === 'fleet' && sub !== 'tie-up-approval';
+      case 'drivers':
+        return mod === 'drivers';
+      case 'fleet-assignment':
+        return mod === 'fleet' && sub === 'tie-up-approval';
+      case 'vendor-payments':
+        return mod === 'payments' && queryTab === 'vendor';
+      case 'documents':
+        return mod === 'documents';
+      case 'tracking':
+        return mod === 'tracking';
+      case 'weighbridge':
+        return mod === 'weighbridge';
+      case 'pod':
+        return mod === 'pod';
+      case 'exceptions':
+        return mod === 'exceptions';
+      case 'communications':
+        return mod === 'communications';
+      case 'notifications':
+        return isNotifOpen;
+      case 'reports':
+        return mod === 'reports';
+      case 'superadmin/analytics':
+        return mod === 'superadmin' && sub === 'analytics';
+      case 'superadmin/users':
+        return mod === 'superadmin' && sub === 'users';
+      case 'superadmin/rbac':
+        return mod === 'superadmin' && sub === 'rbac';
+      case 'settings':
+        return mod === 'settings';
+      case 'superadmin/system-parameters':
+        return mod === 'superadmin' && sub === 'system-parameters';
+      case 'superadmin/admin-users':
+        return mod === 'superadmin' && sub === 'users';
+      case 'superadmin/audit-logs':
+        return mod === 'superadmin' && sub === 'audit-logs';
+      default:
+        return activeNavKey === key;
+    }
+  };
 
-  const financeModules = [
-    { key: 'payments', label: 'Client Payments', Icon: IndianRupee },
-    { key: 'exceptions', label: 'Exceptions', Icon: AlertTriangle },
-    { key: 'communications', label: 'Communications', Icon: MessageSquare },
-  ].filter(m => hasPermission(m.key, 'view'));
-
-  const superAdminModules = [
-    { key: 'superadmin/users', label: 'Admin Users', path: '/admin/superadmin/users', Icon: Users },
-    { key: 'superadmin/rbac', label: 'RBAC Roles', path: '/admin/superadmin/rbac', Icon: Shield },
-    { key: 'superadmin/analytics', label: 'Commercial Analytics', path: '/admin/superadmin/analytics', Icon: BarChart3 },
-    { key: 'superadmin/audit-logs', label: 'Audit Logs', path: '/admin/superadmin/audit-logs', Icon: FileText },
-    { key: 'superadmin/system-parameters', label: 'System Parameters', path: '/admin/superadmin/system-parameters', Icon: Sliders },
-  ];
-
-  const sidebarWidth = isSmallScreen ? 264 : (desktopCollapsed ? 74 : 260);
+  const sidebarWidth = isSmallScreen ? 270 : (desktopCollapsed ? 74 : 270);
   const placeholderModules: string[] = [];
 
   return (
@@ -768,13 +856,11 @@ function AdminShell() {
         }}
       >
         <div className="sidebar-header">
-
           <BrandLogo
             variant={desktopCollapsed && !isSmallScreen ? 'mark' : 'full'}
             theme="light"
             size={desktopCollapsed && !isSmallScreen ? 'sm' : 'sidebar'}
           />
-
 
           {isSmallScreen && (
             <button
@@ -788,199 +874,565 @@ function AdminShell() {
         </div>
 
         <nav className="sidebar-nav">
-          {/* Section: Overview */}
+          {/* ══════════════════════════════════════════════════════════════════════════
+              A. OVERVIEW
+             ══════════════════════════════════════════════════════════════════════════ */}
           {hasPermission('dashboard', 'view') && (
-            <>
-              <div className="nav-section-label">OVERVIEW</div>
-              <div className={`nav-item ${isNav('dashboard') ? 'active-orange' : ''}`} onClick={() => navTo('/admin/dashboard')} title="Dashboard">
-                <LayoutDashboard size={18} />
-                <span>Dashboard</span>
-                <ChevronRight size={14} className="nav-chevron" />
-              </div>
-            </>
-          )}
-
-          {/* Section: Partners */}
-          {(hasPermission('clients', 'view') || hasPermission('vendors', 'view')) && (
-            <div className="nav-section-label">PARTNERS</div>
-          )}
-          {hasPermission('clients', 'view') && (
-            <div className={`nav-item ${isNav('clients') ? 'active-orange' : ''}`} onClick={() => navTo('/admin/clients')} title="Clients">
-              <Users size={18} />
-              <span>Clients</span>
-              {Boolean(navBadges.clients && navBadges.clients > 0) && (
-                <span className="nav-badge-red">{navBadges.clients}</span>
-              )}
-              <ChevronRight size={14} className="nav-chevron" />
-            </div>
-          )}
-
-          {/* Vendors */}
-          {hasPermission('vendors', 'view') && (
-            <>
+            <div className="nav-section-group">
               <div
-                className={`nav-item ${isNav('vendors') ? 'active-orange' : ''}`}
-                title="Vendors"
-                onClick={() => {
-                  if (isNav('vendors')) {
-                    setVendorSubOpen(v => !v);
-                  } else {
-                    navTo('/admin/vendors');
-                    setVendorSubOpen(true);
-                  }
-                }}
+                className="nav-section-label clickable"
+                onClick={() => toggleSection('overview')}
+                title="Toggle Overview"
               >
-                <Building2 size={18} />
-                <span>Vendors</span>
-                {Boolean(navBadges.vendors && navBadges.vendors > 0) && (
-                  <span className="nav-badge-red">{navBadges.vendors}</span>
-                )}
-                <ChevronRight size={14} className={`nav-chevron ${isNav('vendors') && vendorSubOpen ? 'rotated' : ''}`} />
+                <span>A. OVERVIEW</span>
+                <ChevronDown size={13} className={`section-chevron ${collapsedSections.overview ? 'rotated' : ''}`} />
               </div>
-
-              {/* Vendors sub-menu: retain only Vendor Directory */}
-              {isNav('vendors') && vendorSubOpen && !desktopCollapsed && (
-                <div className="sidebar-subnav-list">
-                  <div
-                    className={`subnav-item ${location.pathname === '/admin/vendors' && !location.search ? 'active-orange-text' : ''}`}
-                    onClick={() => navTo('/admin/vendors')}
-                  >
-                    <span className="subnav-bullet">•</span><span>Vendor Directory</span>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-
-          {/* Section: Fleet & Drivers */}
-          {(hasPermission('fleet', 'view') || hasPermission('drivers', 'view')) && (
-            <div className="nav-section-label">FLEET & DRIVERS</div>
-          )}
-          {hasPermission('fleet', 'view') && (
-            <>
-              <div
-                className={`nav-item ${isNav('fleet') ? 'active-orange' : ''}`}
-                title="Fleet & Vehicles"
-                onClick={() => {
-                  if (isNav('fleet')) {
-                    setFleetSubOpen(v => !v);
-                  } else {
-                    navTo('/admin/fleet');
-                    setFleetSubOpen(true);
-                  }
-                }}
-              >
-                <Truck size={18} />
-                <span>Fleet & Vehicles</span>
-                <ChevronRight size={14} className={`nav-chevron ${isNav('fleet') && fleetSubOpen ? 'rotated' : ''}`} />
-              </div>
-
-              {/* Fleet sub-menu */}
-              {isNav('fleet') && fleetSubOpen && !desktopCollapsed && (
-                <div className="sidebar-subnav-list">
-                  {[
-                    { path: '/admin/fleet', label: 'Vehicle Directory', match: location.pathname === '/admin/fleet' },
-                  ].map(({ path, label, match }) => (
-                    <div key={label} className={`subnav-item ${match ? 'active-orange-text' : ''}`} onClick={() => navTo(path)}>
-                      <span className="subnav-bullet">•</span><span>{label}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-
-          {/* Drivers */}
-          {hasPermission('drivers', 'view') && (
-            <div className={`nav-item ${isNav('drivers') ? 'active-orange' : ''}`} onClick={() => navTo('/admin/drivers')} title="Drivers">
-              <UserCheck size={18} />
-              <span>Drivers</span>
-              {Boolean(navBadges.drivers && navBadges.drivers > 0) && (
-                <span className="nav-badge-red">{navBadges.drivers}</span>
-              )}
-              <ChevronRight size={14} className="nav-chevron" />
-            </div>
-          )}
-
-          {/* Section: Operations */}
-          {operationsModules.length > 0 && (
-            <>
-              <div className="nav-section-label">OPERATIONS</div>
-              {operationsModules.map(({ key, label, Icon }) => {
-                const count = navBadges[key] || 0;
-                return (
-                  <div key={key} className={`nav-item ${isNav(key) ? 'active-orange' : ''}`} onClick={() => navTo(`/admin/${key}`)} title={label}>
-                    <Icon size={18} />
-                    <span>{label}</span>
-                    {count > 0 && (
-                      <span className="nav-badge-red">{count}</span>
-                    )}
-                    <ChevronRight size={14} className="nav-chevron" />
-                  </div>
-                );
-              })}
-            </>
-          )}
-
-          {/* Section: Finance & Exceptions */}
-          {financeModules.length > 0 && (
-            <>
-              <div className="sidebar-divider" />
-              <div className="nav-section-label">FINANCE & EXCEPTIONS</div>
-              {financeModules.map(({ key, label, Icon }) => {
-                const count = navBadges[key] || 0;
-                return (
-                  <div key={key} className={`nav-item ${isNav(key) ? 'active-orange' : ''}`} onClick={() => navTo(`/admin/${key}`)} title={label}>
-                    <Icon size={18} />
-                    <span>{label}</span>
-                    {count > 0 && (
-                      <span className="nav-badge-red">{count}</span>
-                    )}
-                    <ChevronRight size={14} className="nav-chevron" />
-                  </div>
-                );
-              })}
-            </>
-          )}
-
-          {/* Section: Reports */}
-          {hasPermission('reports', 'view') && (
-            <>
-              <div className="sidebar-divider" />
-              <div className="nav-section-label">REPORTS</div>
-              <div className={`nav-item ${isNav('reports') ? 'active-orange' : ''}`} onClick={() => navTo('/admin/reports')} title="Reports & Analytics">
-                <BarChart3 size={18} /><span>Reports & Analytics</span><ChevronRight size={14} className="nav-chevron" />
-              </div>
-            </>
-          )}
-
-          {/* Section: Settings (Super Admin Only) */}
-          {adminProfile?.role === 'SUPER_ADMIN' && (
-            <>
-              <div className="sidebar-divider" />
-              <div className="nav-section-label">SETTINGS</div>
-              <div className={`nav-item ${isNav('superadmin/users') || isNav('users') ? 'active-orange' : ''}`} onClick={() => navTo('/admin/superadmin/users')}>
-                <Users size={18} /><span>Users & Permissions</span><ChevronRight size={14} className="nav-chevron" />
-              </div>
-              <div className={`nav-item ${isNav('settings') ? 'active-orange' : ''}`} onClick={() => navTo('/admin/settings')}>
-                <Settings size={18} /><span>System Settings</span><ChevronRight size={14} className="nav-chevron" />
-              </div>
-            </>
-          )}
-
-          {/* Section: Super Admin (Conditional) */}
-          {adminProfile?.role === 'SUPER_ADMIN' && (
-            <>
-              <div className="sidebar-divider" />
-              <div className="nav-section-label">SUPER ADMIN</div>
-              {superAdminModules.map(({ key, label, path, Icon }) => (
-                <div key={key} className={`nav-item ${isNav(key) ? 'active-orange' : ''}`} onClick={() => navTo(path)}>
-                  <Icon size={18} />
-                  <span>{label}</span>
+              {!collapsedSections.overview && (
+                <div
+                  className={`nav-item ${isNav('dashboard') ? 'active-orange' : ''}`}
+                  onClick={() => navTo('/admin/dashboard')}
+                  title="Dashboard"
+                >
+                  <LayoutDashboard size={18} />
+                  <span>Dashboard</span>
                   <ChevronRight size={14} className="nav-chevron" />
                 </div>
-              ))}
-            </>
+              )}
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════════════
+              B. CLIENT MANAGEMENT
+             ══════════════════════════════════════════════════════════════════════════ */}
+          {(hasPermission('clients', 'view') ||
+            hasPermission('requirements', 'view') ||
+            hasPermission('pricing', 'view') ||
+            hasPermission('bookings', 'view') ||
+            hasPermission('payments', 'view')) && (
+            <div className="nav-section-group">
+              <div
+                className="nav-section-label clickable"
+                onClick={() => toggleSection('client')}
+                title="Toggle Client Management"
+              >
+                <span>B. CLIENT MANAGEMENT</span>
+                <ChevronDown size={13} className={`section-chevron ${collapsedSections.client ? 'rotated' : ''}`} />
+              </div>
+              {!collapsedSections.client && (
+                <>
+                  {/* 2. Clients */}
+                  {hasPermission('clients', 'view') && (
+                    <div
+                      className={`nav-item ${isNav('clients') ? 'active-orange' : ''}`}
+                      onClick={() => navTo('/admin/clients')}
+                      title="Clients"
+                    >
+                      <Users size={18} />
+                      <span>Clients</span>
+                      {Boolean(navBadges.clients && navBadges.clients > 0) && (
+                        <span className="nav-badge-red">{navBadges.clients}</span>
+                      )}
+                      <ChevronRight size={14} className="nav-chevron" />
+                    </div>
+                  )}
+
+                  {/* 3. Client Requirements */}
+                  {hasPermission('requirements', 'view') && (
+                    <div
+                      className={`nav-item ${isNav('requirements') ? 'active-orange' : ''}`}
+                      onClick={() => navTo('/admin/requirements')}
+                      title="Client Requirements"
+                    >
+                      <FileSpreadsheet size={18} />
+                      <span>Client Requirements</span>
+                      {Boolean(navBadges.requirements && navBadges.requirements > 0) && (
+                        <span className="nav-badge-red">{navBadges.requirements}</span>
+                      )}
+                      <ChevronRight size={14} className="nav-chevron" />
+                    </div>
+                  )}
+
+                  {/* 4. Client Quotations */}
+                  {(hasPermission('pricing', 'view') || hasPermission('quotations', 'view')) && (
+                    <div
+                      className={`nav-item ${isNav('client-quotations') ? 'active-orange' : ''}`}
+                      onClick={() => navTo('/admin/pricing')}
+                      title="Client Quotations"
+                    >
+                      <Receipt size={18} />
+                      <span>Client Quotations</span>
+                      <ChevronRight size={14} className="nav-chevron" />
+                    </div>
+                  )}
+
+                  {/* 5. Bookings */}
+                  {hasPermission('bookings', 'view') && (
+                    <div
+                      className={`nav-item ${isNav('bookings') ? 'active-orange' : ''}`}
+                      onClick={() => navTo('/admin/bookings')}
+                      title="Bookings"
+                    >
+                      <CalendarCheck size={18} />
+                      <span>Bookings</span>
+                      {Boolean(navBadges.bookings && navBadges.bookings > 0) && (
+                        <span className="nav-badge-red">{navBadges.bookings}</span>
+                      )}
+                      <ChevronRight size={14} className="nav-chevron" />
+                    </div>
+                  )}
+
+                  {/* 6. Client Payments */}
+                  {hasPermission('payments', 'view') && (
+                    <div
+                      className={`nav-item ${isNav('client-payments') ? 'active-orange' : ''}`}
+                      onClick={() => navTo('/admin/payments?tab=client')}
+                      title="Client Payments"
+                    >
+                      <IndianRupee size={18} />
+                      <span>Client Payments</span>
+                      {Boolean(navBadges.payments && navBadges.payments > 0) && (
+                        <span className="nav-badge-red">{navBadges.payments}</span>
+                      )}
+                      <ChevronRight size={14} className="nav-chevron" />
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════════════
+              C. VENDOR MANAGEMENT
+             ══════════════════════════════════════════════════════════════════════════ */}
+          {(hasPermission('vendors', 'view') ||
+            hasPermission('quotations', 'view') ||
+            hasPermission('fleet', 'view') ||
+            hasPermission('drivers', 'view') ||
+            hasPermission('payments', 'view')) && (
+            <div className="nav-section-group">
+              <div
+                className="nav-section-label clickable"
+                onClick={() => toggleSection('vendor')}
+                title="Toggle Vendor Management"
+              >
+                <span>C. VENDOR MANAGEMENT</span>
+                <ChevronDown size={13} className={`section-chevron ${collapsedSections.vendor ? 'rotated' : ''}`} />
+              </div>
+              {!collapsedSections.vendor && (
+                <>
+                  {/* 7. Vendors */}
+                  {hasPermission('vendors', 'view') && (
+                    <div
+                      className={`nav-item ${isNav('vendors') ? 'active-orange' : ''}`}
+                      onClick={() => navTo('/admin/vendors')}
+                      title="Vendors"
+                    >
+                      <Building2 size={18} />
+                      <span>Vendors</span>
+                      {Boolean(navBadges.vendors && navBadges.vendors > 0) && (
+                        <span className="nav-badge-red">{navBadges.vendors}</span>
+                      )}
+                      <ChevronRight size={14} className="nav-chevron" />
+                    </div>
+                  )}
+
+                  {/* 8. Vendor Verification */}
+                  {hasPermission('vendors', 'view') && (
+                    <div
+                      className={`nav-item ${isNav('vendor-verification') ? 'active-orange' : ''}`}
+                      onClick={() => navTo('/admin/vendors/verification-requests')}
+                      title="Vendor Verification"
+                    >
+                      <UserCheck size={18} />
+                      <span>Vendor Verification</span>
+                      {Boolean(navBadges.vendors && navBadges.vendors > 0) && (
+                        <span className="nav-badge-red">{navBadges.vendors}</span>
+                      )}
+                      <ChevronRight size={14} className="nav-chevron" />
+                    </div>
+                  )}
+
+                  {/* 9. Sourcing & RFQ */}
+                  {hasPermission('quotations', 'view') && (
+                    <div
+                      className={`nav-item ${isNav('sourcing-rfq') ? 'active-orange' : ''}`}
+                      onClick={() => navTo('/admin/quotations?tab=rfq')}
+                      title="Sourcing & RFQ"
+                    >
+                      <Layers size={18} />
+                      <span>Sourcing & RFQ</span>
+                      {Boolean(navBadges.quotations && navBadges.quotations > 0) && (
+                        <span className="nav-badge-red">{navBadges.quotations}</span>
+                      )}
+                      <ChevronRight size={14} className="nav-chevron" />
+                    </div>
+                  )}
+
+                  {/* 10. Vendor Quotations */}
+                  {hasPermission('quotations', 'view') && (
+                    <div
+                      className={`nav-item ${isNav('vendor-quotations') ? 'active-orange' : ''}`}
+                      onClick={() => navTo('/admin/vendor-quotations')}
+                      title="Vendor Quotations"
+                    >
+                      <DollarSign size={18} />
+                      <span>Vendor Quotations</span>
+                      <ChevronRight size={14} className="nav-chevron" />
+                    </div>
+                  )}
+
+                  {/* 11. Fleet & Vehicles */}
+                  {hasPermission('fleet', 'view') && (
+                    <div
+                      className={`nav-item ${isNav('fleet') ? 'active-orange' : ''}`}
+                      onClick={() => navTo('/admin/fleet')}
+                      title="Fleet & Vehicles"
+                    >
+                      <Truck size={18} />
+                      <span>Fleet & Vehicles</span>
+                      <ChevronRight size={14} className="nav-chevron" />
+                    </div>
+                  )}
+
+                  {/* 12. Drivers */}
+                  {hasPermission('drivers', 'view') && (
+                    <div
+                      className={`nav-item ${isNav('drivers') ? 'active-orange' : ''}`}
+                      onClick={() => navTo('/admin/drivers')}
+                      title="Drivers"
+                    >
+                      <Users size={18} />
+                      <span>Drivers</span>
+                      {Boolean(navBadges.drivers && navBadges.drivers > 0) && (
+                        <span className="nav-badge-red">{navBadges.drivers}</span>
+                      )}
+                      <ChevronRight size={14} className="nav-chevron" />
+                    </div>
+                  )}
+
+                  {/* 13. Vehicle & Driver Assignment */}
+                  {hasPermission('fleet', 'view') && (
+                    <div
+                      className={`nav-item ${isNav('fleet-assignment') ? 'active-orange' : ''}`}
+                      onClick={() => navTo('/admin/fleet/tie-up-approval')}
+                      title="Vehicle & Driver Assignment"
+                    >
+                      <ShieldCheck size={18} />
+                      <span>Vehicle & Driver Assignment</span>
+                      <ChevronRight size={14} className="nav-chevron" />
+                    </div>
+                  )}
+
+                  {/* 14. Vendor Payments & Settlements */}
+                  {hasPermission('payments', 'view') && (
+                    <div
+                      className={`nav-item ${isNav('vendor-payments') ? 'active-orange' : ''}`}
+                      onClick={() => navTo('/admin/payments?tab=vendor')}
+                      title="Vendor Payments & Settlements"
+                    >
+                      <IndianRupee size={18} />
+                      <span>Vendor Payments & Settlements</span>
+                      <ChevronRight size={14} className="nav-chevron" />
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════════════
+              D. TRIP OPERATIONS
+             ══════════════════════════════════════════════════════════════════════════ */}
+          {(hasPermission('documents', 'view') ||
+            hasPermission('tracking', 'view') ||
+            hasPermission('weighbridge', 'view') ||
+            hasPermission('pod', 'view')) && (
+            <div className="nav-section-group">
+              <div
+                className="nav-section-label clickable"
+                onClick={() => toggleSection('operations')}
+                title="Toggle Trip Operations"
+              >
+                <span>D. TRIP OPERATIONS</span>
+                <ChevronDown size={13} className={`section-chevron ${collapsedSections.operations ? 'rotated' : ''}`} />
+              </div>
+              {!collapsedSections.operations && (
+                <>
+                  {/* 15. Pre-Trip & Document Verification */}
+                  {hasPermission('documents', 'view') && (
+                    <div
+                      className={`nav-item ${isNav('documents') ? 'active-orange' : ''}`}
+                      onClick={() => navTo('/admin/documents')}
+                      title="Pre-Trip & Document Verification"
+                    >
+                      <ShieldCheck size={18} />
+                      <span>Pre-Trip & Document Verification</span>
+                      {Boolean(navBadges.documents && navBadges.documents > 0) && (
+                        <span className="nav-badge-red">{navBadges.documents}</span>
+                      )}
+                      <ChevronRight size={14} className="nav-chevron" />
+                    </div>
+                  )}
+
+                  {/* 16. Trip Tracking */}
+                  {hasPermission('tracking', 'view') && (
+                    <div
+                      className={`nav-item ${isNav('tracking') ? 'active-orange' : ''}`}
+                      onClick={() => navTo('/admin/tracking')}
+                      title="Trip Tracking"
+                    >
+                      <Compass size={18} />
+                      <span>Trip Tracking</span>
+                      <ChevronRight size={14} className="nav-chevron" />
+                    </div>
+                  )}
+
+                  {/* 17. Weighbridge & Freight Bills */}
+                  {hasPermission('weighbridge', 'view') && (
+                    <div
+                      className={`nav-item ${isNav('weighbridge') ? 'active-orange' : ''}`}
+                      onClick={() => navTo('/admin/weighbridge')}
+                      title="Weighbridge & Freight Bills"
+                    >
+                      <Scale size={18} />
+                      <span>Weighbridge & Freight Bills</span>
+                      <ChevronRight size={14} className="nav-chevron" />
+                    </div>
+                  )}
+
+                  {/* 18. POD & Trip Closure */}
+                  {hasPermission('pod', 'view') && (
+                    <div
+                      className={`nav-item ${isNav('pod') ? 'active-orange' : ''}`}
+                      onClick={() => navTo('/admin/pod')}
+                      title="POD & Trip Closure"
+                    >
+                      <CheckSquare size={18} />
+                      <span>POD & Trip Closure</span>
+                      {Boolean(navBadges.pod && navBadges.pod > 0) && (
+                        <span className="nav-badge-red">{navBadges.pod}</span>
+                      )}
+                      <ChevronRight size={14} className="nav-chevron" />
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════════════
+              E. EXCEPTIONS & COMMUNICATIONS
+             ══════════════════════════════════════════════════════════════════════════ */}
+          {(hasPermission('exceptions', 'view') || hasPermission('communications', 'view')) && (
+            <div className="nav-section-group">
+              <div
+                className="nav-section-label clickable"
+                onClick={() => toggleSection('exceptions')}
+                title="Toggle Exceptions & Communications"
+              >
+                <span>E. EXCEPTIONS & COMMUNICATIONS</span>
+                <ChevronDown size={13} className={`section-chevron ${collapsedSections.exceptions ? 'rotated' : ''}`} />
+              </div>
+              {!collapsedSections.exceptions && (
+                <>
+                  {/* 19. Exceptions */}
+                  {hasPermission('exceptions', 'view') && (
+                    <div
+                      className={`nav-item ${isNav('exceptions') ? 'active-orange' : ''}`}
+                      onClick={() => navTo('/admin/exceptions')}
+                      title="Exceptions"
+                    >
+                      <AlertTriangle size={18} />
+                      <span>Exceptions</span>
+                      {Boolean(navBadges.exceptions && navBadges.exceptions > 0) && (
+                        <span className="nav-badge-red">{navBadges.exceptions}</span>
+                      )}
+                      <ChevronRight size={14} className="nav-chevron" />
+                    </div>
+                  )}
+
+                  {/* 20. Communications */}
+                  {hasPermission('communications', 'view') && (
+                    <div
+                      className={`nav-item ${isNav('communications') ? 'active-orange' : ''}`}
+                      onClick={() => navTo('/admin/communications')}
+                      title="Communications"
+                    >
+                      <MessageSquare size={18} />
+                      <span>Communications</span>
+                      {Boolean(unreadChatCount > 0) && (
+                        <span className="nav-badge-red">{unreadChatCount}</span>
+                      )}
+                      <ChevronRight size={14} className="nav-chevron" />
+                    </div>
+                  )}
+
+                  {/* 21. Notifications */}
+                  <div
+                    className={`nav-item ${isNav('notifications') ? 'active-orange' : ''}`}
+                    onClick={() => setIsNotifOpen(true)}
+                    title="Notifications"
+                  >
+                    <Bell size={18} />
+                    <span>Notifications</span>
+                    {Boolean(unreadNotifCount > 0) && (
+                      <span className="nav-badge-red">{unreadNotifCount}</span>
+                    )}
+                    <ChevronRight size={14} className="nav-chevron" />
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════════════
+              F. REPORTS & ANALYTICS
+             ══════════════════════════════════════════════════════════════════════════ */}
+          {(hasPermission('reports', 'view') || adminProfile?.role === 'SUPER_ADMIN') && (
+            <div className="nav-section-group">
+              <div
+                className="nav-section-label clickable"
+                onClick={() => toggleSection('reports')}
+                title="Toggle Reports & Analytics"
+              >
+                <span>F. REPORTS & ANALYTICS</span>
+                <ChevronDown size={13} className={`section-chevron ${collapsedSections.reports ? 'rotated' : ''}`} />
+              </div>
+              {!collapsedSections.reports && (
+                <>
+                  {/* 22. Reports & Analytics */}
+                  {hasPermission('reports', 'view') && (
+                    <div
+                      className={`nav-item ${isNav('reports') ? 'active-orange' : ''}`}
+                      onClick={() => navTo('/admin/reports')}
+                      title="Reports & Analytics"
+                    >
+                      <BarChart3 size={18} />
+                      <span>Reports & Analytics</span>
+                      <ChevronRight size={14} className="nav-chevron" />
+                    </div>
+                  )}
+
+                  {/* 23. Commercial Analytics */}
+                  {(adminProfile?.role === 'SUPER_ADMIN' || hasPermission('reports', 'view')) && (
+                    <div
+                      className={`nav-item ${isNav('superadmin/analytics') ? 'active-orange' : ''}`}
+                      onClick={() => navTo('/admin/superadmin/analytics')}
+                      title="Commercial Analytics"
+                    >
+                      <TrendingUp size={18} />
+                      <span>Commercial Analytics</span>
+                      <ChevronRight size={14} className="nav-chevron" />
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════════════
+              G. ACCESS & CONFIGURATION
+             ══════════════════════════════════════════════════════════════════════════ */}
+          {/* Section: Settings (Super Admin Only) */}
+          {adminProfile?.role === 'SUPER_ADMIN' && (
+            <div className="nav-section-group">
+              <div
+                className="nav-section-label clickable"
+                onClick={() => toggleSection('access')}
+                title="Toggle Access & Configuration"
+              >
+                <span>G. ACCESS & CONFIGURATION</span>
+                <ChevronDown size={13} className={`section-chevron ${collapsedSections.access ? 'rotated' : ''}`} />
+              </div>
+              {!collapsedSections.access && (
+                <>
+                  {/* 24. Users & Permissions */}
+                  <div
+                    className={`nav-item ${isNav('superadmin/users') ? 'active-orange' : ''}`}
+                    onClick={() => navTo('/admin/superadmin/users')}
+                    title="Users & Permissions"
+                  >
+                    <Users size={18} />
+                    <span>Users & Permissions</span>
+                    <ChevronRight size={14} className="nav-chevron" />
+                  </div>
+
+                  {/* 25. RBAC Roles */}
+                  <div
+                    className={`nav-item ${isNav('superadmin/rbac') ? 'active-orange' : ''}`}
+                    onClick={() => navTo('/admin/superadmin/rbac')}
+                    title="RBAC Roles"
+                  >
+                    <Shield size={18} />
+                    <span>RBAC Roles</span>
+                    <ChevronRight size={14} className="nav-chevron" />
+                  </div>
+
+                  {/* 26. System Settings */}
+                  <div
+                    className={`nav-item ${isNav('settings') ? 'active-orange' : ''}`}
+                    onClick={() => navTo('/admin/settings')}
+                    title="System Settings"
+                  >
+                    <Settings size={18} />
+                    <span>System Settings</span>
+                    <ChevronRight size={14} className="nav-chevron" />
+                  </div>
+
+                  {/* 27. System Parameters */}
+                  <div
+                    className={`nav-item ${isNav('superadmin/system-parameters') ? 'active-orange' : ''}`}
+                    onClick={() => navTo('/admin/superadmin/system-parameters')}
+                    title="System Parameters"
+                  >
+                    <Sliders size={18} />
+                    <span>System Parameters</span>
+                    <ChevronRight size={14} className="nav-chevron" />
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════════════
+              H. SUPER ADMIN
+             ══════════════════════════════════════════════════════════════════════════ */}
+          {adminProfile?.role === 'SUPER_ADMIN' && (
+            <div className="nav-section-group">
+              <div
+                className="nav-section-label clickable"
+                onClick={() => toggleSection('superadmin')}
+                title="Toggle Super Admin"
+              >
+                <span>H. SUPER ADMIN</span>
+                <ChevronDown size={13} className={`section-chevron ${collapsedSections.superadmin ? 'rotated' : ''}`} />
+              </div>
+              {!collapsedSections.superadmin && (
+                <>
+                  {/* 28. Admin Users */}
+                  <div
+                    className={`nav-item ${isNav('superadmin/admin-users') ? 'active-orange' : ''}`}
+                    onClick={() => navTo('/admin/superadmin/users')}
+                    title="Admin Users"
+                  >
+                    <Users size={18} />
+                    <span>Admin Users</span>
+                    <ChevronRight size={14} className="nav-chevron" />
+                  </div>
+
+                  {/* 29. Audit Logs */}
+                  <div
+                    className={`nav-item ${isNav('superadmin/audit-logs') ? 'active-orange' : ''}`}
+                    onClick={() => navTo('/admin/superadmin/audit-logs')}
+                    title="Audit Logs"
+                  >
+                    <FileText size={18} />
+                    <span>Audit Logs</span>
+                    <ChevronRight size={14} className="nav-chevron" />
+                  </div>
+                </>
+              )}
+            </div>
           )}
         </nav>
       </aside>
@@ -1252,6 +1704,13 @@ function AdminShell() {
                   <QuotationsModule 
                     onNavigateToComparison={(id) => navigate(`/admin/quotations/${id}`)}
                   />
+                </RequirePermission>
+              } />
+
+              {/* Dedicated Vendor Quotations Module */}
+              <Route path="vendor-quotations" element={
+                <RequirePermission module="quotations">
+                  <VendorQuotationsModule />
                 </RequirePermission>
               } />
 

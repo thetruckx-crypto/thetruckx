@@ -16,9 +16,8 @@ import {
   Package,
   Truck,
   ArrowRight,
+  AlertCircle,
 } from 'lucide-react-native';
-import { ScenicHeroBanner } from '../../../components/ScenicHeroBanner';
-import { BottomGoldWings } from '../../../components/BottomGoldWings';
 
 interface VendorQuotationDetailsScreenProps {
   quotation: any;
@@ -31,20 +30,52 @@ export const VendorQuotationDetailsScreen: React.FC<VendorQuotationDetailsScreen
   onBack,
   onNavigateToBooking,
 }) => {
-  if (!quotation) return null;
+  if (!quotation) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.headerBar}>
+          <TouchableOpacity style={styles.backBtn} onPress={onBack} accessibilityLabel="Back">
+            <ChevronLeft size={22} color="#0F172A" />
+          </TouchableOpacity>
+          <View style={styles.headerTextWrap}>
+            <Text style={styles.headerTitle}>Quotation Details</Text>
+          </View>
+        </View>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
+          <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: '#FEF2F2', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+            <AlertCircle size={32} color="#EF4444" />
+          </View>
+          <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 8, textAlign: 'center' }}>
+            Quotation Not Available
+          </Text>
+          <Text style={{ fontSize: 13, color: '#64748B', textAlign: 'center', lineHeight: 20, marginBottom: 24 }}>
+            The selected quotation record could not be loaded or has been updated.
+          </Text>
+          <TouchableOpacity
+            style={{ backgroundColor: '#F05A22', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 10 }}
+            onPress={onBack}
+          >
+            <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 14 }}>Back to Quotations</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const isAwarded = quotation.status === 'AWARDED';
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.scrollContainer} bounces={false}>
-        {/* Top Banner */}
-        <View style={styles.topWrap}>
-          <ScenicHeroBanner height={180} />
+        {/* Header Bar */}
+        <View style={styles.headerBar}>
           <TouchableOpacity style={styles.backBtn} onPress={onBack} accessibilityLabel="Back">
-            <ChevronLeft size={22} color="#172B4D" />
+            <ChevronLeft size={22} color="#0F172A" />
           </TouchableOpacity>
-          
+          <View style={styles.headerTextWrap}>
+            <Text style={styles.headerTitle}>Quotation Details</Text>
+            <Text style={styles.headerSubtitle} numberOfLines={1}>{quotation.id}</Text>
+          </View>
         </View>
 
         {/* Content */}
@@ -140,7 +171,6 @@ export const VendorQuotationDetailsScreen: React.FC<VendorQuotationDetailsScreen
           )}
         </View>
       </ScrollView>
-      <BottomGoldWings />
     </SafeAreaView>
   );
 };
@@ -154,27 +184,36 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingBottom: 40,
   },
-  topWrap: {
-    position: 'relative',
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
   },
   backBtn: {
-    position: 'absolute',
-    top: 16,
-    left: 16,
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 10,
+    marginRight: 12,
   },
-  logoWrap: {
-    position: 'absolute',
-    bottom: 6,
-    alignSelf: 'center',
+  headerTextWrap: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
   },
   contentWrap: {
     paddingHorizontal: 16,

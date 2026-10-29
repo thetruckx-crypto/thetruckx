@@ -24,9 +24,9 @@ import {
   FileText,
   ArrowRight,
   ShieldCheck,
+  AlertCircle,
 } from 'lucide-react-native';
-import { ScenicHeroBanner } from '../../../components/ScenicHeroBanner';
-import { BottomGoldWings } from '../../../components/BottomGoldWings';
+import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { vendorService } from '../../../services/vendorService';
 
 interface VendorTripDetailsScreenProps {
@@ -88,7 +88,38 @@ export const VendorTripDetailsScreen: React.FC<VendorTripDetailsScreenProps> = (
     );
   }
 
-  if (!trip) return null;
+  if (!trip) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.topBar}>
+          <TouchableOpacity style={styles.backBtn} onPress={onBack} accessibilityLabel="Back">
+            <ChevronLeft size={22} color="#0F172A" />
+          </TouchableOpacity>
+          <View style={styles.topBarCenter}>
+            <BrandLogoHeader size="sm" showSubtitle={false} />
+          </View>
+          <View style={{ width: 38 }} />
+        </View>
+        <View style={[styles.loadingCenter, { paddingHorizontal: 32 }]}>
+          <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: '#FEF2F2', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+            <AlertCircle size={32} color="#EF4444" />
+          </View>
+          <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 8, textAlign: 'center' }}>
+            Trip Record Not Found
+          </Text>
+          <Text style={{ fontSize: 13, color: '#64748B', textAlign: 'center', lineHeight: 20, marginBottom: 24 }}>
+            The requested trip details could not be retrieved from the fleet dispatch ledger.
+          </Text>
+          <TouchableOpacity
+            style={{ backgroundColor: '#F05A22', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 10 }}
+            onPress={onBack}
+          >
+            <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 14 }}>Back to Trips</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const currentStatus = trip.tripStatus;
   const isCompleted = currentStatus === 'COMPLETED';
@@ -107,13 +138,15 @@ export const VendorTripDetailsScreen: React.FC<VendorTripDetailsScreenProps> = (
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.scrollContainer} bounces={false}>
-        {/* Top Banner */}
-        <View style={styles.topWrap}>
-          <ScenicHeroBanner height={180} />
+        {/* Clean Professional Top Bar (Unwanted image removed) */}
+        <View style={styles.topBar}>
           <TouchableOpacity style={styles.backBtn} onPress={onBack} accessibilityLabel="Back">
-            <ChevronLeft size={22} color="#172B4D" />
+            <ChevronLeft size={22} color="#0F172A" />
           </TouchableOpacity>
-          
+          <View style={styles.topBarCenter}>
+            <BrandLogoHeader size="sm" showSubtitle={false} />
+          </View>
+          <View style={{ width: 38 }} />
         </View>
 
         {/* Content */}
@@ -138,7 +171,11 @@ export const VendorTripDetailsScreen: React.FC<VendorTripDetailsScreenProps> = (
 
           {/* Stepper Progression Card */}
           <View style={styles.stepperCard}>
-            <Text style={styles.stepperCardTitle}>LIFECYCLE PROGRESSION</Text>
+            <View style={styles.stepperHeaderRow}>
+              <Navigation size={14} color="#F05A22" />
+              <Text style={styles.stepperCardTitle}>Trip Lifecycle Process</Text>
+            </View>
+            <Text style={styles.stepperSubtext}>Real-time telematics and dispatch milestone verification</Text>
 
             <View style={styles.stepperCol}>
               {stages.map((st, idx) => {
@@ -325,7 +362,6 @@ export const VendorTripDetailsScreen: React.FC<VendorTripDetailsScreenProps> = (
           </TouchableOpacity>
         </View>
       </ScrollView>
-      <BottomGoldWings />
     </SafeAreaView>
   );
 };
@@ -349,27 +385,28 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingBottom: 40,
   },
-  topWrap: {
-    position: 'relative',
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
   },
   backBtn: {
-    position: 'absolute',
-    top: 16,
-    left: 16,
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 10,
   },
-  logoWrap: {
-    position: 'absolute',
-    bottom: 6,
-    alignSelf: 'center',
+  topBarCenter: {
+    alignItems: 'center',
   },
   contentWrap: {
     paddingHorizontal: 16,
@@ -382,7 +419,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   titleText: {
-    color: '#172B4D',
+    color: '#0F172A',
     fontSize: 18,
     fontWeight: '800',
   },
@@ -415,11 +452,21 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 12,
   },
+  stepperHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 2,
+  },
   stepperCardTitle: {
-    color: '#F05A22',
-    fontSize: 11,
+    color: '#0F172A',
+    fontSize: 13,
     fontWeight: '800',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
+  },
+  stepperSubtext: {
+    color: '#64748B',
+    fontSize: 11,
     marginBottom: 14,
   },
   stepperCol: {
@@ -469,7 +516,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   labelPast: {
-    color: '#FFFFFF',
+    color: '#0F172A',
     fontWeight: '700',
   },
   labelCurrent: {
@@ -522,7 +569,7 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   completedNoticeText: {
-    color: '#A7F3D0',
+    color: '#047857',
     fontSize: 12,
     fontWeight: '700',
   },

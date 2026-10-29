@@ -1,5 +1,12 @@
 [
   {
+    "mobile": "9390420247",
+    "role": "VENDOR",
+    "fullName": "VENDOR User",
+    "status": "ACTIVE",
+    "registeredAt": "2026-10-29T12:25:30.800Z"
+  },
+  {
     "mobile": "9876543210",
     "role": "CLIENT",
     "fullName": "Pavani",

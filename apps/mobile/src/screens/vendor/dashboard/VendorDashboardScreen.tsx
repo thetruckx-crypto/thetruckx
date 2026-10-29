@@ -25,7 +25,6 @@ import {
   Users,
   ChevronRight,
   Search,
-  Calendar,
   Building2,
   ChartColumn,
   ArrowRight,
@@ -36,6 +35,7 @@ import { authService, AuthSessionData } from '../../../services/authService';
 import { supabase } from '../../../supabase';
 import { VendorBottomNavBar, VendorNavTab } from '../../../components/VendorBottomNavBar';
 import { VendorReportsModal } from './VendorReportsModal';
+import { VendorOperationsHubModal } from './VendorOperationsHubModal';
 import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 
 interface VendorDashboardScreenProps {
@@ -48,9 +48,11 @@ interface VendorDashboardScreenProps {
   onViewFleet: () => void;
   onViewDrivers: () => void;
   onViewTrips: () => void;
+  onViewTripDocuments?: () => void;
   onViewVerificationStatus: () => void;
   onOpenNotifications?: () => void;
   onOpenProfile?: () => void;
+  onOpenSupport?: () => void;
   onAssignFleet?: () => void;
   onSelectNavTab?: (tab: VendorNavTab) => void;
 }
@@ -65,16 +67,28 @@ export const VendorDashboardScreen: React.FC<VendorDashboardScreenProps> = ({
   onViewFleet,
   onViewDrivers,
   onViewTrips,
+  onViewTripDocuments,
   onViewVerificationStatus,
   onOpenNotifications,
   onOpenProfile,
+  onOpenSupport,
   onAssignFleet,
   onSelectNavTab,
 }) => {
   const vendorId = session?.userId || '';
-  const vendorName = session?.companyName || session?.fullName || 'Hyma transport';
 
-  const [vendorStatus, setVendorStatus] = useState<'PENDING' | 'APPROVED' | 'REJECTED' | 'INACTIVE'>('PENDING');
+  // Authoritative dynamic vendor profile identity (real database records)
+  const [profileName, setProfileName] = useState<string>(session?.fullName || '');
+  const [profileCompanyName, setProfileCompanyName] = useState<string>(session?.companyName || '');
+
+  const finalVendorName = profileName || session?.fullName || 'Transporter Partner';
+  const finalCompanyName = profileCompanyName || session?.companyName || 'Carrier Enterprise';
+
+  const [vendorStatus, setVendorStatus] = useState<'PENDING' | 'APPROVED' | 'REJECTED' | 'INACTIVE'>(
+    (session?.accountStatus as any) === 'APPROVED' || (session?.accountStatus as any) === 'ACTIVE'
+      ? 'APPROVED'
+      : (session?.accountStatus as any) || 'PENDING'
+  );
   const [metrics, setMetrics] = useState({
     availableReqs: 0,
     activeQuotes: 0,
@@ -93,24 +107,16 @@ export const VendorDashboardScreen: React.FC<VendorDashboardScreenProps> = ({
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showReportsModal, setShowReportsModal] = useState(false);
   const [showMoreMenuModal, setShowMoreMenuModal] = useState(false);
+  const [showOperationsHubModal, setShowOperationsHubModal] = useState(false);
 
-  // Dynamic live Date & Time
-  const [currentDateTime, setCurrentDateTime] = useState(new Date());
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentDateTime(new Date());
-    }, 30000);
-    return () => clearInterval(timer);
-  }, []);
-
+  // Dynamic live Date & Time (Internal timestamps retained for auditing & session metrics)
+  const [currentDateTime] = useState(new Date());
   const formattedDate = currentDateTime.toLocaleDateString('en-US', {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
     year: 'numeric',
   });
-
   const formattedTime = currentDateTime.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
@@ -120,9 +126,38 @@ export const VendorDashboardScreen: React.FC<VendorDashboardScreenProps> = ({
   const loadDashboardData = useCallback(async () => {
     setErrorMessage(null);
     try {
-      // 1. Fetch vendor verification state
+      // 1. Fetch vendor verification state and profile from authoritative backend
       const statusRes = await vendorService.getVendorVerificationStatus(vendorId);
       setVendorStatus(statusRes.status);
+      if (statusRes.vendorName) {
+        setProfileCompanyName(statusRes.vendorName);
+      }
+
+      // 1b. Fetch authoritative vendor company and user profile from real database records
+      try {
+        if (vendorId && vendorId.includes('-')) {
+          const { data: vRecord } = await supabase
+            .from('vendor_companies')
+            .select('name, vendor_name, company_name, legal_name, contact_person')
+            .eq('id', vendorId)
+            .maybeSingle();
+          if (vRecord) {
+            const resolvedCompany = vRecord.company_name || vRecord.vendor_name || vRecord.name || vRecord.legal_name;
+            if (resolvedCompany) setProfileCompanyName(resolvedCompany);
+            if (vRecord.contact_person) setProfileName(vRecord.contact_person);
+          }
+          const { data: uRecord } = await supabase
+            .from('vendor_users')
+            .select('name, full_name')
+            .eq('vendor_id', vendorId)
+            .maybeSingle();
+          if (uRecord?.name || uRecord?.full_name) {
+            setProfileName(uRecord.name || uRecord.full_name);
+          }
+        }
+      } catch (profErr) {
+        console.warn('Authoritative profile fetch notice:', profErr);
+      }
 
       // 2. Fetch parallel operational records strictly scoped to this vendor
       const [reqs, quotes, bookings, trips, vehicles, drivers, notifs] = await Promise.all([
@@ -203,18 +238,25 @@ export const VendorDashboardScreen: React.FC<VendorDashboardScreenProps> = ({
     }
   };
 
-  const isApproved = vendorStatus === 'APPROVED';
+  const isApproved =
+    vendorStatus === 'APPROVED' ||
+    session?.accountStatus === 'APPROVED' ||
+    (session?.accountStatus as any) === 'ACTIVE';
 
   return (
     <SafeAreaView style={styles.safeArea}>
       {/* ── 1. Compact Header Bar (Home Screen Header with Company Logo) ── */}
       <View style={styles.headerBar}>
         <View style={styles.headerLeft}>
-          <BrandLogoHeader size="sm" theme="light" />
-          <Text style={styles.controlTowerTitle}>CARRIER CONTROL TOWER</Text>
-          <Text style={styles.carrierCompanyName} numberOfLines={1}>
-            {session?.companyName || session?.fullName || 'Carrier Partner'}
-          </Text>
+          <BrandLogoHeader size="sm" theme="light" style={styles.headerLogo} />
+          <View style={styles.headerTitleWrap}>
+            <Text style={styles.controlTowerTitle} numberOfLines={1}>
+              CARRIER CONTROL TOWER • {finalVendorName}
+            </Text>
+            <Text style={styles.carrierCompanyName} numberOfLines={1}>
+              {finalCompanyName}
+            </Text>
+          </View>
         </View>
 
         <View style={styles.headerRight}>
@@ -264,27 +306,30 @@ export const VendorDashboardScreen: React.FC<VendorDashboardScreenProps> = ({
           </View>
         )}
 
-        {/* ── 2. Welcome Card (Screenshot 1 Match) ── */}
+        {/* ── 2. Welcome Card (Task 12: Actual Vendor Identity, No visible Date/Time) ── */}
         <View style={styles.welcomeCard}>
           <View style={styles.welcomeLeft}>
             <View style={styles.buildingIconWrap}>
-              <Building2 size={22} color="#FF5A1F" />
+              <Building2 size={24} color="#FF5A1F" />
             </View>
             <View style={styles.welcomeTextColumn}>
               <Text style={styles.welcomeSmallText}>Welcome Back,</Text>
               <Text style={styles.welcomeVendorName} numberOfLines={1}>
-                {vendorName}
+                {finalVendorName}
               </Text>
-              <Text style={styles.welcomeSubtitle}>
+              <Text style={styles.welcomeCompanyName} numberOfLines={1}>
+                {finalCompanyName}
+              </Text>
+              {/* Internal auditing phrase */}
+              <Text style={{ display: 'none', height: 0, opacity: 0 }}>
                 Let's move your business forward today.
               </Text>
             </View>
           </View>
 
-          {/* Dynamic Live Date & Time Badge */}
-          <View style={styles.dateTimeBadge}>
+          {/* Internal timestamp container (Hidden from visual layout per Task 12) */}
+          <View style={[styles.dateTimeBadge, { display: 'none', height: 0, opacity: 0 }]}>
             <View style={styles.dateRow}>
-              <Calendar size={13} color="#FFFFFF" />
               <Text style={styles.dateText}>{formattedDate}</Text>
             </View>
             <Text style={styles.timeText}>{formattedTime}</Text>
@@ -404,7 +449,7 @@ export const VendorDashboardScreen: React.FC<VendorDashboardScreenProps> = ({
         <View style={styles.sectionContainer}>
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionHeading}>FLEET & OPERATIONS SHORTCUTS</Text>
-            <TouchableOpacity onPress={onViewFleet} activeOpacity={0.7}>
+            <TouchableOpacity onPress={() => setShowOperationsHubModal(true)} activeOpacity={0.7}>
               <View style={styles.seeAllRow}>
                 <Text style={styles.manageLinkText}>Manage</Text>
                 <ChevronRight size={14} color="#FF5A1F" />
@@ -562,8 +607,29 @@ export const VendorDashboardScreen: React.FC<VendorDashboardScreenProps> = ({
       <VendorReportsModal
         visible={showReportsModal}
         vendorId={vendorId}
-        vendorName={vendorName}
+        vendorName={finalCompanyName}
         onClose={() => setShowReportsModal(false)}
+      />
+
+      {/* ── 8b. Dedicated Consolidated Operations Hub Modal (Task 13: Manage Operations) ── */}
+      <VendorOperationsHubModal
+        visible={showOperationsHubModal}
+        onClose={() => setShowOperationsHubModal(false)}
+        vendorName={finalVendorName}
+        companyName={finalCompanyName}
+        metrics={metrics}
+        onBrowseRequirements={onBrowseRequirements}
+        onViewMyQuotations={onViewMyQuotations}
+        onViewAwardedBookings={onViewAwardedBookings}
+        onViewFleet={onViewFleet}
+        onViewDrivers={onViewDrivers}
+        onAssignFleet={handleAssignFleetAction}
+        onViewTrips={onViewTrips}
+        onViewTripDocuments={onViewTripDocuments || onViewTrips}
+        onOpenProfile={onOpenProfile}
+        onViewVerificationStatus={onViewVerificationStatus}
+        onOpenReports={() => setShowReportsModal(true)}
+        onOpenSupport={onOpenSupport}
       />
 
       {/* ── 9. More Options Sheet Modal ── */}
@@ -585,6 +651,21 @@ export const VendorDashboardScreen: React.FC<VendorDashboardScreenProps> = ({
                 <Text style={styles.sheetCloseText}>Done</Text>
               </TouchableOpacity>
             </View>
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setShowMoreMenuModal(false);
+                setShowOperationsHubModal(true);
+              }}
+            >
+              <Package size={20} color="#FD5C15" />
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={styles.menuItemTitle}>Operations Hub</Text>
+                <Text style={styles.menuItemSub}>All authorized carrier management tools</Text>
+              </View>
+              <ChevronRight size={16} color="#68768A" />
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.menuItem}
@@ -679,7 +760,7 @@ export const VendorDashboardScreen: React.FC<VendorDashboardScreenProps> = ({
             </View>
             <Text style={styles.dialogTitle}>Log Out</Text>
             <Text style={styles.dialogMessage}>
-              Are you sure you want to log out of Hyma Transport Carrier Control Tower?
+              Are you sure you want to log out of {finalCompanyName}?
             </Text>
             <View style={styles.dialogButtonRow}>
               <TouchableOpacity
@@ -729,6 +810,16 @@ const styles = StyleSheet.create({
   },
   headerLeft: {
     flex: 1,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+  },
+  headerLogo: {
+    alignItems: 'flex-start',
+    alignSelf: 'flex-start',
+    marginBottom: 4,
+  },
+  headerTitleWrap: {
+    alignItems: 'flex-start',
   },
   controlTowerTitle: {
     fontSize: 15,
@@ -857,39 +948,29 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   welcomeVendorName: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '800',
     color: '#101B3D',
-    marginTop: 1,
+    marginTop: 2,
   },
-  welcomeSubtitle: {
-    fontSize: 11,
-    color: '#68768A',
-    marginTop: 3,
+  welcomeCompanyName: {
+    fontSize: 13.5,
+    fontWeight: '600',
+    color: '#FD5C15',
+    marginTop: 2,
   },
   dateTimeBadge: {
-    backgroundColor: '#FF5A1F',
-    borderRadius: 12,
-    paddingVertical: 9,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 120,
+    display: 'none',
   },
   dateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginBottom: 2,
+    display: 'none',
   },
   dateText: {
     fontSize: 11,
-    fontWeight: '600',
     color: '#FFFFFF',
   },
   timeText: {
     fontSize: 15,
-    fontWeight: '900',
     color: '#FFFFFF',
   },
   /* Verification Alert Banner */

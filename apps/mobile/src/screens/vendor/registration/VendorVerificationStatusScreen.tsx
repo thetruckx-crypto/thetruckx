@@ -54,6 +54,7 @@ export const VendorVerificationStatusScreen: React.FC<VendorVerificationStatusSc
   const [transporter, setTransporter] = useState(vendorName);
   const [vendorCode, setVendorCode] = useState<string | undefined>(undefined);
   const [rejectionReason, setRejectionReason] = useState<string | undefined>(undefined);
+  const [correctionNotes, setCorrectionNotes] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -64,6 +65,7 @@ export const VendorVerificationStatusScreen: React.FC<VendorVerificationStatusSc
       if (res.vendorName) setTransporter(res.vendorName);
       if (res.vendorCode) setVendorCode(res.vendorCode);
       if (res.rejectionReason) setRejectionReason(res.rejectionReason);
+      if (res.correctionNotes) setCorrectionNotes(res.correctionNotes);
 
       if (res.status === 'APPROVED') {
         if (onApprovedContinue) {
@@ -302,14 +304,16 @@ export const VendorVerificationStatusScreen: React.FC<VendorVerificationStatusSc
                 )}
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.completeRegBtn}
-                onPress={onCompleteRegistration || onCorrectDocuments}
-                activeOpacity={0.8}
-              >
-                <FileEdit size={15} color="#F05A22" />
-                <Text style={styles.completeRegText}>Complete / Update Registration Details</Text>
-              </TouchableOpacity>
+              {Boolean(rejectionReason || correctionNotes) && (
+                <TouchableOpacity
+                  style={styles.completeRegBtn}
+                  onPress={onCorrectDocuments || onCompleteRegistration}
+                  activeOpacity={0.8}
+                >
+                  <FileEdit size={15} color="#F05A22" />
+                  <Text style={styles.completeRegText}>Update Requested Details</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
 

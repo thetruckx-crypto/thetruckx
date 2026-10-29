@@ -51,10 +51,9 @@ export const BrandLogoHeader: React.FC<BrandLogoHeaderProps> = ({
 
 
   return (
-    <View style={[styles.container, isDark ? styles.darkPill : null, style]}>
+    <View style={[styles.container, style]}>
       <Image
         source={logoSource}
-
         style={[
           { width, height },
           tintColor ? { tintColor } : null,
@@ -71,12 +70,6 @@ const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  darkPill: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
   },
 });
 

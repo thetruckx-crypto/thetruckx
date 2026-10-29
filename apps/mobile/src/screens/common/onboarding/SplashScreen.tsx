@@ -179,16 +179,9 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
       />
 
       <Animated.View style={[styles.canvasContainer, { opacity: fadeAnim }]}>
-        {/* Layer 1: High-res background art with India map at top, waves, and sunset truck at bottom (no baked-in logo, loader or text) */}
-        <Image
-          source={require('../../../../assets/necl-splash-bg-clean.jpg')}
-          style={styles.fullScreenImage}
-          resizeMode="cover"
-        />
-
-        {/* Layer 2: Foreground Real Branding, Rotating Loading, and Real Loading Text */}
+        {/* Foreground Real Branding, Rotating Loading, and Real Loading Text */}
         <View style={styles.foregroundContainer}>
-          {/* Official TRUCKS HD Logo */}
+          {/* Official THE TRUCKX Transparent Logo */}
           <View style={styles.logoWrapper}>
             <Image
               source={BRANDING.assets.logo}
@@ -250,7 +243,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
 const styles = StyleSheet.create({
   rootContainer: {
     flex: 1,
-    backgroundColor: '#FFF9F4', // Warm cream base matching top sky
+    backgroundColor: '#FFFFFF',
     width: '100%',
     height: '100%',
   },
@@ -258,19 +251,13 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     height: '100%',
-    position: 'relative',
-  },
-  fullScreenImage: {
-    ...StyleSheet.absoluteFillObject,
-    width: '100%',
-    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
   },
   foregroundContainer: {
-    position: 'absolute',
-    top: SCREEN_HEIGHT * 0.28, // Sits precisely in the luminous middle canvas zone
-    left: 0,
-    right: 0,
     alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 24,
   },
   logoWrapper: {

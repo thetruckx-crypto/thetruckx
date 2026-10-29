@@ -25,8 +25,7 @@ import {
   X,
   FileUp,
 } from 'lucide-react-native';
-import { ScenicHeroBanner } from '../../../components/ScenicHeroBanner';
-import { BottomGoldWings } from '../../../components/BottomGoldWings';
+import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { vendorService } from '../../../services/vendorService';
 import { authService } from '../../../services/authService';
 import { documentWorkflowService } from '../../../services/documentWorkflowService';
@@ -175,13 +174,15 @@ export const VendorTripDocumentsScreen: React.FC<VendorTripDocumentsScreenProps>
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.scrollContainer} bounces={false}>
-        {/* Top Banner */}
-        <View style={styles.topWrap}>
-          <ScenicHeroBanner height={180} />
+        {/* Clean Professional Top Bar (Unwanted image removed) */}
+        <View style={styles.topBar}>
           <TouchableOpacity style={styles.backBtn} onPress={onBack} accessibilityLabel="Back">
-            <ChevronLeft size={22} color="#172B4D" />
+            <ChevronLeft size={22} color="#FFFFFF" />
           </TouchableOpacity>
-          
+          <View style={styles.topBarCenter}>
+            <BrandLogoHeader size="sm" theme="light" showSubtitle={false} />
+          </View>
+          <View style={{ width: 38 }} />
         </View>
 
         {/* Content */}
@@ -300,8 +301,6 @@ export const VendorTripDocumentsScreen: React.FC<VendorTripDocumentsScreenProps>
             })}
           </View>
         </View>
-
-        <BottomGoldWings />
       </ScrollView>
 
       {/* ── Weighbill On Behalf Modal ── */}
@@ -394,30 +393,33 @@ const styles = StyleSheet.create({
   scrollContainer: {
     paddingBottom: 60,
   },
-  topWrap: {
-    position: 'relative',
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 16,
+    backgroundColor: '#0F172A',
+    borderBottomWidth: 1,
+    borderBottomColor: '#1E293B',
   },
   backBtn: {
-    position: 'absolute',
-    top: 48,
-    left: 16,
     width: 38,
     height: 38,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 19,
+    backgroundColor: '#1E293B',
+    borderWidth: 1,
+    borderColor: '#334155',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 10,
   },
-  logoWrap: {
-    position: 'absolute',
-    top: 48,
-    right: 16,
-    zIndex: 10,
+  topBarCenter: {
+    alignItems: 'center',
   },
   contentWrap: {
     paddingHorizontal: 16,
-    marginTop: -20,
+    paddingTop: 16,
     zIndex: 2,
   },
   headingWrap: {

@@ -8,7 +8,6 @@ import {
   FlatList,
   RefreshControl,
   ActivityIndicator,
-  Modal,
   ScrollView,
 } from 'react-native';
 import {
@@ -24,17 +23,9 @@ import {
   CreditCard,
   AlertTriangle,
   Sparkles,
-  X,
-  Play,
 } from 'lucide-react-native';
 import { AppNotificationItem, MobileRole } from '../../../types';
 import { authService } from '../../../services/authService';
-import {
-  mobileNotificationService,
-  getRoleNotificationCatalog,
-  NotificationTemplate,
-  buildNotificationItem,
-} from '../../../services/notificationService';
 
 interface NotificationsScreenProps {
   onBack: () => void;
@@ -52,8 +43,6 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
   const [activeFilter, setActiveFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [testModalVisible, setTestModalVisible] = useState(false);
-  const [dispatchingKey, setDispatchingKey] = useState<string | null>(null);
 
   // Load session role and notifications
   const loadNotifications = useCallback(async () => {
@@ -62,25 +51,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
       const effectiveRole = propRole || session?.role || 'CLIENT';
       setCurrentRole(effectiveRole);
 
-      let data = await authService.fetchRealNotifications(session?.userId, effectiveRole);
-
-      // If user has zero notifications, seed role-specific operational notifications from catalog
-      if (!data || data.length === 0) {
-        const catalog = getRoleNotificationCatalog(effectiveRole);
-        // Seed first 6 high-value notifications for this role
-        const initialSeeds = catalog.slice(0, 6).map((tpl) =>
-          buildNotificationItem(effectiveRole, tpl.type)
-        );
-        for (const item of initialSeeds) {
-          await authService.appendUserCustomNotification(
-            item,
-            session?.mobile || session?.userId || 'common',
-            effectiveRole
-          );
-        }
-        data = initialSeeds;
-      }
-
+      const data = await authService.fetchRealNotifications(session?.userId, effectiveRole);
       setNotifications(data || []);
     } catch (e) {
       console.warn('Failed to load notifications:', e);
@@ -101,25 +72,6 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
 
   const handleMarkAllRead = () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-  };
-
-  // Dispatch a specific notification from catalog and trigger real Android OS push
-  const handleTriggerCatalogNotification = async (template: NotificationTemplate) => {
-    try {
-      setDispatchingKey(template.type);
-      const newItem = await mobileNotificationService.dispatchCatalogNotification(
-        currentRole,
-        template.type
-      );
-      setNotifications((prev) => [newItem, ...prev.filter((n) => n.id !== newItem.id)]);
-      setTimeout(() => {
-        setDispatchingKey(null);
-        setTestModalVisible(false);
-      }, 500);
-    } catch (e: any) {
-      console.warn('Dispatch notification warning:', e);
-      setDispatchingKey(null);
-    }
   };
 
   // Filter tabs tailored per role
@@ -158,10 +110,6 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
     if (activeFilter === 'all') return notifications;
     return notifications.filter((item) => item.category === activeFilter);
   }, [notifications, activeFilter]);
-
-  const catalogList = useMemo(() => {
-    return getRoleNotificationCatalog(currentRole);
-  }, [currentRole]);
 
   const getCategoryIcon = (category: string) => {
     switch (category) {
@@ -227,17 +175,6 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
         </View>
 
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          {/* Test Catalog Notifications Button */}
-          <TouchableOpacity
-            style={[styles.testNotifBtn, { marginRight: 8 }]}
-            onPress={() => setTestModalVisible(true)}
-            activeOpacity={0.7}
-            accessibilityLabel="Test Push Notifications"
-          >
-            <Bell size={16} color="#FA5700" />
-            <Text style={styles.testNotifBtnText}>Test Push</Text>
-          </TouchableOpacity>
-
           <TouchableOpacity
             style={styles.markReadBtn}
             onPress={handleMarkAllRead}
@@ -286,8 +223,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
           </View>
           <Text style={styles.emptyTitle}>All Caught Up</Text>
           <Text style={styles.emptyDesc}>
-            No unread notifications in this category. Tap "Test Push" above to try any of the{' '}
-            {catalogList.length} {currentRole.toLowerCase()} notifications.
+            No unread notifications in this category. You will receive real-time updates as business events occur.
           </Text>
         </View>
       ) : (
@@ -338,68 +274,6 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
         />
       )}
 
-      {/* Test Push Notifications Modal */}
-      <Modal
-        visible={testModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setTestModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>
-                  {currentRole === 'CLIENT'
-                    ? 'Client Notifications (27)'
-                    : currentRole === 'VENDOR'
-                    ? 'Vendor Notifications (34)'
-                    : 'Driver Notifications (33)'}
-                </Text>
-                <Text style={styles.modalSubtitle}>
-                  Tap any item to trigger a real Android push notification
-                </Text>
-              </View>
-              <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setTestModalVisible(false)}>
-                <X size={20} color="#64748B" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.modalScroll} contentContainerStyle={{ paddingBottom: 24 }}>
-              {catalogList.map((tpl, index) => {
-                const isDispatching = dispatchingKey === tpl.type;
-                return (
-                  <TouchableOpacity
-                    key={tpl.type}
-                    style={[styles.catalogItem, isDispatching && styles.catalogItemActive]}
-                    onPress={() => handleTriggerCatalogNotification(tpl)}
-                    activeOpacity={0.7}
-                    disabled={isDispatching}
-                  >
-                    <View style={[styles.catalogIndexCircle, { backgroundColor: getIconBg(tpl.category) }]}>
-                      <Text style={styles.catalogIndexText}>{index + 1}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.catalogItemName}>{tpl.name}</Text>
-                      <Text style={styles.catalogItemPreview} numberOfLines={1}>
-                        {tpl.title}
-                      </Text>
-                    </View>
-                    {isDispatching ? (
-                      <ActivityIndicator size="small" color="#F05A22" />
-                    ) : (
-                      <View style={styles.triggerBadge}>
-                        <Play size={10} color="#FA5700" fill="#FA5700" />
-                        <Text style={styles.triggerBadgeText}>Push</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 };
@@ -431,22 +305,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#64748B',
     fontWeight: '500',
-  },
-  testNotifBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FFF4EE',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#FFD8C2',
-  },
-  testNotifBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FA5700',
   },
   markReadBtn: {
     padding: 8,
@@ -590,97 +448,5 @@ const styles = StyleSheet.create({
     color: '#64748B',
     textAlign: 'center',
     lineHeight: 18,
-  },
-  // Test Modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(11, 25, 44, 0.6)',
-    justifyContent: 'flex-end',
-  },
-  modalSheet: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '85%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0B192C',
-  },
-  modalSubtitle: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  modalCloseBtn: {
-    padding: 6,
-  },
-  modalScroll: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-  },
-  catalogItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    backgroundColor: '#F8FAFC',
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    gap: 12,
-  },
-  catalogItemActive: {
-    borderColor: '#FA5700',
-    backgroundColor: '#FFF5ED',
-  },
-  catalogIndexCircle: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  catalogIndexText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  catalogItemName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0B192C',
-  },
-  catalogItemPreview: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 1,
-  },
-  triggerBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#FFF4EE',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#FFD8C2',
-  },
-  triggerBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#FA5700',
   },
 });

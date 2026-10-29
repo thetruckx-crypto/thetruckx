@@ -19,8 +19,7 @@ import {
   ShieldAlert,
   ArrowRight,
 } from 'lucide-react-native';
-import { ScenicHeroBanner } from '../../../components/ScenicHeroBanner';
-import { BottomGoldWings } from '../../../components/BottomGoldWings';
+import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { driverService } from '../../../services/driverService';
 
 interface DriverDocumentCorrectionScreenProps {
@@ -93,13 +92,15 @@ export const DriverDocumentCorrectionScreen: React.FC<DriverDocumentCorrectionSc
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.scrollContainer} bounces={false}>
-        {/* Top Banner */}
-        <View style={styles.topWrap}>
-          <ScenicHeroBanner height={170} />
+        {/* Clean Professional Top Bar (Unwanted image removed) */}
+        <View style={styles.topBar}>
           <TouchableOpacity style={styles.backBtn} onPress={onBack} accessibilityLabel="Back">
-            <ChevronLeft size={22} color="#172B4D" />
+            <ChevronLeft size={22} color="#0F172A" />
           </TouchableOpacity>
-          
+          <View style={styles.topBarCenter}>
+            <BrandLogoHeader size="sm" showSubtitle={false} />
+          </View>
+          <View style={{ width: 38 }} />
         </View>
 
         <View style={styles.contentWrap}>
@@ -200,7 +201,6 @@ export const DriverDocumentCorrectionScreen: React.FC<DriverDocumentCorrectionSc
           </TouchableOpacity>
         </View>
       </ScrollView>
-      <BottomGoldWings />
     </SafeAreaView>
   );
 };
@@ -214,27 +214,28 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingBottom: 40,
   },
-  topWrap: {
-    position: 'relative',
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
   },
   backBtn: {
-    position: 'absolute',
-    top: 16,
-    left: 16,
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 10,
   },
-  logoWrap: {
-    position: 'absolute',
-    bottom: 8,
-    alignSelf: 'center',
+  topBarCenter: {
+    alignItems: 'center',
   },
   contentWrap: {
     paddingHorizontal: 20,

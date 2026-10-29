@@ -106,36 +106,42 @@ export const VendorVerificationRequests: React.FC<VendorVerificationRequestsProp
       });
 
       // Map to verification request rows
-      // A company is considered a verification request if it is PENDING, REJECTED, or has documents to verify
+      // A company is considered a verification request if it is PENDING, UNDER_REVIEW, REJECTED, or pending approval
       const verificationRequests = companies
-        .filter((c) => c.status === 'PENDING' || c.status === 'PENDING_APPROVAL' || c.status === 'REJECTED' || c.onboarding_source === 'MOBILE_APP' || c.onboarding_source === 'SELF_REGISTERED' || c.onboarding_source === 'INVITED')
+        .filter((c) => c.status === 'PENDING' || c.status === 'PENDING_APPROVAL' || c.status === 'UNDER_REVIEW' || c.status === 'REJECTED' || (c.status !== 'APPROVED' && c.status !== 'ACTIVE' && (c.onboarding_source === 'MOBILE_APP' || c.onboarding_source === 'SELF_REGISTERED' || c.onboarding_source === 'INVITED')))
         .map((c) => {
           const contact = usersByVendor[c.id];
           let normalizedStatus: 'Pending Review' | 'Under Verification' | 'Rejected' = 'Pending Review';
           if (c.status === 'REJECTED') {
             normalizedStatus = 'Rejected';
-          } else if (c.status === 'APPROVED') {
+          } else if (c.status === 'UNDER_REVIEW' || c.status === 'PENDING_APPROVAL') {
             normalizedStatus = 'Under Verification';
           } else {
             normalizedStatus = 'Pending Review';
           }
 
           // Extract city/location from address
-          let location = 'Hyderabad';
+          let location = '—';
           if (c.address) {
             const parts = c.address.split(',');
-            location = parts[0].trim();
+            location = parts[0]?.trim() || c.address.trim();
           }
+
+          const rawPhone = contact?.mobile || (c as any).phone || '';
+          const cleanPhone = String(rawPhone).replace(/\s+/g, '');
+          const contactPhone = cleanPhone
+            ? (cleanPhone.startsWith('+91') ? cleanPhone : `+91 ${cleanPhone.replace(/^0+/, '')}`)
+            : '—';
 
           return {
             id: c.id,
-            vendorIdDisplay: `VEN-${c.id.substring(0, 8).toUpperCase()}`,
+            vendorIdDisplay: (c as any).vendor_code || `VEN-${c.id.substring(0, 8).toUpperCase()}`,
             vendorName: c.vendor_name || 'Unnamed Vendor',
-            vendorType: 'Fleet Owner',
-            contactPerson: contact?.full_name || 'Primary Contact',
-            contactPhone: contact?.mobile ? `+91 ${contact.mobile}` : '+91 9876543210',
-            contactEmail: contact?.email || '',
-            location: location || 'All India',
+            vendorType: (c as any).vendor_type || 'Fleet Owner',
+            contactPerson: contact?.full_name || (c as any).contact_person || '—',
+            contactPhone,
+            contactEmail: contact?.email || (c as any).email || '—',
+            location: location || '—',
             submittedOn: new Date(c.created_at || Date.now()).toLocaleDateString('en-GB', {
               day: 'numeric',
               month: 'short',

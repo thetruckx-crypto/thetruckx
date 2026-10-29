@@ -163,6 +163,125 @@ const VENDOR_STEP_SCREEN_MAP: Record<number, ScreenId> = {
   7: 'VENDOR_DOC_UPLOAD',
 };
 
+const isValidScreenForRole = (screen: ScreenId, role: MobileRole): boolean => {
+  const commonScreens: ScreenId[] = [
+    'PROFILE',
+    'EDIT_PROFILE',
+    'NOTIFICATIONS',
+    'NOTIFICATION_DETAILS',
+    'SETTINGS',
+    'HELP_SUPPORT',
+  ];
+  if (commonScreens.includes(screen)) return true;
+
+  if (role === 'CLIENT') {
+    const clientScreens: ScreenId[] = [
+      'CLIENT_DASHBOARD',
+      'CREATE_REQUIREMENT',
+      'CARGO_DETAILS',
+      'PICKUP_DELIVERY_DETAILS',
+      'REQUIREMENT_REVIEW',
+      'REQUIREMENT_CONFIRM',
+      'MY_REQUIREMENTS',
+      'REQUIREMENT_DETAILS',
+      'QUOTATIONS_LIST',
+      'QUOTATION_COMPARISON',
+      'QUOTATION_DETAILS',
+      'BOOKING_CONFIRMATION',
+      'MY_SHIPMENTS',
+      'MY_BOOKINGS',
+      'BOOKING_DETAILS',
+      'SHIPMENT_TRACKING',
+      'SHIPMENT_DOCUMENTS',
+      'PROOF_OF_DELIVERY',
+      'SAVED_ADDRESSES',
+      'CLIENT_ADDRESS',
+    ];
+    return clientScreens.includes(screen);
+  }
+
+  if (role === 'VENDOR') {
+    const vendorScreens: ScreenId[] = [
+      'VENDOR_DASHBOARD',
+      'VENDOR_REQUIREMENTS',
+      'VENDOR_REQUIREMENT_DETAILS',
+      'VENDOR_SUBMIT_QUOTATION',
+      'VENDOR_QUOTATION_CONFIRM',
+      'VENDOR_MY_QUOTATIONS',
+      'VENDOR_QUOTATION_DETAILS',
+      'VENDOR_AWARDED_BOOKINGS',
+      'VENDOR_BOOKING_DETAILS',
+      'VENDOR_FLEET_MANAGEMENT',
+      'VENDOR_DRIVER_MANAGEMENT',
+      'VENDOR_ASSIGN_VEHICLE',
+      'VENDOR_ASSIGN_DRIVER',
+      'VENDOR_ASSIGNMENT_CONFIRM',
+      'VENDOR_TRIP_MANAGEMENT',
+      'VENDOR_TRIP_DETAILS',
+      'VENDOR_TRIP_DOCUMENTS',
+    ];
+    return vendorScreens.includes(screen);
+  }
+
+  if (role === 'DRIVER') {
+    const driverScreens: ScreenId[] = [
+      'DRIVER_DASHBOARD',
+      'DRIVER_ASSIGNED_TRIPS',
+      'DRIVER_TRIP_DETAILS',
+      'DRIVER_PICKUP_CONFIRM',
+      'DRIVER_TRIP_PROGRESS',
+      'DRIVER_DELIVERY_CONFIRM',
+      'DRIVER_POD_UPLOAD',
+      'DRIVER_TRIP_COMPLETION',
+      'DRIVER_TRIP_HISTORY',
+      'DRIVER_DOCUMENTS',
+    ];
+    return driverScreens.includes(screen);
+  }
+
+  return false;
+};
+
+class MobileErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error: Error | null }> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: any) {
+    console.error('[Mobile Error Boundary]', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={{ flex: 1, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', padding: 28 }}>
+          <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: '#FEF2F2', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+            <Text style={{ fontSize: 30 }}>⚠️</Text>
+          </View>
+          <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 8, textAlign: 'center' }}>
+            Application Error Recovered
+          </Text>
+          <Text style={{ fontSize: 13, color: '#64748B', textAlign: 'center', lineHeight: 20, marginBottom: 24 }}>
+            {this.state.error?.message || 'A navigation or render issue occurred.'}
+          </Text>
+          <TouchableOpacity
+            style={{ backgroundColor: '#F05A22', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 10 }}
+            onPress={() => this.setState({ hasError: false, error: null })}
+          >
+            <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 14 }}>Reload Screen</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<ScreenId>('SPLASH');
   const [mobileNumber, setMobileNumber] = useState<string>('');
@@ -177,6 +296,17 @@ export default function App() {
     userName?: string;
   }>({});
   const [isResumingRegistration, setIsResumingRegistration] = useState<boolean>(false);
+
+  // Maintain and restore authenticated session's last active screen
+  useEffect(() => {
+    if (
+      session &&
+      (session.accountStatus === 'APPROVED' || session.accountStatus === 'ACTIVE') &&
+      isValidScreenForRole(currentScreen, session.role)
+    ) {
+      AsyncStorage.setItem('@necl_last_active_screen', currentScreen).catch(() => {});
+    }
+  }, [currentScreen, session]);
 
   // Client Registration State
   const [profileData, setProfileData] = useState<ClientProfileFormData | undefined>(undefined);
@@ -288,6 +418,12 @@ export default function App() {
 
   const handleVendorStepNext = async (stepIndex: number, data?: any) => {
     if (data) {
+      if (stepIndex === 1 && data.phone) {
+        const cleanP = String(data.phone).replace(/[^0-9]/g, '').slice(-10);
+        if (cleanP.length === 10) {
+          setMobileNumber(cleanP);
+        }
+      }
       if (stepIndex === 7) {
         const step7Data = Array.isArray(data) ? { documents: data } : data;
         await vendorService.saveActiveRegistrationStep(7, step7Data, mobileNumber);
@@ -407,9 +543,62 @@ export default function App() {
 
   const verifiedClientPhoneRef = useRef<string | null>(null);
 
+  // Global Protection Guard: Prevent unauthorized access to protected operational screens
+  useEffect(() => {
+    if (session) return;
+
+    const unauthenticatedAllowedScreens: ScreenId[] = [
+      'SPLASH',
+      'ONBOARDING',
+      'LOGIN',
+      'OTP',
+      'REGISTRATION',
+      'CLIENT_BUSINESS_DETAILS',
+      'CLIENT_DOC_UPLOAD',
+      'CLIENT_REG_REVIEW',
+      'VENDOR_REGISTRATION',
+      'VENDOR_BUSINESS_INFO',
+      'VENDOR_ADDRESS_CONTACT',
+      'VENDOR_OPERATING_LOCATIONS',
+      'VENDOR_FLEET_INFO',
+      'VENDOR_TRANSPORT_SERVICES',
+      'VENDOR_DOC_UPLOAD',
+      'VENDOR_APPLICATION_REVIEW',
+      'DRIVER_REGISTRATION',
+      'DRIVER_PERSONAL_INFO',
+      'DRIVER_LICENCE_DETAILS',
+      'DRIVER_VEHICLE_ASSOCIATION',
+      'DRIVER_DOC_UPLOAD',
+      'DRIVER_APPLICATION_REVIEW',
+    ];
+
+    if (currentScreen === 'VENDOR_VERIFICATION_STATUS' && !pendingRegistration && !registeredVendorId && !mobileNumber) {
+      setCurrentScreen('LOGIN');
+      return;
+    }
+
+    if (currentScreen === 'DRIVER_VERIFICATION_STATUS' && !pendingRegistration && !registeredDriverId && !mobileNumber) {
+      setCurrentScreen('LOGIN');
+      return;
+    }
+
+    if (currentScreen === 'REGISTRATION_STATUS' && !pendingRegistration && !registeredClientId && !mobileNumber) {
+      setCurrentScreen('LOGIN');
+      return;
+    }
+
+    if (!unauthenticatedAllowedScreens.includes(currentScreen)) {
+      setCurrentScreen('LOGIN');
+    }
+  }, [session, currentScreen, pendingRegistration, registeredVendorId, registeredDriverId, registeredClientId, mobileNumber]);
+
   // Guard Client Dashboard: Unapproved or incompletely registered clients must NOT bypass onboarding or access dashboard
   useEffect(() => {
     if (currentScreen === 'CLIENT_DASHBOARD' && selectedRole === 'CLIENT') {
+      if (!session) {
+        setCurrentScreen('LOGIN');
+        return;
+      }
       const checkPhone = (mobileNumber || session?.mobile || '').replace(/[^0-9]/g, '').slice(-10);
       if (checkPhone && verifiedClientPhoneRef.current === checkPhone) {
         return;
@@ -453,8 +642,12 @@ export default function App() {
   // Guard Vendor Dashboard: Unapproved vendors must NOT access dashboard
   useEffect(() => {
     if (currentScreen === 'VENDOR_DASHBOARD' && selectedRole === 'VENDOR') {
+      if (!session) {
+        setCurrentScreen('LOGIN');
+        return;
+      }
       (async () => {
-        if (session?.accountStatus === 'APPROVED') {
+        if (session?.accountStatus === 'APPROVED' || (session as any)?.accountStatus === 'ACTIVE') {
           return;
         }
         const vId = effectiveVendorId;
@@ -474,6 +667,8 @@ export default function App() {
               await authService.saveSession(updatedSession);
             }
           }
+        } else {
+          setCurrentScreen('LOGIN');
         }
       })();
     }
@@ -482,9 +677,17 @@ export default function App() {
   // Guard Driver Dashboard: Unapproved drivers must NOT access dashboard
   useEffect(() => {
     if (currentScreen === 'DRIVER_DASHBOARD' && selectedRole === 'DRIVER') {
+      if (!session) {
+        setCurrentScreen('LOGIN');
+        return;
+      }
       (async () => {
         const dId = effectiveDriverId;
         const phone = mobileNumber || session?.mobile;
+        if (!dId && !phone) {
+          setCurrentScreen('LOGIN');
+          return;
+        }
         const profile = await driverService.getDriverProfile(dId, phone);
         if (profile && profile.status !== 'APPROVED') {
           if (profile.status === 'INACTIVE') {
@@ -517,10 +720,31 @@ export default function App() {
     setMobileNumber(existing.mobile);
     setSelectedRole(existing.role);
 
+    // If session is already approved or active, restore last active screen directly without forced resets
+    if (existing.accountStatus === 'APPROVED' || existing.accountStatus === 'ACTIVE') {
+      setIsResumingRegistration(false);
+      try {
+        const savedScreen = await AsyncStorage.getItem('@necl_last_active_screen');
+        if (savedScreen && isValidScreenForRole(savedScreen as ScreenId, existing.role)) {
+          setCurrentScreen(savedScreen as ScreenId);
+          return;
+        }
+      } catch {}
+      routeRoleDestination(existing.role);
+      return;
+    }
+
     try {
       const completion = await authService.checkRegistrationCompletion(existing.role, existing.mobile, existing);
       if (completion.accountStatus === 'APPROVED' || completion.accountStatus === 'ACTIVE') {
         setIsResumingRegistration(false);
+        try {
+          const savedScreen = await AsyncStorage.getItem('@necl_last_active_screen');
+          if (savedScreen && isValidScreenForRole(savedScreen as ScreenId, existing.role)) {
+            setCurrentScreen(savedScreen as ScreenId);
+            return;
+          }
+        } catch {}
         routeRoleDestination(existing.role);
       } else if (!completion.isComplete) {
         setIsResumingRegistration(true);
@@ -617,6 +841,13 @@ export default function App() {
       const completion = await authService.checkRegistrationCompletion(newSession.role, newSession.mobile, newSession);
       if (completion.accountStatus === 'APPROVED' || completion.accountStatus === 'ACTIVE') {
         setIsResumingRegistration(false);
+        try {
+          const savedScreen = await AsyncStorage.getItem('@necl_last_active_screen');
+          if (savedScreen && isValidScreenForRole(savedScreen as ScreenId, newSession.role)) {
+            setCurrentScreen(savedScreen as ScreenId);
+            return;
+          }
+        } catch {}
         routeRoleDestination(newSession.role);
       } else if (!completion.isComplete) {
         setIsResumingRegistration(true);
@@ -684,15 +915,29 @@ export default function App() {
       registeredClientId ||
       `${role.toLowerCase()}-${cleanPhone}`;
 
+    const rawStatus = accountStatus || profile?.status || 'PENDING';
+    const normalizedStatus = (rawStatus === 'ACTIVE' || rawStatus === 'APPROVED') ? 'APPROVED' : rawStatus;
+
     const activeSession: AuthSessionData = {
       userId: resolvedId,
+      clientId: resolvedId,
+      clientCode: resolvedId,
       mobile: cleanPhone || mobileNumber,
       role,
       fullName: profile?.name || profile?.fullName || `${role} User`,
       companyName: profile?.company || profile?.companyName || (role === 'CLIENT' ? 'Client Enterprise' : 'Transport Firm'),
-      token: 'auth-session-approved-' + Date.now(),
+      email: profile?.email || profile?.emailAddress,
+      designation: profile?.designation,
+      department: profile?.department,
+      address: profile?.address || profile?.registeredAddress,
+      city: profile?.city,
+      state: profile?.state,
+      pincode: profile?.pincode,
+      gstin: profile?.gstin || profile?.gstNumber,
+      pan: profile?.pan,
+      token: 'auth-session-' + Date.now(),
       createdAt: new Date().toISOString(),
-      accountStatus: 'APPROVED',
+      accountStatus: normalizedStatus,
       isRegistrationComplete: true,
     };
     await authService.saveSession(activeSession);
@@ -702,37 +947,57 @@ export default function App() {
 
     if (role === 'CLIENT') {
       setRegisteredClientId(resolvedId);
-    }
-    if (role === 'VENDOR') {
+      routeRoleDestination(role);
+    } else if (role === 'VENDOR') {
       setRegisteredVendorId(resolvedId);
-    }
-    if (role === 'DRIVER') {
+      if (normalizedStatus === 'APPROVED') {
+        routeRoleDestination(role);
+      } else {
+        setCurrentScreen('VENDOR_VERIFICATION_STATUS');
+      }
+    } else if (role === 'DRIVER') {
       setRegisteredDriverId(resolvedId);
+      if (normalizedStatus === 'APPROVED') {
+        routeRoleDestination(role);
+      } else {
+        setCurrentScreen('DRIVER_VERIFICATION_STATUS');
+      }
     }
 
     setIsResumingRegistration(false);
-    // Ultra Direct Login: Route directly to user app home screen
-    routeRoleDestination(role);
   };
 
   const handleOtpVerifiedNewUser = async () => {
     setIsResumingRegistration(false);
-    const cleanPhone = (mobileNumber || '').replace(/[^0-9]/g, '').slice(-10);
+    const cleanPhone = (mobileNumber || pendingRegistration?.targetPhone || '').replace(/[^0-9]/g, '').slice(-10);
 
     // If an application was submitted through the Review -> OTP verification flow:
     if (pendingRegistration) {
       if (pendingRegistration.role === 'CLIENT' && pendingRegistration.clientSubmissionData) {
         try {
-          const result = await clientService.submitCompleteRegistration(pendingRegistration.clientSubmissionData);
+          const sub = pendingRegistration.clientSubmissionData;
+          const result = await clientService.submitCompleteRegistration(sub);
           const resolvedId = result.clientCode || result.companyId || `CLI-${Date.now()}`;
           setRegisteredClientId(resolvedId);
 
           const newSession: AuthSessionData = {
             userId: resolvedId,
+            clientId: resolvedId,
+            clientCode: resolvedId,
             mobile: cleanPhone,
             role: 'CLIENT',
-            fullName: pendingRegistration.clientSubmissionData.fullName,
-            companyName: pendingRegistration.clientSubmissionData.companyName,
+            fullName: sub.fullName,
+            companyName: sub.companyName,
+            email: sub.emailAddress || sub.email,
+            designation: sub.designation,
+            department: sub.department,
+            address: sub.registeredAddress,
+            city: sub.city,
+            state: sub.state,
+            pincode: sub.pincode,
+            gstin: sub.gstin,
+            pan: sub.pan,
+            businessType: sub.businessType,
             token: 'auth-session-client-' + Date.now(),
             createdAt: new Date().toISOString(),
             accountStatus: 'APPROVED',
@@ -761,13 +1026,13 @@ export default function App() {
 
           const newSession: AuthSessionData = {
             userId: vId,
-            mobile: cleanPhone,
+            mobile: cleanPhone || pendingRegistration.targetPhone,
             role: 'VENDOR',
-            fullName: pendingRegistration.vendorFormData.contactPerson || pendingRegistration.vendorFormData.companyName,
-            companyName: pendingRegistration.vendorFormData.companyName,
+            fullName: pendingRegistration.vendorFormData.contactPerson || pendingRegistration.vendorFormData.transporterName || pendingRegistration.vendorFormData.companyName || 'Transporter',
+            companyName: pendingRegistration.vendorFormData.transporterName || pendingRegistration.vendorFormData.companyName || 'Transport Enterprise',
             token: 'auth-session-vendor-' + Date.now(),
             createdAt: new Date().toISOString(),
-            accountStatus: 'APPROVED',
+            accountStatus: 'PENDING',
             isRegistrationComplete: true,
           };
           await authService.saveSession(newSession);
@@ -776,8 +1041,8 @@ export default function App() {
 
           await vendorService.clearDraftForm();
           setPendingRegistration(null);
-          // Directly navigate to vendor home screen!
-          setCurrentScreen('VENDOR_DASHBOARD');
+          // Navigate to verification status screen awaiting admin review
+          setCurrentScreen('VENDOR_VERIFICATION_STATUS');
           return;
         } catch (err: any) {
           Alert.alert('Registration Submission Error', err.message || 'Failed to submit vendor application.');
@@ -855,17 +1120,33 @@ export default function App() {
 
   // 18. Secure Logout & Session Termination
   const handleLogout = async () => {
+    try {
+      await AsyncStorage.removeItem('@necl_last_active_screen');
+    } catch {}
     await authService.clearSession();
     setSession(null);
+    setMobileNumber('');
+    setRegisteredVendorId('');
+    setRegisteredClientId('');
+    setRegisteredDriverId('');
+    setActiveDriverTripId('');
+    setActiveVendorTripId('');
+    setActiveBookingId('');
+    setActiveRequirementId('');
+    setSelectedVendorRequirement(null);
+    setSelectedVendorQuotation(null);
+    setSelectedVendorBooking(null);
     setSelectedNotification(null);
     setIsResumingRegistration(false);
+    setPendingRegistration(null);
     setCurrentScreen('LOGIN');
   };
 
   const isLightStatusBar = currentScreen === 'ONBOARDING';
 
   return (
-    <View style={styles.rootContainer}>
+    <MobileErrorBoundary>
+      <View style={styles.rootContainer}>
       <StatusBar
         style={isLightStatusBar ? 'light' : 'dark'}
         backgroundColor={isLightStatusBar ? '#0A1931' : '#FFFFFF'}
@@ -909,13 +1190,20 @@ export default function App() {
       )}
 
       {isResumingRegistration &&
+        !session?.isRegistrationComplete &&
+        session?.accountStatus !== 'APPROVED' &&
+        session?.accountStatus !== 'ACTIVE' &&
+        session?.accountStatus !== 'PENDING' &&
         (currentScreen.startsWith('CLIENT_') ||
           currentScreen.startsWith('VENDOR_') ||
           currentScreen.startsWith('DRIVER_') ||
           currentScreen === 'REGISTRATION') &&
         !currentScreen.includes('DASHBOARD') &&
         !currentScreen.includes('STATUS') &&
-        !currentScreen.includes('CONFIRM') && (
+        !currentScreen.includes('CONFIRM') &&
+        !currentScreen.includes('REQUIREMENTS') &&
+        !currentScreen.includes('TRIP') &&
+        !currentScreen.includes('FLEET') && (
           <View style={styles.resumingBanner}>
             <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Clock size={16} color="#D97706" />
@@ -1014,11 +1302,23 @@ export default function App() {
               if (statusRes.fullName) targetName = statusRes.fullName;
 
               const newSession: AuthSessionData = {
-                userId: statusRes.companyId || registeredClientId || 'client-user',
+                userId: targetCode,
+                clientId: targetCode,
+                clientCode: targetCode,
                 mobile: checkPhone,
                 role: 'CLIENT',
                 fullName: targetName,
                 companyName: targetComp,
+                email: profileData?.emailAddress || statusRes.email || session?.email,
+                designation: profileData?.designation || statusRes.designation || session?.designation,
+                department: profileData?.department || statusRes.department || session?.department,
+                address: businessDetails?.registeredAddress || statusRes.registeredAddress || session?.address,
+                city: businessDetails?.city || statusRes.city || session?.city,
+                state: businessDetails?.state || statusRes.state || session?.state,
+                pincode: businessDetails?.pincode || statusRes.pincode || session?.pincode,
+                gstin: businessDetails?.gstin || statusRes.gstin || session?.gstin,
+                pan: businessDetails?.pan || statusRes.pan || session?.pan,
+                businessType: businessDetails?.businessType || session?.businessType,
                 token: 'auth-session-approved-' + Date.now(),
                 createdAt: new Date().toISOString(),
                 accountStatus: 'APPROVED',
@@ -1158,6 +1458,8 @@ export default function App() {
       {/* Screen 16: SETTINGS SCREEN */}
       {currentScreen === 'SETTINGS' && (
         <SettingsScreen
+          role={selectedRole}
+          hideBiometrics={selectedRole === 'CLIENT'}
           onBack={() =>
             setCurrentScreen(
               selectedRole === 'DRIVER' ? 'DRIVER_DASHBOARD' : 'PROFILE'
@@ -1281,7 +1583,7 @@ export default function App() {
             setMobileNumber(data.targetPhone);
             setSelectedRole('CLIENT');
             setOtpPurpose('REGISTRATION');
-            setTestOtpCode(data.testCode || '12345');
+            setTestOtpCode(data.testCode || '123456');
             setCurrentScreen('OTP');
           }}
           onSubmitSuccess={(assignedId) => {
@@ -1317,11 +1619,23 @@ export default function App() {
                 if (statusRes.fullName) targetName = statusRes.fullName;
 
                 const newSession: AuthSessionData = {
-                  userId: statusRes.companyId || registeredClientId || 'client-user',
+                  userId: targetCode,
+                  clientId: targetCode,
+                  clientCode: targetCode,
                   mobile: checkPhone,
                   role: 'CLIENT',
                   fullName: targetName,
                   companyName: targetComp,
+                  email: profileData?.emailAddress || statusRes.email || session?.email,
+                  designation: profileData?.designation || statusRes.designation || session?.designation,
+                  department: profileData?.department || statusRes.department || session?.department,
+                  address: businessDetails?.registeredAddress || statusRes.registeredAddress || session?.address,
+                  city: businessDetails?.city || statusRes.city || session?.city,
+                  state: businessDetails?.state || statusRes.state || session?.state,
+                  pincode: businessDetails?.pincode || statusRes.pincode || session?.pincode,
+                  gstin: businessDetails?.gstin || statusRes.gstin || session?.gstin,
+                  pan: businessDetails?.pan || statusRes.pan || session?.pan,
+                  businessType: businessDetails?.businessType || session?.businessType,
                   token: 'auth-session-approved-' + Date.now(),
                   createdAt: new Date().toISOString(),
                   accountStatus: 'APPROVED',
@@ -1870,7 +2184,7 @@ export default function App() {
       {/* Screen 8: Application Review */}
       {currentScreen === 'VENDOR_APPLICATION_REVIEW' && (
         <VendorApplicationReviewScreen
-          initialMobile={mobileNumber}
+          initialMobile={mobileNumber || session?.mobile || ''}
           onBack={() => {
             if (vendorUpdateFlow.active) {
               setCurrentScreen('VENDOR_VERIFICATION_STATUS');
@@ -1887,15 +2201,16 @@ export default function App() {
             setCurrentScreen(VENDOR_STEP_SCREEN_MAP[stepIdx] || 'VENDOR_REGISTRATION');
           }}
           onProceedToOtp={(data: { targetPhone: string; testCode?: string; formData: any }) => {
+            const cleanTarget = (data.targetPhone || '').replace(/[^0-9]/g, '').slice(-10);
             setPendingRegistration({
               role: 'VENDOR',
-              targetPhone: data.targetPhone,
+              targetPhone: cleanTarget,
               vendorFormData: data.formData,
             });
-            setMobileNumber(data.targetPhone);
+            setMobileNumber(cleanTarget);
             setSelectedRole('VENDOR');
             setOtpPurpose('REGISTRATION');
-            setTestOtpCode(data.testCode || '12345');
+            setTestOtpCode(data.testCode || '123456');
             setCurrentScreen('OTP');
           }}
           onSubmitSuccess={(result) => {
@@ -2057,15 +2372,18 @@ export default function App() {
           onViewFleet={() => setCurrentScreen('VENDOR_FLEET_MANAGEMENT')}
           onViewDrivers={() => setCurrentScreen('VENDOR_DRIVER_MANAGEMENT')}
           onViewTrips={() => setCurrentScreen('VENDOR_TRIP_MANAGEMENT')}
+          onViewTripDocuments={() => setCurrentScreen('VENDOR_TRIP_MANAGEMENT')}
           onViewVerificationStatus={() => setCurrentScreen('VENDOR_VERIFICATION_STATUS')}
           onOpenNotifications={() => setCurrentScreen('NOTIFICATIONS')}
           onOpenProfile={() => setCurrentScreen('PROFILE')}
+          onOpenSupport={() => setCurrentScreen('HELP_SUPPORT')}
           onAssignFleet={() => setCurrentScreen('VENDOR_AWARDED_BOOKINGS')}
           onSelectNavTab={(tab) => {
             if (tab === 'HOME') setCurrentScreen('VENDOR_DASHBOARD');
             else if (tab === 'LOADS') setCurrentScreen('VENDOR_REQUIREMENTS');
             else if (tab === 'TRIPS') setCurrentScreen('VENDOR_TRIP_MANAGEMENT');
             else if (tab === 'FLEET') setCurrentScreen('VENDOR_FLEET_MANAGEMENT');
+            else if (tab === 'MORE') setCurrentScreen('PROFILE');
           }}
         />
       )}
@@ -2085,6 +2403,7 @@ export default function App() {
             else if (tab === 'LOADS') setCurrentScreen('VENDOR_REQUIREMENTS');
             else if (tab === 'TRIPS') setCurrentScreen('VENDOR_TRIP_MANAGEMENT');
             else if (tab === 'FLEET') setCurrentScreen('VENDOR_FLEET_MANAGEMENT');
+            else if (tab === 'MORE') setCurrentScreen('PROFILE');
           }}
         />
       )}
@@ -2194,6 +2513,7 @@ export default function App() {
             else if (tab === 'LOADS') setCurrentScreen('VENDOR_REQUIREMENTS');
             else if (tab === 'TRIPS') setCurrentScreen('VENDOR_TRIP_MANAGEMENT');
             else if (tab === 'FLEET') setCurrentScreen('VENDOR_FLEET_MANAGEMENT');
+            else if (tab === 'MORE') setCurrentScreen('PROFILE');
           }}
         />
       )}
@@ -2208,6 +2528,7 @@ export default function App() {
             else if (tab === 'LOADS') setCurrentScreen('VENDOR_REQUIREMENTS');
             else if (tab === 'TRIPS') setCurrentScreen('VENDOR_TRIP_MANAGEMENT');
             else if (tab === 'FLEET') setCurrentScreen('VENDOR_FLEET_MANAGEMENT');
+            else if (tab === 'MORE') setCurrentScreen('PROFILE');
           }}
         />
       )}
@@ -2262,6 +2583,13 @@ export default function App() {
           onSelectTrip={(tripId) => {
             setActiveVendorTripId(tripId);
             setCurrentScreen('VENDOR_TRIP_DETAILS');
+          }}
+          onSelectNavTab={(tab) => {
+            if (tab === 'HOME') setCurrentScreen('VENDOR_DASHBOARD');
+            else if (tab === 'LOADS') setCurrentScreen('VENDOR_REQUIREMENTS');
+            else if (tab === 'TRIPS') setCurrentScreen('VENDOR_TRIP_MANAGEMENT');
+            else if (tab === 'FLEET') setCurrentScreen('VENDOR_FLEET_MANAGEMENT');
+            else if (tab === 'MORE') setCurrentScreen('PROFILE');
           }}
         />
       )}
@@ -2641,7 +2969,8 @@ export default function App() {
             }}
           />
         )}
-    </View>
+      </View>
+    </MobileErrorBoundary>
   );
 }
 

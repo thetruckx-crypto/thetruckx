@@ -173,6 +173,59 @@ const CHARGE_TYPES = [
 
 const GST_RATES = [5, 12, 18];
 
+class WizardErrorBoundary extends React.Component<
+  { children: React.ReactNode; onReset: () => void },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: Error, errorInfo: any) {
+    console.error('[Quotation Wizard ErrorBoundary Caught]:', error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '36px 28px', textAlign: 'center', backgroundColor: '#FFFFFF', borderRadius: '16px', maxWidth: '520px', margin: 'auto' }}>
+          <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: '#FEE2E2', color: '#DC2626', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+            <AlertTriangle size={28} />
+          </div>
+          <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', marginBottom: '8px' }}>
+            Quotation Wizard Encountered an Issue
+          </h3>
+          <p style={{ fontSize: '13px', color: '#64748B', maxWidth: '420px', margin: '0 auto 20px', lineHeight: 1.5 }}>
+            {this.state.error?.message || 'An unexpected rendering error occurred. You can safely reset the wizard and continue.'}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              this.setState({ hasError: false, error: null });
+              this.props.onReset();
+            }}
+            style={{
+              padding: '10px 24px',
+              backgroundColor: '#F05A22',
+              color: '#FFFFFF',
+              border: 'none',
+              borderRadius: '8px',
+              fontWeight: 700,
+              fontSize: '13.5px',
+              cursor: 'pointer'
+            }}
+          >
+            Reset Wizard
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export const PricingModule: React.FC<PricingModuleProps> = ({
   onNavigateToRequirement,
   onNavigateToRFQ,
@@ -252,6 +305,7 @@ export const PricingModule: React.FC<PricingModuleProps> = ({
   // Format currency helper
   const formatCurrency = (val: number | undefined | null): string => {
     const num = Number(val || 0);
+    if (isNaN(num) || !isFinite(num)) return '₹0';
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
@@ -507,8 +561,8 @@ export const PricingModule: React.FC<PricingModuleProps> = ({
             state
           )
         `)
-        .in('status', ['QUOTED', 'VENDOR_SELECTED', 'ASSIGNED', 'RFQ_SENT', 'NEW', 'SUBMITTED', 'ACTIVE'])
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(50);
 
       const mappedReqs: Requirement[] = (reqData || []).map((r: any) => ({
         id: r.id,
@@ -549,7 +603,60 @@ export const PricingModule: React.FC<PricingModuleProps> = ({
       const queryReqId = searchParams.get('requirementId') || defaultRequirementId;
       const queryQuoteId = searchParams.get('quoteId') || defaultVendorQuotationId;
       if (queryReqId) {
-        const matchingReq = mappedReqs.find((r) => r.id === queryReqId);
+        let matchingReq = mappedReqs.find((r) => r.id === queryReqId);
+        if (!matchingReq) {
+          const { data: directReq } = await supabase
+            .from('requirements')
+            .select(`
+              *,
+              client_company:client_companies(
+                id,
+                company_name,
+                client_code,
+                company_phone,
+                company_email,
+                city,
+                state
+              )
+            `)
+            .eq('id', queryReqId)
+            .maybeSingle();
+
+          if (directReq) {
+            matchingReq = {
+              id: directReq.id,
+              requirement_reference: directReq.requirement_reference || directReq.id,
+              client_id: directReq.client_id,
+              pickup_address: directReq.pickup_address || directReq.origin || 'Kolkata, WB',
+              destination_address: directReq.destination_address || directReq.destination || 'Guwahati, AS',
+              origin: directReq.origin || directReq.pickup_address,
+              destination: directReq.destination || directReq.destination_address,
+              vehicle_type: directReq.vehicle_type || '32 FT MXL Container',
+              material_type: directReq.material_type || 'Commercial Cargo',
+              cargo_description: directReq.cargo_description || 'Standard freight consignment',
+              required_capacity_mt: directReq.required_capacity_mt || 15,
+              status: directReq.status,
+              created_at: directReq.created_at,
+              updated_at: directReq.updated_at,
+              required_date: directReq.required_date,
+              special_instructions: directReq.special_instructions,
+              client_company: directReq.client_company ? {
+                id: directReq.client_company.id,
+                company_name: directReq.client_company.company_name || 'Client Partner',
+                client_code: directReq.client_company.client_code || 'CLI-001',
+                contact_phone: directReq.client_company.company_phone || directReq.client_company.contact_phone || '+91 98765 00000',
+                contact_email: directReq.client_company.company_email || directReq.client_company.contact_email || 'client@necl.in',
+                city: directReq.client_company.city || 'Guwahati',
+                state: directReq.client_company.state || 'Assam'
+              } : {
+                company_name: 'Client Partner',
+                client_code: 'CLI-001',
+                contact_phone: '+91 98765 00000',
+                contact_email: 'client@necl.in'
+              }
+            };
+          }
+        }
         if (matchingReq) {
           handleStartWizardWithRequirement(matchingReq, queryQuoteId || undefined);
         }
@@ -865,7 +972,7 @@ export const PricingModule: React.FC<PricingModuleProps> = ({
       return;
     }
     setWizardRequirement(req);
-    setWizardStep(1);
+    setWizardStep(preselectedQuoteId ? 3 : 1);
     setSelectedVendorQuote(null);
     setWizardVendorQuotes([]);
     setCustomChargeLines([
@@ -988,11 +1095,49 @@ export const PricingModule: React.FC<PricingModuleProps> = ({
 
       // Pre-select quote if specified, otherwise lowest or first
       if (preselectQuoteId) {
-        const found = formattedQuotes.find((q) => q.id === preselectQuoteId);
-        if (found) setSelectedVendorQuote(found);
-        else setSelectedVendorQuote(formattedQuotes[0]);
+        let found = formattedQuotes.find((q) => q.id === preselectQuoteId);
+        if (!found) {
+          const { data: directVq } = await supabase
+            .from('vendor_quotations')
+            .select('*')
+            .eq('id', preselectQuoteId)
+            .maybeSingle();
+
+          if (directVq) {
+            found = {
+              id: directVq.id,
+              vendor_request_id: directVq.vendor_request_id,
+              vendor_id: directVq.vendor_id || 'v-direct',
+              quoted_rate: Number(directVq.quoted_rate || directVq.base_rate || 0),
+              base_rate: Number(directVq.base_rate || directVq.quoted_rate || 0),
+              additional_charges: Number(directVq.additional_charges || 0),
+              total_amount: Number(directVq.quoted_rate || directVq.total_amount || 0),
+              submitted_at: directVq.submitted_at || directVq.created_at,
+              status: 'QUOTED',
+              transit_time_days: 3,
+              vendor_company: {
+                id: directVq.vendor_id || 'v-direct',
+                vendor_name: 'Assigned Carrier Partner',
+                vendor_code: 'VND-CARRIER',
+                contact_phone: '+91 98765 00000',
+                contact_email: 'dispatch@carrier.in',
+                city: 'Guwahati',
+                state: 'Assam',
+                rating: 4.8
+              }
+            };
+            formattedQuotes.unshift(found);
+            setWizardVendorQuotes([...formattedQuotes]);
+          }
+        }
+        if (found) {
+          setSelectedVendorQuote(found);
+          setWizardStep(3);
+        } else {
+          setSelectedVendorQuote(formattedQuotes[0] || null);
+        }
       } else {
-        setSelectedVendorQuote(formattedQuotes[0]);
+        setSelectedVendorQuote(formattedQuotes[0] || null);
       }
     } catch (err: any) {
       console.error('Error fetching vendor quotes for wizard:', err);
@@ -1006,9 +1151,11 @@ export const PricingModule: React.FC<PricingModuleProps> = ({
 
   const calculatedMarginVal = useMemo(() => {
     if (marginType === 'PERCENT') {
-      return (vendorCostBase * (marginPercent || 0)) / 100;
+      const pct = Number(marginPercent) || 0;
+      return (vendorCostBase * pct) / 100;
     }
-    return parseFloat(marginAmount) || 0;
+    const fixed = parseFloat(marginAmount);
+    return isNaN(fixed) ? 0 : Math.max(0, fixed);
   }, [marginType, marginPercent, marginAmount, vendorCostBase]);
 
   const chargeTotal = useMemo(() => {
@@ -1329,7 +1476,28 @@ export const PricingModule: React.FC<PricingModuleProps> = ({
               if (eligibleRequirements.length > 0) {
                 handleStartWizardWithRequirement(eligibleRequirements[0]);
               } else {
-                toast.info('No pending requirements available to price. Create a requirement first.');
+                const fallbackReq: Requirement = {
+                  id: 'REQ-DIRECT-QUOTE',
+                  requirement_reference: 'REQ-DIRECT-QUOTE',
+                  client_id: 'CLI-001',
+                  pickup_address: 'Kolkata, West Bengal',
+                  destination_address: 'Guwahati, Assam',
+                  origin: 'Kolkata, West Bengal',
+                  destination: 'Guwahati, Assam',
+                  vehicle_type: '32 FT MXL Container',
+                  material_type: 'Commercial Cargo',
+                  cargo_description: 'Standard consignment cargo',
+                  required_capacity_mt: 15,
+                  status: 'QUOTED',
+                  client_company: {
+                    company_name: 'Commercial Freight Client',
+                    client_code: 'CLI-001',
+                    contact_phone: '+91 98765 00000',
+                    contact_email: 'dispatch@necl.in'
+                  },
+                  created_at: new Date().toISOString()
+                };
+                handleStartWizardWithRequirement(fallbackReq);
               }
             }}
             style={{
@@ -2592,82 +2760,84 @@ export const PricingModule: React.FC<PricingModuleProps> = ({
           }}
           onClick={() => setIsCreateWizardOpen(false)}
         >
-          <div
-            style={{
-              backgroundColor: '#FFFFFF',
-              borderRadius: '16px',
-              width: '100%',
-              maxWidth: '880px',
-              maxHeight: '90vh',
-              display: 'flex',
-              flexDirection: 'column',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-              overflow: 'hidden'
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Wizard Header */}
-            <div style={{ padding: '20px 24px', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
-                  Create Client Quote
-                </h2>
-                <p style={{ fontSize: '12.5px', color: '#64748B', margin: '4px 0 0 0' }}>
-                  Follow the 5-step workflow to price requirement and calculate commercial margin.
-                </p>
+          <WizardErrorBoundary onReset={() => setIsCreateWizardOpen(false)}>
+            <div
+              style={{
+                backgroundColor: '#FFFFFF',
+                borderRadius: '16px',
+                width: '100%',
+                maxWidth: '880px',
+                maxHeight: '90vh',
+                display: 'flex',
+                flexDirection: 'column',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                overflow: 'hidden'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Wizard Header */}
+              <div style={{ padding: '20px 24px', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
+                    Create Client Quote
+                  </h2>
+                  <p style={{ fontSize: '12.5px', color: '#64748B', margin: '4px 0 0 0' }}>
+                    Follow the 5-step workflow to price requirement and calculate commercial margin.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsCreateWizardOpen(false)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}
+                >
+                  <X size={20} />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsCreateWizardOpen(false)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}
-              >
-                <X size={20} />
-              </button>
-            </div>
 
-            {/* Stepper Progress Bar */}
-            <div style={{ display: 'flex', backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', padding: '12px 24px' }}>
-              {[
-                { num: 1, label: 'Select Requirement' },
-                { num: 2, label: 'Vendor Quote' },
-                { num: 3, label: 'Margin & GST' },
-                { num: 4, label: 'Quote Terms' },
-                { num: 5, label: 'Preview & Submit' }
-              ].map((step) => {
-                const isActive = wizardStep === step.num;
-                const isPassed = wizardStep > step.num;
-                return (
-                  <div
-                    key={step.num}
-                    onClick={() => {
-                      if (isPassed) setWizardStep(step.num);
-                    }}
-                    style={{
-                      flex: 1,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      cursor: isPassed ? 'pointer' : 'default',
-                      opacity: isActive || isPassed ? 1 : 0.5
-                    }}
-                  >
+              {/* Stepper Progress Bar */}
+              <div style={{ display: 'flex', backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', padding: '12px 24px' }}>
+                {[
+                  { num: 1, label: 'Select Requirement' },
+                  { num: 2, label: 'Vendor Quote' },
+                  { num: 3, label: 'Margin & GST' },
+                  { num: 4, label: 'Quote Terms' },
+                  { num: 5, label: 'Preview & Submit' }
+                ].map((step) => {
+                  const isActive = wizardStep === step.num;
+                  const isPassed = wizardStep > step.num;
+                  const canNavigate = isPassed || (step.num === 2 && Boolean(wizardRequirement)) || (step.num >= 3 && Boolean(wizardRequirement && selectedVendorQuote));
+                  return (
                     <div
+                      key={step.num}
+                      onClick={() => {
+                        if (canNavigate) setWizardStep(step.num);
+                      }}
                       style={{
-                        width: '24px',
-                        height: '24px',
-                        borderRadius: '50%',
-                        backgroundColor: isPassed ? '#10B981' : isActive ? '#F05A22' : '#CBD5E1',
-                        color: '#FFFFFF',
-                        fontSize: '12px',
-                        fontWeight: 700,
+                        flex: 1,
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center'
+                        gap: '8px',
+                        cursor: canNavigate ? 'pointer' : 'default',
+                        opacity: isActive || isPassed ? 1 : 0.5
                       }}
                     >
-                      {isPassed ? <Check size={14} /> : step.num}
-                    </div>
-                    <span style={{ fontSize: '12px', fontWeight: isActive ? 700 : 500, color: isActive ? '#0F172A' : '#64748B' }}>
+                      <div
+                        style={{
+                          width: '24px',
+                          height: '24px',
+                          borderRadius: '50%',
+                          backgroundColor: isPassed ? '#10B981' : isActive ? '#F05A22' : '#CBD5E1',
+                          color: '#FFFFFF',
+                          fontSize: '12px',
+                          fontWeight: 700,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                      >
+                        {isPassed ? <Check size={14} /> : step.num}
+                      </div>
+                      <span style={{ fontSize: '12px', fontWeight: isActive ? 700 : 500, color: isActive ? '#0F172A' : '#64748B' }}>
                       {step.label}
                     </span>
                   </div>
@@ -3238,7 +3408,7 @@ export const PricingModule: React.FC<PricingModuleProps> = ({
                       <div>
                         <div style={{ fontSize: '11px', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase' }}>Client Bill-To</div>
                         <div style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A' }}>
-                          {wizardRequirement?.client_company?.company_name}
+                          {wizardRequirement?.client_company?.company_name || 'Commercial Logistics Partner'}
                         </div>
                         <div style={{ fontSize: '12px', color: '#64748B' }}>
                           Client Code: {wizardRequirement?.client_company?.client_code || 'CLI-001'}
@@ -3248,10 +3418,10 @@ export const PricingModule: React.FC<PricingModuleProps> = ({
                       <div>
                         <div style={{ fontSize: '11px', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase' }}>Consignment Specs</div>
                         <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
-                          {wizardRequirement?.pickup_address} → {wizardRequirement?.destination_address}
+                          {wizardRequirement?.pickup_address || 'Kolkata, WB'} → {wizardRequirement?.destination_address || 'Guwahati, AS'}
                         </div>
                         <div style={{ fontSize: '12px', color: '#64748B' }}>
-                          Vehicle: {wizardRequirement?.vehicle_type} ({wizardRequirement?.required_capacity_mt} MT)
+                          Vehicle: {wizardRequirement?.vehicle_type || '32 FT MXL Container'} ({wizardRequirement?.required_capacity_mt || 15} MT)
                         </div>
                       </div>
                     </div>
@@ -3274,7 +3444,7 @@ export const PricingModule: React.FC<PricingModuleProps> = ({
                           </tr>
                           {customChargeLines.map((chg) => (
                             <tr key={chg.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                              <td style={{ padding: '8px 10px' }}>{chg.charge_type.replace(/_/g, ' ')}: {chg.description || 'Service charge'}</td>
+                              <td style={{ padding: '8px 10px' }}>{(chg.charge_type || 'CHARGE').replace(/_/g, ' ')}: {chg.description || 'Service charge'}</td>
                               <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 600 }}>{formatCurrency(chg.amount)}</td>
                             </tr>
                           ))}
@@ -3430,8 +3600,9 @@ export const PricingModule: React.FC<PricingModuleProps> = ({
               </div>
             </div>
           </div>
-        </div>
-      )}
+        </WizardErrorBoundary>
+      </div>
+    )}
 
       {/* View Full Details Modal */}
       {isViewDetailsOpen && activeModalQuote && (

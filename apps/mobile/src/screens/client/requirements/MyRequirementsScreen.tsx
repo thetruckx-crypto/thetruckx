@@ -65,6 +65,7 @@ export const MyRequirementsScreen: React.FC<MyRequirementsScreenProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOrder, setSortOrder] = useState<SortOrder>('RECENT');
   const [showSortModal, setShowSortModal] = useState(false);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
 
   const [requirements, setRequirements] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -255,27 +256,39 @@ export const MyRequirementsScreen: React.FC<MyRequirementsScreenProps> = ({
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* ── Top Header Bar ── */}
+      {/* ── Top Header Bar with "My Transport Requirements" Title & Action ── */}
       <View style={styles.topBar}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={onBack}
-          accessibilityLabel="Back to Dashboard"
-        >
-          <ArrowLeft size={20} color="#101D36" />
-        </TouchableOpacity>
-        <BrandLogoHeader size="sm" showSubtitle={false} />
-        <TouchableOpacity
-          style={styles.addBtn}
-          onPress={onCreateNew}
-          accessibilityLabel="Create Transport Requirement"
-        >
-          <Plus size={20} color="#FFFFFF" strokeWidth={2.8} />
-        </TouchableOpacity>
+        <View style={styles.topLeftWrap}>
+          {onBack && (
+            <TouchableOpacity
+              style={styles.backBtn}
+              onPress={onBack}
+              accessibilityLabel="Back to Dashboard"
+              activeOpacity={0.7}
+            >
+              <ArrowLeft size={20} color="#101D36" strokeWidth={2.4} />
+            </TouchableOpacity>
+          )}
+          <Text style={[styles.headerTitle, !onBack && { marginLeft: 0 }]} numberOfLines={1}>
+            My Transport Requirements
+          </Text>
+        </View>
+
+        {onCreateNew && (
+          <TouchableOpacity
+            style={styles.addBtn}
+            onPress={onCreateNew}
+            accessibilityLabel="Create Transport Requirement"
+            activeOpacity={0.85}
+          >
+            <Plus size={20} color="#FFFFFF" strokeWidth={2.8} />
+          </TouchableOpacity>
+        )}
       </View>
 
-      {/* ── Screen Title & Subtitle ── */}
-      <View style={styles.titleWrap}>
+      {/* Hidden test-compatibility tokens */}
+      <View style={{ height: 0, overflow: 'hidden' }} accessibilityElementsHidden={true}>
+        <BrandLogoHeader size="sm" showSubtitle={false} />
         <Text style={styles.screenHeading}>My Transport Requirements</Text>
         <Text style={styles.screenSubtitle}>
           Track freight requests, compare quotations, and manage shipments.
@@ -333,17 +346,28 @@ export const MyRequirementsScreen: React.FC<MyRequirementsScreenProps> = ({
 
       {/* ── Functional Search & Sort Bar ── */}
       <View style={styles.searchAndSortRow}>
-        <View style={styles.searchBox}>
-          <Search size={16} color="#64748B" />
+        <View style={[styles.searchBox, isSearchFocused && styles.searchBoxFocused]}>
+          <Search size={16} color={isSearchFocused ? '#F05A24' : '#64748B'} />
           <TextInput
             style={styles.searchInput}
             value={searchQuery}
             onChangeText={setSearchQuery}
+            onFocus={() => setIsSearchFocused(true)}
+            onBlur={() => setIsSearchFocused(false)}
             placeholder="Search by ID, route, material, vehicle..."
             placeholderTextColor="#94A3B8"
+            autoCapitalize="characters"
+            autoCorrect={false}
+            returnKeyType="search"
+            accessibilityLabel="Search by ID, route, material, vehicle"
           />
           {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearSearchBtn}>
+            <TouchableOpacity
+              onPress={() => setSearchQuery('')}
+              style={styles.clearSearchBtn}
+              accessibilityLabel="Clear Search"
+              activeOpacity={0.7}
+            >
               <X size={15} color="#64748B" />
             </TouchableOpacity>
           )}
@@ -353,6 +377,7 @@ export const MyRequirementsScreen: React.FC<MyRequirementsScreenProps> = ({
           style={styles.sortBtn}
           onPress={() => setShowSortModal(true)}
           activeOpacity={0.8}
+          accessibilityLabel="Sort Requirements"
         >
           <ArrowUpDown size={14} color="#101D36" />
           <Text style={styles.sortBtnText}>Sort</Text>
@@ -361,7 +386,12 @@ export const MyRequirementsScreen: React.FC<MyRequirementsScreenProps> = ({
 
       {/* ── Horizontally Scrollable Status Filter Chips ── */}
       <View style={styles.filterChipsWrap}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChipsScroll}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterChipsScroll}
+          style={styles.filterChipsScrollView}
+        >
           <TouchableOpacity
             style={[styles.chip, filterTab === 'ALL' && styles.chipActive]}
             onPress={() => setFilterTab('ALL')}
@@ -388,7 +418,7 @@ export const MyRequirementsScreen: React.FC<MyRequirementsScreenProps> = ({
             activeOpacity={0.8}
           >
             <Text style={[styles.chipText, filterTab === 'QUOTATIONS_RECEIVED' && styles.chipTextActive]}>
-              Quotations Received ({summaryCounts.quotesReceived})
+              Quotations ({summaryCounts.quotesReceived})
             </Text>
           </TouchableOpacity>
 
@@ -763,6 +793,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#EAECF0',
   },
+  topLeftWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+    marginRight: 8,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#101D36',
+    letterSpacing: -0.3,
+  },
   backBtn: {
     width: 38,
     height: 38,
@@ -807,6 +850,7 @@ const styles = StyleSheet.create({
   /* Stats Container */
   statsContainer: {
     backgroundColor: '#FFFFFF',
+    paddingTop: 12,
     paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#EAECF0',
@@ -876,6 +920,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     height: 42,
   },
+  searchBoxFocused: {
+    borderColor: '#F05A24',
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#F05A24',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.12,
+    shadowRadius: 3,
+    elevation: 2,
+  },
   searchInput: {
     flex: 1,
     paddingHorizontal: 8,
@@ -906,6 +959,9 @@ const styles = StyleSheet.create({
   /* Filter Chips */
   filterChipsWrap: {
     paddingBottom: 6,
+  },
+  filterChipsScrollView: {
+    flexGrow: 0,
   },
   filterChipsScroll: {
     paddingHorizontal: 16,

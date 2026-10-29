@@ -1279,7 +1279,9 @@ export const vendorService = {
           if (apiRes.ok) {
             const apiData = await apiRes.json();
             if (apiData && apiData.success) {
-              const resStatus = apiData.status as 'PENDING' | 'APPROVED' | 'REJECTED' | 'INACTIVE';
+              const resStatus = (apiData.status === 'ACTIVE' || apiData.status === 'APPROVED')
+                ? 'APPROVED'
+                : (apiData.status as 'PENDING' | 'APPROVED' | 'REJECTED' | 'INACTIVE');
               // Update local cache to keep offline & session in sync
               const cKey = apiData.vendorId || vendorId || cleanPhone;
               if (cKey) {
@@ -1372,7 +1374,7 @@ export const vendorService = {
         if (!vErr && vComp) {
           const displayCode = vComp.vendor_code || formatDisplayId('VD', vComp.id);
 
-          if (vComp.status === 'APPROVED') {
+          if (vComp.status === 'APPROVED' || vComp.status === 'ACTIVE') {
             // Synchronize local cache with approved state
             await AsyncStorage.setItem(
               `${VENDOR_APP_PREFIX}${resolvedId}`,
@@ -1811,7 +1813,32 @@ export const vendorService = {
     remarks?: string;
   }): Promise<{ success: boolean; quotationId: string; error?: string }> {
     try {
-      // 0. Enforce authorization: Vendor account must be approved before submitting bids
+      // 0. Primary Path: Authoritative Backend API with server-level DB write permissions
+      try {
+        const resp = await fetch(`${getBackendApiUrl()}/vendor/submit-quotation`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(input),
+        });
+        const result = await resp.json();
+        if (resp.ok && result.success) {
+          return {
+            success: true,
+            quotationId: result.quotationId,
+          };
+        }
+        if (!resp.ok || result.error) {
+          return {
+            success: false,
+            quotationId: result.quotationId || '',
+            error: result.error || 'Failed to submit quotation.',
+          };
+        }
+      } catch (netErr: any) {
+        console.warn('Backend submit-quotation API unreachable, attempting direct Supabase query:', netErr);
+      }
+
+      // Enforce authorization: Vendor account must be approved before submitting bids
       if (input.vendorId && input.vendorId.includes('-')) {
         const { data: vComp } = await supabase
           .from('vendor_companies')

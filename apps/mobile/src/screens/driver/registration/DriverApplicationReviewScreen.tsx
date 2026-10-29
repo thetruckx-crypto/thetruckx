@@ -62,10 +62,13 @@ export const DriverApplicationReviewScreen: React.FC<DriverApplicationReviewScre
       return;
     }
 
+    const rawMobile = (formData.phone || initialMobile || '').trim();
+    const cleanMobile = rawMobile.replace(/[^0-9]/g, '').slice(-10);
+
     setSubmitting(true);
     try {
       // 1. Role Change Detection: Verify against database only upon submission
-      const roleCheck = await authService.checkExistingRoleInDatabase(initialMobile, 'DRIVER');
+      const roleCheck = await authService.checkExistingRoleInDatabase(cleanMobile, 'DRIVER');
       if (roleCheck.hasExistingDifferentRole) {
         setSubmitting(false);
         Alert.alert(
@@ -76,7 +79,7 @@ export const DriverApplicationReviewScreen: React.FC<DriverApplicationReviewScre
               text: 'Contact Admin',
               onPress: async () => {
                 const reqRes = await authService.requestAdminRoleDeactivation(
-                  initialMobile,
+                  cleanMobile,
                   roleCheck.previousRole!,
                   'DRIVER'
                 );
@@ -90,7 +93,7 @@ export const DriverApplicationReviewScreen: React.FC<DriverApplicationReviewScre
       }
 
       // 2. Persist registration details to database upon successful submission
-      const res = await driverService.submitDriverRegistration(formData, initialMobile);
+      const res = await driverService.submitDriverRegistration(formData, cleanMobile);
       setSubmitting(false);
       onSubmitSuccess({
         driverId: res.driverId,
