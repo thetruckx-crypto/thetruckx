@@ -19,6 +19,7 @@ import { DashboardScreen } from './components/DashboardScreen';
 import { GlobalSearchModal } from './components/GlobalSearchModal';
 import { NotificationsDrawer } from './components/NotificationsDrawer';
 import { getVehicles } from './services/vehicleService';
+import { HubNavigationHeader } from './components/common/HubNavigationHeader';
 
 // Lazy-loaded route modules for fast initial page load and optimized chunking
 const ClientDirectory = React.lazy(() => import('./components/clients/ClientDirectory').then(m => ({ default: m.ClientDirectory })));
@@ -1536,6 +1537,19 @@ function AdminShell() {
 
         {/* Page content */}
         <div className="dashboard-content-area">
+          <HubNavigationHeader
+            badges={{
+              vendors: navBadges.vendors,
+              requirements: navBadges.requirements,
+              bookings: navBadges.bookings,
+              drivers: navBadges.drivers,
+              documents: navBadges.documents,
+              pod: navBadges.pod,
+              payments: navBadges.payments,
+              exceptions: navBadges.exceptions,
+              chats: unreadChatCount,
+            }}
+          />
           <Suspense fallback={
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '400px', gap: '14px' }}>
               <div style={{ width: '36px', height: '36px', border: '3px solid #E2E8F0', borderTop: '3px solid #F05A22', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
