@@ -30,7 +30,7 @@ export const PODModule: React.FC = () => {
   const [toastType, setToastType] = useState<"success" | "error">("success");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [counts, setCounts] = useState({ pending: 0, approvedToday: 0, rejectedToday: 0 });
+  const [counts, setCounts] = useState({ pending: 0, approvedToday: 0, rejectedToday: 0, tripsClosedTotal: 0 });
   const [podDocs, setPodDocs] = useState<any[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
 
@@ -44,23 +44,49 @@ export const PODModule: React.FC = () => {
     setLoading(true);
     try {
       await ensureAdminSession();
-      const { data: tripsData } = await supabase
-        .from("trips")
-        .select("*")
-        .in("trip_status", ["DELIVERED", "COMPLETED", "IN_TRANSIT", "UNLOADING"])
-        .or("pod_approved.is.null,pod_approved.eq.false")
-        .order("created_at", { ascending: false });
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      const startOfDayIso = startOfDay.toISOString();
 
-      if (tripsData) {
-        const enriched = tripsData.map((t, idx) => ({
-          ...t,
-          trip_reference: t.trip_reference || `TRP-${String(idx + 1).padStart(3, "0")}`,
-          booking_reference: `BOK-${t.booking_id?.substring(0, 8) ?? ""}`,
-          pod_status: t.pod_approved === false ? "REJECTED" : "PENDING",
-        }));
-        setTrips(enriched);
-        setCounts(c => ({ ...c, pending: enriched.length }));
-      }
+      const [tripsRes, closedRes, approvedTodayRes, rejectedTodayRes] = await Promise.all([
+        supabase
+          .from("trips")
+          .select("*, vehicles(registration_number), drivers(full_name)")
+          .in("trip_status", ["DELIVERED", "COMPLETED", "IN_TRANSIT", "UNLOADING"])
+          .or("pod_approved.is.null,pod_approved.eq.false")
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("trips")
+          .select("id", { count: "exact", head: true })
+          .eq("trip_status", "COMPLETED"),
+        supabase
+          .from("trips")
+          .select("id", { count: "exact", head: true })
+          .eq("pod_approved", true)
+          .gte("pod_approved_at", startOfDayIso),
+        supabase
+          .from("trips")
+          .select("id", { count: "exact", head: true })
+          .eq("pod_approved", false)
+          .gte("pod_reviewed_at", startOfDayIso),
+      ]);
+
+      const tripsData = tripsRes.data || [];
+      const enriched = tripsData.map((t: any, idx: number) => ({
+        ...t,
+        trip_reference: t.trip_reference || `TRP-${String(idx + 1).padStart(3, "0")}`,
+        booking_reference: `BOK-${t.booking_id?.substring(0, 8) ?? ""}`,
+        vehicle_registration: t.vehicles?.registration_number || t.vehicle_registration || "Unassigned",
+        driver_name: t.drivers?.full_name || t.driver_name || "Unassigned",
+        pod_status: t.pod_approved === false ? "REJECTED" : "PENDING",
+      }));
+      setTrips(enriched);
+      setCounts({
+        pending: enriched.length,
+        approvedToday: approvedTodayRes.count || 0,
+        rejectedToday: rejectedTodayRes.count || 0,
+        tripsClosedTotal: closedRes.count || 0,
+      });
     } catch (err: any) {
       console.error("Error fetching trips:", err);
     } finally {
@@ -276,7 +302,7 @@ export const PODModule: React.FC = () => {
             <div className="kpi-header-row">
               <span className="kpi-title">Trips Closed (Total)</span>
             </div>
-            <div className="kpi-value">—</div>
+            <div className="kpi-value">{counts.tripsClosedTotal}</div>
           </div>
         </div>
       </div>

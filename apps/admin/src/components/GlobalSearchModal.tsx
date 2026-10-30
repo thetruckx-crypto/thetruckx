@@ -11,13 +11,15 @@ import {
   Plus,
   Clock,
   ExternalLink,
-  RefreshCw
+  RefreshCw,
+  Navigation,
+  DollarSign
 } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 
 export interface SearchEntity {
   id: string;
-  category: 'vehicle' | 'booking' | 'driver' | 'client' | 'vendor' | 'document';
+  category: 'vehicle' | 'booking' | 'driver' | 'client' | 'vendor' | 'document' | 'trip' | 'quotation';
   title: string;
   subtitle: string;
   tag: string;
@@ -55,6 +57,8 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
         { data: drivers },
         { data: reqs },
         { data: boks },
+        { data: trips },
+        { data: quotes },
         { data: docs }
       ] = await Promise.all([
         supabase.from('client_companies').select('*').limit(50),
@@ -63,6 +67,8 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
         supabase.from('drivers').select('*').limit(50),
         supabase.from('requirements').select('*, client_companies(company_name)').limit(50),
         supabase.from('bookings').select('*, client_companies(company_name)').limit(50),
+        supabase.from('trips').select('*').limit(50),
+        supabase.from('vendor_quotations').select('*, vendor_companies(vendor_name)').limit(50),
         supabase.from('documents').select('*').limit(20),
       ]);
 
@@ -142,7 +148,32 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
         });
       });
 
-      // 7. Documents
+      // 7. Trips
+      (trips || []).forEach(t => {
+        entities.push({
+          id: `trp-${t.id}`,
+          category: 'trip',
+          title: `Trip ${t.id.substring(0, 8)}`,
+          subtitle: `Trip Status: ${t.trip_status}`,
+          tag: 'Trip',
+          details: `Created: ${t.created_at ? new Date(t.created_at).toLocaleDateString() : 'Recent'}`
+        });
+      });
+
+      // 8. Quotations
+      (quotes || []).forEach(q => {
+        const vName = (q as any).vendor_companies?.vendor_name || 'Transporter';
+        entities.push({
+          id: `qte-${q.id}`,
+          category: 'quotation',
+          title: `Quote ₹${q.quoted_rate?.toLocaleString('en-IN') || q.base_rate?.toLocaleString('en-IN') || 0}`,
+          subtitle: `Vendor: ${vName} | Req: ${q.requirement_id ? q.requirement_id.substring(0, 8) : 'Direct'}`,
+          tag: 'Quotation',
+          details: `Rate: ₹${q.quoted_rate || q.base_rate || 0} | Locked: ${q.is_locked ? 'Yes' : 'No'}`
+        });
+      });
+
+      // 9. Documents
       (docs || []).forEach(doc => {
         entities.push({
           id: `doc-${doc.id}`,
@@ -202,6 +233,8 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
       vendor: dbEntities.filter(e => e.category === 'vendor').length,
       vehicle: dbEntities.filter(e => e.category === 'vehicle').length,
       driver: dbEntities.filter(e => e.category === 'driver').length,
+      trip: dbEntities.filter(e => e.category === 'trip').length,
+      quotation: dbEntities.filter(e => e.category === 'quotation').length,
       document: dbEntities.filter(e => e.category === 'document').length,
     };
   }, [dbEntities]);
@@ -366,6 +399,24 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
             >
               <User size={14} /> Drivers <span className="cat-count">{categoryCounts.driver}</span>
             </button>
+            <button
+              className={`search-cat-tab ${activeCategory === 'trip' ? 'active' : ''}`}
+              onClick={() => {
+                setActiveCategory('trip');
+                setSelectedIndex(0);
+              }}
+            >
+              <Navigation size={14} /> Trips <span className="cat-count">{categoryCounts.trip}</span>
+            </button>
+            <button
+              className={`search-cat-tab ${activeCategory === 'quotation' ? 'active' : ''}`}
+              onClick={() => {
+                setActiveCategory('quotation');
+                setSelectedIndex(0);
+              }}
+            >
+              <DollarSign size={14} /> Quotes <span className="cat-count">{categoryCounts.quotation}</span>
+            </button>
           </div>
         </div>
 
@@ -402,6 +453,8 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                       {item.category === 'driver' && <User size={18} />}
                       {item.category === 'client' && <Building size={18} />}
                       {item.category === 'vendor' && <Users size={18} />}
+                      {item.category === 'trip' && <Navigation size={18} />}
+                      {item.category === 'quotation' && <DollarSign size={18} />}
                       {item.category === 'document' && <FileText size={18} />}
                     </div>
 

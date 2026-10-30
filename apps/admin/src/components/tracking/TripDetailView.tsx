@@ -54,7 +54,7 @@ export const TripDetailView: React.FC = () => {
       // 2. Fetch booking, requirement, client, vehicle, driver, vendor
       const [bookingRes, vehRes, drvRes, venRes, docRes] = await Promise.all([
         supabase.from("bookings").select("id, requirement_id, client_id, booking_status").eq("id", tripData.booking_id).maybeSingle(),
-        tripData.vehicle_id ? supabase.from("vehicles").select("id, vehicle_number, vehicle_type").eq("id", tripData.vehicle_id).maybeSingle() : Promise.resolve({ data: null }),
+        tripData.vehicle_id ? supabase.from("vehicles").select("id, registration_number, vehicle_type").eq("id", tripData.vehicle_id).maybeSingle() : Promise.resolve({ data: null }),
         tripData.driver_id ? supabase.from("drivers").select("id, full_name, mobile").eq("id", tripData.driver_id).maybeSingle() : Promise.resolve({ data: null }),
         tripData.vendor_id ? supabase.from("vendor_companies").select("id, vendor_name").eq("id", tripData.vendor_id).maybeSingle() : Promise.resolve({ data: null }),
         supabase.from("documents").select("*").eq("reference_id", tripId),
@@ -221,7 +221,7 @@ export const TripDetailView: React.FC = () => {
             <span style={{ fontSize: "0.85rem", color: "#64748B", fontWeight: 600 }}>Assigned Vehicle</span>
           </div>
           <div style={{ fontSize: "1.15rem", fontWeight: 700, color: "#111111" }}>
-            {trip.vehicle?.vehicle_number || "Unassigned Vehicle"}
+            {trip.vehicle?.registration_number || trip.vehicle?.vehicle_number || "Unassigned Vehicle"}
           </div>
           <div style={{ fontSize: "0.85rem", color: "#64748B", marginTop: 2 }}>
             Type: {trip.vehicle?.vehicle_type || "Standard Freight Truck"}

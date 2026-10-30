@@ -1576,11 +1576,15 @@ function AdminShell() {
         }}
         onSelectEntity={(entity) => {
           setIsSearchOpen(false);
-          if (entity.category === 'booking' || entity.category === 'vehicle') navigate('/admin/bookings');
+          if (entity.category === 'booking') navigate('/admin/bookings');
+          else if (entity.category === 'vehicle') navigate('/admin/fleet');
+          else if (entity.category === 'trip') navigate('/admin/tracking');
+          else if (entity.category === 'quotation') navigate('/admin/quotations');
           else if (entity.category === 'client') navigate(`/admin/clients/${entity.id.replace('cli-', '')}`);
           else if (entity.category === 'vendor') navigate(`/admin/vendors/${entity.id.replace('ven-', '')}`);
           else if (entity.category === 'driver') navigate('/admin/drivers');
           else if (entity.category === 'document') navigate('/admin/documents');
+          else navigate('/admin/dashboard');
         }}
       />
 
