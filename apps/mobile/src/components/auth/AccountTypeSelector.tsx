@@ -15,14 +15,12 @@ interface AccountTypeSelectorProps {
   selectedRole: MobileRole;
   onPress: () => void;
   style?: StyleProp<ViewStyle>;
-  layout?: 'inline' | 'stacked';
 }
 
 export const AccountTypeSelector: React.FC<AccountTypeSelectorProps> = ({
   selectedRole,
   onPress,
   style,
-  layout = 'inline',
 }) => {
   const getRoleDisplayName = (r: MobileRole): string => {
     switch (r) {
@@ -41,34 +39,22 @@ export const AccountTypeSelector: React.FC<AccountTypeSelectorProps> = ({
 
   return (
     <TouchableOpacity
-      style={[
-        styles.container,
-        layout === 'stacked' && styles.containerStacked,
-        style,
-      ]}
+      style={[styles.container, style]}
       onPress={onPress}
-      activeOpacity={0.75}
+      activeOpacity={0.7}
       accessibilityRole="button"
       accessibilityLabel={`Login as ${roleName}. Tap to change account type.`}
+      accessibilityHint="Opens account type selector bottom sheet"
     >
-      {layout === 'stacked' ? (
-        <View style={styles.stackedWrap}>
-          <Text style={styles.stackedLabel}>Login as</Text>
-          <Text style={styles.stackedRoleValue}>{roleName}</Text>
-        </View>
-      ) : (
-        <View style={styles.inlineContentWrap}>
-          <Text style={styles.inlineText}>
-            <Text style={styles.loginAsPrefix}>Login as </Text>
-            <Text style={styles.roleValueBold}>{roleName}</Text>
-          </Text>
-        </View>
-      )}
+      <View style={styles.textColumn}>
+        <Text style={styles.label}>Login as</Text>
+        <Text style={styles.roleValue}>{roleName}</Text>
+      </View>
 
       <ChevronDown
-        size={18}
+        size={20}
         color="#172B4D"
-        strokeWidth={2.4}
+        strokeWidth={2}
         style={styles.chevron}
       />
     </TouchableOpacity>
@@ -82,56 +68,46 @@ const styles = StyleSheet.create({
     borderColor: '#D9E0E8',
     borderRadius: 12,
     paddingHorizontal: 16,
-    height: 56,
+    height: 60,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 16,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.03,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 0.5,
+      },
+    }),
   },
-  containerStacked: {
-    height: undefined,
-    minHeight: 62,
-    paddingVertical: 10,
-  },
-  inlineContentWrap: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  inlineText: {
-    fontSize: 15,
-    includeFontPadding: false,
-    textAlignVertical: 'center',
-    paddingVertical: Platform.OS === 'android' ? 0 : 2,
-  },
-  loginAsPrefix: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#7B8798',
-  },
-  roleValueBold: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#172B4D',
-  },
-  chevron: {
-    marginLeft: 8,
-  },
-  stackedWrap: {
+  textColumn: {
     flex: 1,
     justifyContent: 'center',
+    alignItems: 'flex-start',
   },
-  stackedLabel: {
-    fontSize: 11,
-    fontWeight: '600',
+  label: {
+    fontSize: 12,
+    fontWeight: '500',
     color: '#7B8798',
-    marginBottom: 3,
+    letterSpacing: 0.2,
+    lineHeight: 16,
     includeFontPadding: false,
+    marginBottom: 2,
   },
-  stackedRoleValue: {
-    fontSize: 15,
+  roleValue: {
+    fontSize: 16,
     fontWeight: '700',
     color: '#172B4D',
+    letterSpacing: -0.2,
+    lineHeight: 22,
     includeFontPadding: false,
+  },
+  chevron: {
+    marginLeft: 12,
   },
 });
