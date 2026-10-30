@@ -32,6 +32,7 @@ const TABLES_TO_CLEAN_IN_ORDER = [
   'charge_lines',
   'payment_records',
   'documents',
+  'exceptions',
   'trips',
   'bookings',
   'client_quotes',

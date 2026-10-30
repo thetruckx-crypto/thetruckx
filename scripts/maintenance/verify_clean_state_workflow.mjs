@@ -242,6 +242,7 @@ async function verifyFreshWorkflowReadiness() {
     'client_quotes',
     'bookings',
     'trips',
+    'exceptions',
     'documents',
     'admin_users',
     'regional_hubs',

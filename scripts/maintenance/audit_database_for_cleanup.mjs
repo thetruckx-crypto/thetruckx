@@ -25,6 +25,7 @@ const TABLES = [
   'bookings',
   'trips',
   'trip_events',
+  'exceptions',
   'pod_submissions',
   'documents',
   'notifications',

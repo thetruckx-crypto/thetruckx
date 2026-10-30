@@ -28,6 +28,7 @@ const ALL_TABLES = [
   'client_quotes',
   'bookings',
   'trips',
+  'exceptions',
   'documents',
   'audit_logs',
   'weighments',
