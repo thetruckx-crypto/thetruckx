@@ -98,6 +98,17 @@ import { VendorTripManagementScreen } from './src/screens/vendor/trips/VendorTri
 import { VendorTripDetailsScreen } from './src/screens/vendor/trips/VendorTripDetailsScreen'; // Screen 27
 import { VendorTripDocumentsScreen } from './src/screens/vendor/trips/VendorTripDocumentsScreen'; // Screen 28
 
+// Phase 3: 8 Unified Vendor Mobile Hubs
+import {
+  VendorRegistrationHubScreen,
+  VendorComplianceHubScreen,
+  VendorLoadsHubScreen,
+  VendorQuotationsHubScreen,
+  VendorBookingsHubScreen,
+  VendorAssetHubScreen,
+  VendorTripsHubScreen,
+} from './src/screens/vendor/hubs';
+
 // Phase 4: Driver Registration & Verification Screens (1-9)
 import { DriverRegistrationScreen } from './src/screens/driver/registration/DriverRegistrationScreen'; // Screen 1
 import { DriverPersonalInfoScreen } from './src/screens/driver/registration/DriverPersonalInfoScreen'; // Screen 2
@@ -2620,6 +2631,137 @@ export default function App() {
         <VendorTripDocumentsScreen
           tripId={activeVendorTripId}
           onBack={() => setCurrentScreen('VENDOR_TRIP_DETAILS')}
+        />
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────── */}
+      {/* PHASE 3: 8 UNIFIED VENDOR MOBILE HUBS                                */}
+      {/* ─────────────────────────────────────────────────────────────────── */}
+
+      {/* Hub 1: Stepped Carrier Registration & KYC */}
+      {currentScreen === 'VENDOR_HUB_REGISTRATION' && (
+        <VendorRegistrationHubScreen
+          initialMobile={mobileNumber}
+          onBackToLogin={async () => {
+            await vendorService.clearDraftForm();
+            setCurrentScreen('LOGIN');
+          }}
+          onProceedToOtp={(data) => {
+            const cleanTarget = (data.targetPhone || '').replace(/[^0-9]/g, '').slice(-10);
+            setPendingRegistration({
+              role: 'VENDOR',
+              targetPhone: cleanTarget,
+              vendorFormData: data.formData,
+            });
+            setMobileNumber(cleanTarget);
+            setSelectedRole('VENDOR');
+            setOtpPurpose('REGISTRATION');
+            setTestOtpCode(data.testCode || '123456');
+            setCurrentScreen('OTP');
+          }}
+          onSubmitSuccess={(result) => {
+            setRegisteredVendorId(result.vendorId);
+            setVendorApplicationNumber(result.applicationNumber);
+            setCurrentScreen('VENDOR_SUBMISSION_CONFIRM');
+          }}
+          onViewVerificationStatus={() => setCurrentScreen('VENDOR_HUB_COMPLIANCE')}
+        />
+      )}
+
+      {/* Hub 2: Compliance & Document Remediation Center */}
+      {currentScreen === 'VENDOR_HUB_COMPLIANCE' && (
+        <VendorComplianceHubScreen
+          vendorId={effectiveVendorId}
+          mobile={mobileNumber || session?.mobile}
+          vendorName="Transport Enterprise"
+          onBackToLogin={() => setCurrentScreen('LOGIN')}
+          onEnterDashboard={() => setCurrentScreen('VENDOR_DASHBOARD')}
+          onOpenSupport={() => setCurrentScreen('HELP_SUPPORT')}
+        />
+      )}
+
+      {/* Hub 4: Available Loads Sourcing & Instant Reverse Bidding */}
+      {currentScreen === 'VENDOR_HUB_LOADS' && (
+        <VendorLoadsHubScreen
+          vendorId={effectiveVendorId}
+          onBackToDashboard={() => setCurrentScreen('VENDOR_DASHBOARD')}
+          onViewMyQuotations={() => setCurrentScreen('VENDOR_HUB_QUOTATIONS')}
+          onSelectNavTab={(tab) => {
+            if (tab === 'HOME') setCurrentScreen('VENDOR_DASHBOARD');
+            else if (tab === 'LOADS') setCurrentScreen('VENDOR_HUB_LOADS');
+            else if (tab === 'TRIPS') setCurrentScreen('VENDOR_HUB_TRIPS');
+            else if (tab === 'FLEET') setCurrentScreen('VENDOR_HUB_ASSETS');
+            else if (tab === 'MORE') setCurrentScreen('PROFILE');
+          }}
+        />
+      )}
+
+      {/* Hub 5: Bid Ledger & Quotations Workbench */}
+      {currentScreen === 'VENDOR_HUB_QUOTATIONS' && (
+        <VendorQuotationsHubScreen
+          vendorId={effectiveVendorId}
+          onBackToDashboard={() => setCurrentScreen('VENDOR_DASHBOARD')}
+          onNavigateToBookingPlacement={(booking) => {
+            setSelectedVendorBooking(booking);
+            setCurrentScreen('VENDOR_HUB_BOOKINGS');
+          }}
+          onSelectNavTab={(tab) => {
+            if (tab === 'HOME') setCurrentScreen('VENDOR_DASHBOARD');
+            else if (tab === 'LOADS') setCurrentScreen('VENDOR_HUB_LOADS');
+            else if (tab === 'TRIPS') setCurrentScreen('VENDOR_HUB_TRIPS');
+            else if (tab === 'FLEET') setCurrentScreen('VENDOR_HUB_ASSETS');
+            else if (tab === 'MORE') setCurrentScreen('PROFILE');
+          }}
+        />
+      )}
+
+      {/* Hub 6: Bookings & Fleet Placement Center */}
+      {currentScreen === 'VENDOR_HUB_BOOKINGS' && (
+        <VendorBookingsHubScreen
+          vendorId={effectiveVendorId}
+          onBackToDashboard={() => setCurrentScreen('VENDOR_DASHBOARD')}
+          onViewTrip={(tripId) => {
+            setActiveVendorTripId(tripId);
+            setCurrentScreen('VENDOR_HUB_TRIPS');
+          }}
+          onSelectNavTab={(tab) => {
+            if (tab === 'HOME') setCurrentScreen('VENDOR_DASHBOARD');
+            else if (tab === 'LOADS') setCurrentScreen('VENDOR_HUB_LOADS');
+            else if (tab === 'TRIPS') setCurrentScreen('VENDOR_HUB_TRIPS');
+            else if (tab === 'FLEET') setCurrentScreen('VENDOR_HUB_ASSETS');
+            else if (tab === 'MORE') setCurrentScreen('PROFILE');
+          }}
+        />
+      )}
+
+      {/* Hub 7: Fleet & Driver Asset Registry */}
+      {currentScreen === 'VENDOR_HUB_ASSETS' && (
+        <VendorAssetHubScreen
+          vendorId={effectiveVendorId}
+          onBackToDashboard={() => setCurrentScreen('VENDOR_DASHBOARD')}
+          onSelectNavTab={(tab) => {
+            if (tab === 'HOME') setCurrentScreen('VENDOR_DASHBOARD');
+            else if (tab === 'LOADS') setCurrentScreen('VENDOR_HUB_LOADS');
+            else if (tab === 'TRIPS') setCurrentScreen('VENDOR_HUB_TRIPS');
+            else if (tab === 'FLEET') setCurrentScreen('VENDOR_HUB_ASSETS');
+            else if (tab === 'MORE') setCurrentScreen('PROFILE');
+          }}
+        />
+      )}
+
+      {/* Hub 8: In-Transit Operations & Trip Vault */}
+      {currentScreen === 'VENDOR_HUB_TRIPS' && (
+        <VendorTripsHubScreen
+          vendorId={effectiveVendorId}
+          initialTripId={activeVendorTripId}
+          onBackToDashboard={() => setCurrentScreen('VENDOR_DASHBOARD')}
+          onSelectNavTab={(tab) => {
+            if (tab === 'HOME') setCurrentScreen('VENDOR_DASHBOARD');
+            else if (tab === 'LOADS') setCurrentScreen('VENDOR_HUB_LOADS');
+            else if (tab === 'TRIPS') setCurrentScreen('VENDOR_HUB_TRIPS');
+            else if (tab === 'FLEET') setCurrentScreen('VENDOR_HUB_ASSETS');
+            else if (tab === 'MORE') setCurrentScreen('PROFILE');
+          }}
         />
       )}
 

@@ -4,3 +4,4 @@ export * from './rfqs';
 export * from './bookings';
 export * from './trips';
 export * from './fleet';
+export * from './hubs';

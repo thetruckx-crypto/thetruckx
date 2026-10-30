@@ -60,7 +60,7 @@ export type ScreenId =
   | 'VENDOR_VERIFICATION_STATUS'    // 10. Verification Status
   | 'VENDOR_DOC_CORRECTION'         // 11. Document Status and Correction
   // Phase 3: Vendor Operations (Screens 12 to 28)
-  | 'VENDOR_DASHBOARD'              // 12. Vendor Dashboard
+  | 'VENDOR_DASHBOARD'              // 12. Vendor Dashboard (Hub 3: Carrier Control Tower)
   | 'VENDOR_REQUIREMENTS'           // 13. Available Transport Requirements
   | 'VENDOR_REQUIREMENT_DETAILS'    // 14. Requirement Details
   | 'VENDOR_SUBMIT_QUOTATION'       // 15. Submit Quotation
@@ -77,6 +77,14 @@ export type ScreenId =
   | 'VENDOR_TRIP_MANAGEMENT'        // 26. Trip Management
   | 'VENDOR_TRIP_DETAILS'           // 27. Trip Details
   | 'VENDOR_TRIP_DOCUMENTS'         // 28. Trip Documents and POD
+  // Phase 3: 8 Unified Vendor Mobile Hubs
+  | 'VENDOR_HUB_REGISTRATION'       // Hub 1: Stepped Carrier Registration & KYC
+  | 'VENDOR_HUB_COMPLIANCE'         // Hub 2: Compliance & Document Remediation
+  | 'VENDOR_HUB_LOADS'              // Hub 4: Load Sourcing & Instant Reverse Bidding
+  | 'VENDOR_HUB_QUOTATIONS'         // Hub 5: Bid Ledger & Quotations Workbench
+  | 'VENDOR_HUB_BOOKINGS'           // Hub 6: Bookings & Fleet Placement Center
+  | 'VENDOR_HUB_ASSETS'             // Hub 7: Fleet & Driver Asset Registry
+  | 'VENDOR_HUB_TRIPS'              // Hub 8: In-Transit Operations & Trip Vault
   // Driver Registration & Verification (Screens 1 to 9)
   | 'DRIVER_REGISTRATION'           // 01. Driver Registration
   | 'DRIVER_PERSONAL_INFO'          // 02. Personal Information
