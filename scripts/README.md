@@ -64,13 +64,11 @@ Utilities for local development and build tooling.
 
 ---
 
-## 4. Maintenance & Cleanup (`scripts/maintenance/`)
+## 4. Maintenance (`scripts/maintenance/`)
 
-Database maintenance and hygiene scripts.
+System health and administrative verification scripts.
 
 | Script | Purpose | Execution |
 |--------|---------|-----------|
-| `audit_database_for_cleanup.mjs` | Audits test records and identifies orphaned data safely before cleanup. | `node scripts/maintenance/audit_database_for_cleanup.mjs` |
 | `check_admin_users.mjs` | Verifies admin user integrity and role permissions. | `node scripts/maintenance/check_admin_users.mjs` |
-| `execute_full_cleanup.mjs` | Creates pre-cleanup snapshot in `archive/backups/database/` and resets test records. | `node scripts/maintenance/execute_full_cleanup.mjs` |
-| `verify_clean_state_workflow.mjs` | Validates system readiness after database reset or migration run. | `node scripts/maintenance/verify_clean_state_workflow.mjs` |
+

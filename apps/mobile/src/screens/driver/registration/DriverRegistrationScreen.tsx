@@ -43,6 +43,7 @@ import { DriverDobCalendarModal } from '../../../components/DriverDobCalendarMod
 import { driverService } from '../../../services/driverService';
 import { DriverRegistrationFormData } from '../../../types';
 import { authService } from '../../../services/authService';
+import { compressMobileImage } from '../../../utils/mobileImageCompressor';
 
 export interface DriverRegistrationScreenProps {
   initialMobile?: string;
@@ -84,6 +85,10 @@ export const DriverRegistrationScreen: React.FC<DriverRegistrationScreenProps> =
   const [dlBackUri, setDlBackUri] = useState<string | null>(null);
   const [aadhaarFrontUri, setAadhaarFrontUri] = useState<string | null>(null);
   const [aadhaarBackUri, setAadhaarBackUri] = useState<string | null>(null);
+  const [dlFrontSize, setDlFrontSize] = useState<string | null>(null);
+  const [dlBackSize, setDlBackSize] = useState<string | null>(null);
+  const [aadhaarFrontSize, setAadhaarFrontSize] = useState<string | null>(null);
+  const [aadhaarBackSize, setAadhaarBackSize] = useState<string | null>(null);
 
   // Vendor Selection State
   const [vendors, setVendors] = useState<VendorOption[]>([]);
@@ -327,8 +332,13 @@ export const DriverRegistrationScreen: React.FC<DriverRegistrationScreenProps> =
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const uri = result.assets[0].uri;
-        applyDocumentUri(target, uri);
+        const rawUri = result.assets[0].uri;
+        try {
+          const comp = await compressMobileImage(rawUri);
+          applyDocumentUri(target, comp.uri, comp.sizeLabel);
+        } catch {
+          applyDocumentUri(target, rawUri);
+        }
       }
     } catch (err: any) {
       Alert.alert('Camera Error', err.message || 'Failed to capture photo from camera.');
@@ -360,8 +370,13 @@ export const DriverRegistrationScreen: React.FC<DriverRegistrationScreenProps> =
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const uri = result.assets[0].uri;
-        applyDocumentUri(target, uri);
+        const rawUri = result.assets[0].uri;
+        try {
+          const comp = await compressMobileImage(rawUri);
+          applyDocumentUri(target, comp.uri, comp.sizeLabel);
+        } catch {
+          applyDocumentUri(target, rawUri);
+        }
       }
     } catch (err: any) {
       Alert.alert('Gallery Error', err.message || 'Failed to select document from gallery.');
@@ -370,19 +385,24 @@ export const DriverRegistrationScreen: React.FC<DriverRegistrationScreenProps> =
 
   const applyDocumentUri = (
     target: 'dlFront' | 'dlBack' | 'aadhaarFront' | 'aadhaarBack',
-    uri: string
+    uri: string,
+    sizeLabel?: string
   ) => {
     if (target === 'dlFront') {
       setDlFrontUri(uri);
+      if (sizeLabel) setDlFrontSize(sizeLabel);
       setErrors((prev) => ({ ...prev, dlFront: undefined }));
     } else if (target === 'dlBack') {
       setDlBackUri(uri);
+      if (sizeLabel) setDlBackSize(sizeLabel);
       setErrors((prev) => ({ ...prev, dlBack: undefined }));
     } else if (target === 'aadhaarFront') {
       setAadhaarFrontUri(uri);
+      if (sizeLabel) setAadhaarFrontSize(sizeLabel);
       setErrors((prev) => ({ ...prev, aadhaarFront: undefined }));
     } else if (target === 'aadhaarBack') {
       setAadhaarBackUri(uri);
+      if (sizeLabel) setAadhaarBackSize(sizeLabel);
       setErrors((prev) => ({ ...prev, aadhaarBack: undefined }));
     }
   };
@@ -390,10 +410,19 @@ export const DriverRegistrationScreen: React.FC<DriverRegistrationScreenProps> =
   const handleRemoveDocument = (
     target: 'dlFront' | 'dlBack' | 'aadhaarFront' | 'aadhaarBack'
   ) => {
-    if (target === 'dlFront') setDlFrontUri(null);
-    else if (target === 'dlBack') setDlBackUri(null);
-    else if (target === 'aadhaarFront') setAadhaarFrontUri(null);
-    else if (target === 'aadhaarBack') setAadhaarBackUri(null);
+    if (target === 'dlFront') {
+      setDlFrontUri(null);
+      setDlFrontSize(null);
+    } else if (target === 'dlBack') {
+      setDlBackUri(null);
+      setDlBackSize(null);
+    } else if (target === 'aadhaarFront') {
+      setAadhaarFrontUri(null);
+      setAadhaarFrontSize(null);
+    } else if (target === 'aadhaarBack') {
+      setAadhaarBackUri(null);
+      setAadhaarBackSize(null);
+    }
   };
 
   // Form Validation
@@ -541,7 +570,8 @@ export const DriverRegistrationScreen: React.FC<DriverRegistrationScreenProps> =
     subtitle: string,
     target: 'dlFront' | 'dlBack' | 'aadhaarFront' | 'aadhaarBack',
     uri: string | null,
-    error?: string
+    error?: string,
+    sizeLabel?: string | null
   ) => {
     return (
       <View style={[styles.docCard, error ? styles.docCardError : null]}>
@@ -556,7 +586,9 @@ export const DriverRegistrationScreen: React.FC<DriverRegistrationScreenProps> =
           {uri ? (
             <View style={styles.uploadedCheckBadge}>
               <Check size={14} color="#10B981" />
-              <Text style={styles.uploadedCheckText}>Attached</Text>
+              <Text style={styles.uploadedCheckText}>
+                Attached{sizeLabel ? ` (${sizeLabel})` : ''}
+              </Text>
             </View>
           ) : null}
         </View>
@@ -882,7 +914,8 @@ export const DriverRegistrationScreen: React.FC<DriverRegistrationScreenProps> =
                 'Ensure licence number, driver photo, name, and validity are clear',
                 'dlFront',
                 dlFrontUri,
-                errors.dlFront
+                errors.dlFront,
+                dlFrontSize
               )}
 
               {/* DL Back Side */}
@@ -891,7 +924,8 @@ export const DriverRegistrationScreen: React.FC<DriverRegistrationScreenProps> =
                 'Ensure authorized vehicle classes (e.g. HGMV, TRANS) and badge numbers are visible',
                 'dlBack',
                 dlBackUri,
-                errors.dlBack
+                errors.dlBack,
+                dlBackSize
               )}
             </View>
 
@@ -917,7 +951,8 @@ export const DriverRegistrationScreen: React.FC<DriverRegistrationScreenProps> =
                 'Ensure Aadhaar photo, legal name, gender, and date of birth are legible',
                 'aadhaarFront',
                 aadhaarFrontUri,
-                errors.aadhaarFront
+                errors.aadhaarFront,
+                aadhaarFrontSize
               )}
 
               {/* Aadhaar Back Side */}
@@ -926,7 +961,8 @@ export const DriverRegistrationScreen: React.FC<DriverRegistrationScreenProps> =
                 'Ensure residential address and QR code are completely visible',
                 'aadhaarBack',
                 aadhaarBackUri,
-                errors.aadhaarBack
+                errors.aadhaarBack,
+                aadhaarBackSize
               )}
             </View>
 

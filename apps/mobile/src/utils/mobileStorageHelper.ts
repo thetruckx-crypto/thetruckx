@@ -70,6 +70,12 @@ export function getStandardMimeType(fileNameOrExt: string, fallbackMime?: string
   }
 }
 
+import {
+  compressMobileImage,
+  isOptimizableImage,
+  formatBytes,
+} from './mobileImageCompressor';
+
 export interface UploadDocumentParams {
   uri?: string;
   blob?: Blob | ArrayBuffer | Uint8Array;
@@ -84,6 +90,11 @@ export interface UploadDocumentResult {
   storagePath: string;
   fileUrl?: string;
   error?: string;
+  originalSize?: string;
+  compressedSize?: string;
+  compressionRatio?: string;
+  wasCompressed?: boolean;
+  sizeLabel?: string;
 }
 
 export const MAX_UPLOAD_SIZE_BYTES = 15 * 1024 * 1024; // 15 MB
@@ -92,12 +103,13 @@ export const ALLOWED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'doc', '
 /**
  * Universal, rock-solid document uploader for React Native mobile & web.
  * Accurately reads binary bytes into Uint8Array and uploads to Supabase Storage with retries.
+ * Automatically performs high-quality client-side compression on images to save storage footprint.
  */
 export async function uploadDocumentToStorage(
   params: UploadDocumentParams
 ): Promise<UploadDocumentResult> {
   const { uri, blob, fileName, mimeType, storagePath } = params;
-  const targetMime = getStandardMimeType(fileName, mimeType);
+  let targetMime = getStandardMimeType(fileName, mimeType);
 
   // 1. File extension validation
   const ext = fileName.split('.').pop()?.toLowerCase() || '';
@@ -112,6 +124,38 @@ export async function uploadDocumentToStorage(
   try {
     await ensureMobileSession();
 
+    let workingUri = uri;
+    let compressionDetails = {
+      originalSize: undefined as string | undefined,
+      compressedSize: undefined as string | undefined,
+      compressionRatio: undefined as string | undefined,
+      wasCompressed: false,
+      sizeLabel: undefined as string | undefined,
+    };
+
+    // 1.1 Automatic High-Quality Image Compression (Max 1920px, 0.82 JPEG quality)
+    if (workingUri && isOptimizableImage(fileName || targetMime)) {
+      try {
+        const comp = await compressMobileImage(workingUri);
+        if (comp.wasCompressed) {
+          workingUri = comp.uri;
+          targetMime = 'image/jpeg';
+          compressionDetails = {
+            originalSize: comp.originalSizeFormatted,
+            compressedSize: comp.compressedSizeFormatted,
+            compressionRatio: `${comp.savingsPercentage}% reduction`,
+            wasCompressed: true,
+            sizeLabel: comp.sizeLabel,
+          };
+          console.log(
+            `[mobileStorageHelper] Compressed "${fileName}": ${comp.originalSizeFormatted} -> ${comp.compressedSizeFormatted} (${comp.savingsPercentage}% savings)`
+          );
+        }
+      } catch (cErr) {
+        console.warn('[mobileStorageHelper] Auto-compression skipped:', cErr);
+      }
+    }
+
     let uploadData: Uint8Array | ArrayBuffer | null = null;
 
     if (blob instanceof Uint8Array || blob instanceof ArrayBuffer) {
@@ -120,27 +164,27 @@ export async function uploadDocumentToStorage(
       if (blob && typeof (blob as any).arrayBuffer === 'function') {
         const ab = await (blob as any).arrayBuffer();
         uploadData = new Uint8Array(ab);
-      } else if (uri) {
-        const res = await fetch(uri);
+      } else if (workingUri) {
+        const res = await fetch(workingUri);
         const ab = await res.arrayBuffer();
         uploadData = new Uint8Array(ab);
       }
     } else {
       // Native Android / iOS
-      if (uri) {
-        if (uri.startsWith('data:')) {
-          const base64Data = uri.split(',')[1] || uri;
+      if (workingUri) {
+        if (workingUri.startsWith('data:')) {
+          const base64Data = workingUri.split(',')[1] || workingUri;
           uploadData = base64ToUint8Array(base64Data);
         } else {
           try {
             // Expo FileSystem: read directly as base64 string
-            const base64 = await FileSystem.readAsStringAsync(uri, {
+            const base64 = await FileSystem.readAsStringAsync(workingUri, {
               encoding: FileSystem.EncodingType.Base64,
             });
             uploadData = base64ToUint8Array(base64);
           } catch (fsErr: any) {
             console.warn('FileSystem read error, fallback to fetch blob:', fsErr);
-            const res = await fetch(uri);
+            const res = await fetch(workingUri);
             const ab = await res.arrayBuffer();
             uploadData = new Uint8Array(ab);
           }
@@ -219,10 +263,16 @@ export async function uploadDocumentToStorage(
       .from(STORAGE_BUCKET)
       .createSignedUrl(uploadedPath, 86400 * 7);
 
+    const finalSizeFormatted = formatBytes(byteLength);
     return {
       success: true,
       storagePath: uploadedPath,
       fileUrl: signData?.signedUrl || uploadedPath,
+      originalSize: compressionDetails.originalSize || finalSizeFormatted,
+      compressedSize: compressionDetails.compressedSize || finalSizeFormatted,
+      compressionRatio: compressionDetails.compressionRatio || '0% (Standard)',
+      wasCompressed: compressionDetails.wasCompressed,
+      sizeLabel: compressionDetails.sizeLabel || finalSizeFormatted,
     };
   } catch (err: any) {
     console.error('uploadDocumentToStorage exception:', err);
