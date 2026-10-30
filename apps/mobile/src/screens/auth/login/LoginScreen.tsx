@@ -3,31 +3,33 @@ import {
   View,
   Text,
   StyleSheet,
-  TextInput,
   TouchableOpacity,
   SafeAreaView,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  ActivityIndicator,
-  Alert,
   Modal,
+  Alert,
 } from 'react-native';
 import {
   ArrowLeft,
-  Phone,
   ArrowRight,
-  Check,
-  Building2,
-  Truck,
-  UserCheck,
   AlertTriangle,
   RefreshCw,
   UserPlus,
   X,
 } from 'lucide-react-native';
 import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
-import { AuthBottomDecoration } from '../../../components/AuthBottomDecoration';
+import {
+  PrimaryButton,
+  SecondaryButton,
+  CustomCheckbox,
+  MobileNumberField,
+  AccountTypeSelector,
+  AccountTypeBottomSheet,
+  ErrorMessage,
+  ForgotNumberModal,
+} from '../../../components/auth';
 import { authService, AuthSessionData } from '../../../services/authService';
 import { MobileRole } from '../../../types';
 
@@ -47,7 +49,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   selectedRole = 'CLIENT',
   onBack,
   onContinueToOtp,
-  onLoginSuccess,
   onRoleChanged,
   onRegisterPress,
   onNavigateToRegistration,
@@ -55,10 +56,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const [mobileNumber, setMobileNumber] = useState(initialMobile || '');
   const [rememberMe, setRememberMe] = useState(true);
   const [role, setRole] = useState<MobileRole>(selectedRole);
+  const [isRoleSheetVisible, setIsRoleSheetVisible] = useState(false);
+  const [isForgotModalVisible, setIsForgotModalVisible] = useState(false);
+
+  const [loading, setLoading] = useState(false);
+  const [inlineError, setInlineError] = useState<string | null>(null);
+
+  // Modals for role mismatch & registration requirements
   const [showNotRegisteredModal, setShowNotRegisteredModal] = useState(false);
   const [showWrongRoleModal, setShowWrongRoleModal] = useState(false);
   const [registeredOtherRole, setRegisteredOtherRole] = useState<MobileRole | null>(null);
-  const [loading, setLoading] = useState(false);
 
   const [noticeModal, setNoticeModal] = useState<{
     visible: boolean;
@@ -87,19 +94,21 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   };
 
   const roleLabels: Record<MobileRole, string> = {
-    CLIENT: 'Client / Shipper',
-    VENDOR: 'Vendor / Transporter',
+    CLIENT: 'Client',
+    VENDOR: 'Vendor',
     DRIVER: 'Driver',
   };
 
   const handleSelectRole = (newRole: MobileRole) => {
     setRole(newRole);
     onRoleChanged(newRole);
+    setIsRoleSheetVisible(false);
+    if (inlineError) setInlineError(null);
   };
 
   const handleRegisterNow = () => {
     if (showWrongRoleModal && registeredOtherRole) {
-      const otherLabel = registeredOtherRole === 'CLIENT' ? 'Client' : registeredOtherRole === 'VENDOR' ? 'Vendor' : 'Driver';
+      const otherLabel = roleLabels[registeredOtherRole];
       Alert.alert(
         'Registration Restricted',
         `This mobile number is already registered under the ${otherLabel} role. You cannot register under another role using the same mobile number.`
@@ -127,24 +136,51 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     }
   };
 
+  const handleMobileChange = (val: string) => {
+    setMobileNumber(val);
+    if (inlineError) setInlineError(null);
+  };
+
+  const cleanPhone = mobileNumber.replace(/[^0-9]/g, '').slice(-10);
+  const isMobileValid = cleanPhone.length === 10;
+
   const handleLogin = async () => {
-    const cleanPhone = mobileNumber.replace(/[^0-9]/g, '').slice(-10);
-    if (cleanPhone.length !== 10) {
-      showNotice(
-        'Invalid Mobile Number',
-        'Please enter a valid 10-digit Indian mobile number to log in.'
-      );
+    if (!isMobileValid) {
+      setInlineError('Please enter a valid 10-digit Indian mobile number.');
       return;
     }
 
     setLoading(true);
+    setInlineError(null);
+
     try {
-      // Dispatch single standard OTP 123456 for login
+      // 1. Cross-role and registration check
+      const check = await authService.checkMobileRegistration(cleanPhone, role);
+
+      if (check.isRegisteredOtherRole && check.status !== 'DEACTIVATED') {
+        setRegisteredOtherRole(check.otherRole || null);
+        setShowWrongRoleModal(true);
+        setLoading(false);
+        return;
+      }
+
+      if (!check.isRegistered && check.status === 'NOT_REGISTERED') {
+        setShowNotRegisteredModal(true);
+        setLoading(false);
+        return;
+      }
+
+      // 2. Dispatch OTP to mobile number
       const res = await authService.sendOtp(cleanPhone, 'LOGIN', role);
       onContinueToOtp(cleanPhone, 'LOGIN', res.testCode || '123456');
-    } catch {
-      // Fallback: Proceed to OTP 123456
-      onContinueToOtp(cleanPhone, 'LOGIN', '123456');
+    } catch (err: any) {
+      const msg = err.message || '';
+      if (msg.includes('WRONG_ROLE')) {
+        setInlineError(msg);
+      } else {
+        // Fallback: Proceed to OTP screen with testing code 123456
+        onContinueToOtp(cleanPhone, 'LOGIN', '123456');
+      }
     } finally {
       setLoading(false);
     }
@@ -160,6 +196,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           contentContainerStyle={styles.scrollContainer}
           bounces={false}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
           {/* Top Bar with Back Arrow */}
           <View style={styles.topBar}>
@@ -167,17 +204,18 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               style={styles.backBtn}
               onPress={onBack}
               accessibilityLabel="Back"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
-              <ArrowLeft size={22} color="#172B4D" />
+              <ArrowLeft size={24} color="#172B4D" strokeWidth={2.4} />
             </TouchableOpacity>
           </View>
 
-          {/* Logo Center */}
+          {/* Centered Brand Logo */}
           <View style={styles.logoWrap}>
             <BrandLogoHeader size="md" theme="light" />
           </View>
 
-          {/* Heading */}
+          {/* Welcome Back Heading */}
           <View style={styles.headingWrap}>
             <Text style={styles.titleText}>
               Welcome <Text style={styles.orangeText}>Back</Text>
@@ -187,177 +225,99 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             </Text>
           </View>
 
-          {/* User Selection Options: 3 Segmented Role Cards / Tabs */}
-          <View style={styles.userSelectionContainer}>
-            <View style={styles.userRoleTabsRow}>
-              {/* Option 1: Client / Shipper */}
-              <TouchableOpacity
-                style={[
-                  styles.userRoleTab,
-                  role === 'CLIENT' && styles.userRoleTabActiveClient,
-                ]}
-                onPress={() => handleSelectRole('CLIENT')}
-                activeOpacity={0.8}
-              >
-                <View
-                  style={[
-                    styles.userRoleTabIconWrap,
-                    role === 'CLIENT' ? styles.userRoleTabIconClientActive : styles.userRoleTabIconInactive,
-                  ]}
-                >
-                  <Building2
-                    size={17}
-                    color={role === 'CLIENT' ? '#FFFFFF' : '#64748B'}
-                    strokeWidth={2.2}
-                  />
-                </View>
-                <Text
-                  style={[
-                    styles.userRoleTabText,
-                    role === 'CLIENT' && styles.userRoleTabTextActiveClient,
-                  ]}
-                >
-                  Client
-                </Text>
-              </TouchableOpacity>
+          {/* Form Container */}
+          <View style={styles.formContainer}>
+            {/* Account Type Selector Card */}
+            <AccountTypeSelector
+              selectedRole={role}
+              onPress={() => setIsRoleSheetVisible(true)}
+            />
 
-              {/* Option 2: Vendor / Transporter */}
-              <TouchableOpacity
-                style={[
-                  styles.userRoleTab,
-                  role === 'VENDOR' && styles.userRoleTabActiveVendor,
-                ]}
-                onPress={() => handleSelectRole('VENDOR')}
-                activeOpacity={0.8}
-              >
-                <View
-                  style={[
-                    styles.userRoleTabIconWrap,
-                    role === 'VENDOR' ? styles.userRoleTabIconVendorActive : styles.userRoleTabIconInactive,
-                  ]}
-                >
-                  <Truck
-                    size={17}
-                    color={role === 'VENDOR' ? '#FFFFFF' : '#64748B'}
-                    strokeWidth={2.2}
-                  />
-                </View>
-                <Text
-                  style={[
-                    styles.userRoleTabText,
-                    role === 'VENDOR' && styles.userRoleTabTextActiveVendor,
-                  ]}
-                >
-                  Vendor
-                </Text>
-              </TouchableOpacity>
+            {/* Mobile Number Field */}
+            <MobileNumberField
+              value={mobileNumber}
+              onChangeText={handleMobileChange}
+              error={inlineError || undefined}
+            />
 
-              {/* Option 3: Driver */}
+            {/* Remember Me & Forgot Number Row */}
+            <View style={styles.optionsRow}>
+              <CustomCheckbox
+                checked={rememberMe}
+                onChange={setRememberMe}
+                label="Remember Me"
+              />
+
               <TouchableOpacity
-                style={[
-                  styles.userRoleTab,
-                  role === 'DRIVER' && styles.userRoleTabActiveDriver,
-                ]}
-                onPress={() => handleSelectRole('DRIVER')}
-                activeOpacity={0.8}
+                onPress={() => setIsForgotModalVisible(true)}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <View
-                  style={[
-                    styles.userRoleTabIconWrap,
-                    role === 'DRIVER' ? styles.userRoleTabIconDriverActive : styles.userRoleTabIconInactive,
-                  ]}
-                >
-                  <UserCheck
-                    size={17}
-                    color={role === 'DRIVER' ? '#FFFFFF' : '#64748B'}
-                    strokeWidth={2.2}
-                  />
-                </View>
-                <Text
-                  style={[
-                    styles.userRoleTabText,
-                    role === 'DRIVER' && styles.userRoleTabTextActiveDriver,
-                  ]}
-                >
-                  Driver
-                </Text>
+                <Text style={styles.forgotText}>Forgot Number?</Text>
               </TouchableOpacity>
             </View>
 
-          </View>
+            {/* Inline Error Message */}
+            {inlineError ? (
+              <ErrorMessage
+                message={inlineError}
+                onDismiss={() => setInlineError(null)}
+              />
+            ) : null}
 
-          {/* Input: 10-Digit Mobile Number */}
-          <View style={styles.inputContainer}>
-            <Phone size={18} color="#94A3B8" style={styles.inputLeadingIcon} />
-            <Text style={styles.prefixText}>+91 </Text>
-            <TextInput
-              style={styles.textInput}
-              placeholder="10-digit Mobile Number"
-              placeholderTextColor="#94A3B8"
-              value={mobileNumber}
-              onChangeText={setMobileNumber}
-              keyboardType="phone-pad"
-              maxLength={10}
+            {/* Primary Action Button: Send OTP & Login */}
+            <PrimaryButton
+              title="Send OTP & Login"
+              onPress={handleLogin}
+              loading={loading}
+              disabled={!isMobileValid || loading}
+              showArrow
+              style={styles.primaryBtn}
+            />
+
+            {/* Divider: ─── OR ─── */}
+            <View style={styles.dividerWrap}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>OR</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            {/* Dynamic Registration CTA */}
+            <SecondaryButton
+              role={role}
+              onPress={() => {
+                const phone = mobileNumber.replace(/[^0-9]/g, '').slice(-10);
+                if (onNavigateToRegistration) {
+                  onNavigateToRegistration(role, phone);
+                } else if (onRegisterPress) {
+                  onRegisterPress();
+                }
+              }}
             />
           </View>
-
-          {/* Options: Remember Me */}
-          <View style={styles.optionsRow}>
-            <TouchableOpacity
-              style={styles.rememberRow}
-              onPress={() => setRememberMe(!rememberMe)}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.checkbox, rememberMe && styles.checkboxActive]}>
-                {rememberMe && <Check size={12} color="#FFFFFF" strokeWidth={3} />}
-              </View>
-              <Text style={styles.rememberText}>Remember Me</Text>
-            </TouchableOpacity>
-
-            <View style={{ flex: 1 }} />
-          </View>
-
-          {/* Primary Action Button: Login with OTP */}
-          <TouchableOpacity
-            style={styles.loginBtn}
-            onPress={handleLogin}
-            disabled={loading}
-            activeOpacity={0.85}
-          >
-            {loading ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
-            ) : (
-              <>
-                <Text style={styles.loginBtnText}>Send OTP & Login</Text>
-                <ArrowRight size={18} color="#FFFFFF" strokeWidth={2.5} />
-              </>
-            )}
-          </TouchableOpacity>
-
-          {/* Don't have an account? Register link */}
-          {onRegisterPress && (
-            <TouchableOpacity
-              style={styles.registerRow}
-              onPress={onRegisterPress}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.registerText}>Don't have an account? </Text>
-              <Text style={styles.registerLink}>
-                {role === 'CLIENT' ? 'Register as Client' : role === 'VENDOR' ? 'Register as Vendor' : 'Register as Driver'}
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          <View style={{ flex: 1, minHeight: 20 }} />
-
-          {/* Bottom Scenic Truck & Wave Decoration */}
-          <AuthBottomDecoration height={180} />
         </ScrollView>
       </KeyboardAvoidingView>
 
+      {/* Account Type Bottom Sheet Modal */}
+      <AccountTypeBottomSheet
+        visible={isRoleSheetVisible}
+        selectedRole={role}
+        onSelectRole={handleSelectRole}
+        onClose={() => setIsRoleSheetVisible(false)}
+      />
 
+      {/* Forgot Number Dedicated Recovery Modal */}
+      <ForgotNumberModal
+        visible={isForgotModalVisible}
+        currentRole={role}
+        onClose={() => setIsForgotModalVisible(false)}
+        onRecovered={(foundMobile) => {
+          setMobileNumber(foundMobile);
+          setIsForgotModalVisible(false);
+        }}
+      />
 
-      {/* Improved Notice Popup: Clean rounded design, orange warning icon, balanced spacing, subtle shadow, prominent orange OK button */}
+      {/* Notice Popup Modal */}
       <Modal
         visible={noticeModal.visible}
         transparent
@@ -366,7 +326,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
       >
         <View style={styles.centerModalOverlay}>
           <View style={styles.noticeCard}>
-            {/* Close 'X' Button on Right Side */}
             <TouchableOpacity
               style={styles.modalCloseXBtn}
               onPress={handleCloseNotice}
@@ -376,16 +335,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               <X size={18} color="#64748B" strokeWidth={2.4} />
             </TouchableOpacity>
 
-            {/* Orange Warning Icon Badge */}
             <View style={styles.noticeWarningBadge}>
-              <AlertTriangle size={34} color="#F05A22" strokeWidth={2.4} />
+              <AlertTriangle size={32} color="#F15A24" strokeWidth={2.4} />
             </View>
 
-            {/* Clear Title & Friendly Message */}
             <Text style={styles.noticeCardTitle}>{noticeModal.title || 'Notice'}</Text>
             <Text style={styles.noticeCardMessage}>{noticeModal.message}</Text>
 
-            {/* Prominent Orange OK Button Matching Brand */}
             <TouchableOpacity
               style={styles.noticeOkBtn}
               onPress={handleCloseNotice}
@@ -397,7 +353,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         </View>
       </Modal>
 
-      {/* Registration Notification Modal: Block Unregistered Users */}
+      {/* Not Registered Modal */}
       <Modal
         visible={showNotRegisteredModal}
         transparent
@@ -406,7 +362,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
       >
         <View style={styles.centerModalOverlay}>
           <View style={styles.alertCard}>
-            {/* Close 'X' Button on Right Side */}
             <TouchableOpacity
               style={styles.modalCloseXBtn}
               onPress={handleTryAgain}
@@ -417,20 +372,17 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             </TouchableOpacity>
 
             <View style={styles.alertWarningBadge}>
-              <AlertTriangle size={34} color="#F05A22" strokeWidth={2.4} />
+              <AlertTriangle size={32} color="#F15A24" strokeWidth={2.4} />
             </View>
 
             <Text style={styles.alertCardTitle}>Registration Required</Text>
-            
             <Text style={styles.notRegisteredHeadline}>
               You are not registered yet. Please register before logging in.
             </Text>
-
             <Text style={styles.alertCardBody}>
               No registered {roleLabels[role]} account was found for +91 {mobileNumber}. Please complete your registration to access the {roleLabels[role]} portal.
             </Text>
 
-            {/* Required Action Buttons: Register Now & Try Again */}
             <View style={styles.alertActionsWrap}>
               <TouchableOpacity
                 style={styles.alertPrimaryBtn}
@@ -448,14 +400,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 activeOpacity={0.75}
               >
                 <RefreshCw size={15} color="#475569" strokeWidth={2} />
-                <Text style={styles.alertSecondaryBtnText}>Try Again</Text>
+                <Text style={styles.alertSecondaryBtnText}>Try Another Number</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* Role Mismatch Notification Modal: Role-Based Authentication */}
+      {/* Wrong Role Mismatch Modal */}
       <Modal
         visible={showWrongRoleModal}
         transparent
@@ -464,7 +416,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
       >
         <View style={styles.centerModalOverlay}>
           <View style={styles.alertCard}>
-            {/* Close 'X' Button on Right Side */}
             <TouchableOpacity
               style={styles.modalCloseXBtn}
               onPress={handleTryAgain}
@@ -475,50 +426,38 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             </TouchableOpacity>
 
             <View style={styles.alertWarningBadge}>
-              <AlertTriangle size={34} color="#F05A22" strokeWidth={2.4} />
+              <AlertTriangle size={32} color="#F15A24" strokeWidth={2.4} />
             </View>
 
-            <Text style={styles.alertCardTitle}>
-              {role === 'CLIENT' ? 'Account Type Notice' : 'Registration Restricted'}
+            <Text style={styles.alertCardTitle}>Role Mismatch Detected</Text>
+            <Text style={styles.notRegisteredHeadline}>
+              This mobile number is registered as {registeredOtherRole ? roleLabels[registeredOtherRole] : 'another role'}.
             </Text>
-
-            <Text style={styles.alertCardBodyBold}>
-              {role === 'CLIENT'
-                ? `This mobile number is already registered under another account type (${registeredOtherRole === 'VENDOR' ? 'Vendor / Transporter' : 'Driver'}). Please enter the mobile number registered for your Client account, or create a new Client account.`
-                : `This mobile number is already registered under the ${registeredOtherRole === 'CLIENT' ? 'Client' : registeredOtherRole === 'VENDOR' ? 'Vendor' : 'Driver'} role. You cannot register under another role using the same mobile number.`}
+            <Text style={styles.alertCardBody}>
+              +91 {mobileNumber} is registered under the {registeredOtherRole ? roleLabels[registeredOtherRole] : 'different'} portal. You cannot log in as {roleLabels[role]}.
             </Text>
 
             <View style={styles.alertActionsWrap}>
-              {role !== 'CLIENT' && registeredOtherRole && (
+              {registeredOtherRole && (
                 <TouchableOpacity
                   style={styles.alertPrimaryBtn}
                   onPress={handleSwitchToRegisteredRole}
                   activeOpacity={0.88}
                 >
-                  <Check size={18} color="#FFFFFF" strokeWidth={2.5} />
                   <Text style={styles.alertPrimaryBtnText}>
                     Switch to {roleLabels[registeredOtherRole]} & Login
                   </Text>
+                  <ArrowRight size={16} color="#FFFFFF" strokeWidth={2.2} />
                 </TouchableOpacity>
               )}
-
-              <TouchableOpacity
-                style={role === 'CLIENT' ? styles.alertPrimaryBtn : styles.alertOutlineBtn}
-                onPress={handleRegisterNow}
-                activeOpacity={0.88}
-              >
-                <UserPlus size={16} color={role === 'CLIENT' ? '#FFFFFF' : '#C2410C'} strokeWidth={2} />
-                <Text style={role === 'CLIENT' ? styles.alertPrimaryBtnText : styles.alertOutlineBtnText}>
-                  {role === 'CLIENT' ? 'Create Client Account' : `Register as ${roleLabels[role]}`}
-                </Text>
-              </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.alertSecondaryBtn}
                 onPress={handleTryAgain}
                 activeOpacity={0.75}
               >
-                <Text style={styles.alertSecondaryBtnText}>Try Again</Text>
+                <RefreshCw size={15} color="#475569" strokeWidth={2} />
+                <Text style={styles.alertSecondaryBtnText}>Cancel</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -539,318 +478,103 @@ const styles = StyleSheet.create({
   scrollContainer: {
     flexGrow: 1,
     backgroundColor: '#FFFFFF',
+    paddingBottom: 32,
   },
   topBar: {
     paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingTop: Platform.OS === 'android' ? 12 : 8,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   backBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
   },
   logoWrap: {
     alignItems: 'center',
-    marginTop: 6,
-    marginBottom: 20,
+    justifyContent: 'center',
+    marginTop: 8,
+    marginBottom: 16,
   },
   headingWrap: {
     alignItems: 'center',
     paddingHorizontal: 24,
-    marginBottom: 20,
+    marginBottom: 28,
   },
   titleText: {
     fontSize: 28,
     fontWeight: '800',
     color: '#172B4D',
-    letterSpacing: -0.4,
-    marginBottom: 6,
+    letterSpacing: -0.5,
   },
   orangeText: {
-    color: '#F05A22',
+    color: '#F15A24',
   },
   subtitleText: {
     fontSize: 14,
-    color: '#64748B',
+    color: '#7B8798',
+    marginTop: 6,
     textAlign: 'center',
+    fontWeight: '400',
   },
-  userSelectionContainer: {
-    marginHorizontal: 24,
-    marginBottom: 16,
-  },
-  userRoleTabsRow: {
-    flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 14,
-    padding: 4,
-    gap: 6,
-  },
-  userRoleTab: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderRadius: 10,
-    gap: 6,
-  },
-  userRoleTabActiveClient: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#2563EB',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  userRoleTabActiveVendor: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#F05A22',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: '#FED7AA',
-  },
-  userRoleTabActiveDriver: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#16A34A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-  },
-  userRoleTabIconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  userRoleTabIconInactive: {
-    backgroundColor: '#E2E8F0',
-  },
-  userRoleTabIconClientActive: {
-    backgroundColor: '#2563EB',
-  },
-  userRoleTabIconVendorActive: {
-    backgroundColor: '#F05A22',
-  },
-  userRoleTabIconDriverActive: {
-    backgroundColor: '#16A34A',
-  },
-  userRoleTabText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  userRoleTabTextActiveClient: {
-    color: '#1E40AF',
-    fontWeight: '800',
-  },
-  userRoleTabTextActiveVendor: {
-    color: '#C2410C',
-    fontWeight: '800',
-  },
-  userRoleTabTextActiveDriver: {
-    color: '#15803D',
-    fontWeight: '800',
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 12,
-    marginHorizontal: 24,
-    marginBottom: 14,
-    height: 50,
-    paddingHorizontal: 14,
-  },
-  inputLeadingIcon: {
-    marginRight: 10,
-  },
-  prefixText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#172B4D',
-    marginRight: 4,
-  },
-  textInput: {
-    flex: 1,
-    fontSize: 14,
-    color: '#172B4D',
-    height: '100%',
+  formContainer: {
+    paddingHorizontal: 24,
   },
   optionsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginHorizontal: 24,
-    marginTop: 2,
-    marginBottom: 22,
-  },
-  rememberRow: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    marginTop: 14,
+    marginBottom: 20,
   },
-  checkbox: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
-    borderWidth: 1.5,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
+  forgotText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#F15A24',
   },
-  checkboxActive: {
-    backgroundColor: '#F05A22',
-    borderColor: '#F05A22',
-  },
-  rememberText: {
-    fontSize: 13,
-    color: '#172B4D',
-    fontWeight: '500',
-  },
-  loginBtn: {
-    backgroundColor: '#F05A22',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginHorizontal: 24,
-    height: 50,
-    borderRadius: 12,
-    shadowColor: '#F05A22',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  loginBtnText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
-  registerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginHorizontal: 24,
+  primaryBtn: {
     marginTop: 4,
-    marginBottom: 12,
   },
-  registerText: {
-    fontSize: 13.5,
-    color: '#64748B',
+  dividerWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 24,
   },
-  registerLink: {
-    fontSize: 13.5,
-    fontWeight: '700',
-    color: '#F05A22',
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E2E8F0',
   },
-  // Dialog & Notice Card Styles
+  dividerText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#7B8798',
+    marginHorizontal: 16,
+    letterSpacing: 0.5,
+  },
   centerModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(10, 25, 49, 0.58)',
+    backgroundColor: 'rgba(9, 30, 66, 0.54)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
   },
-  // Notice Popup Card
   noticeCard: {
     width: '100%',
-    maxWidth: 340,
+    maxWidth: 380,
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    paddingHorizontal: 26,
-    paddingTop: 28,
-    paddingBottom: 24,
+    borderRadius: 16,
+    padding: 24,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.12,
-    shadowRadius: 24,
-    elevation: 8,
     position: 'relative',
-  },
-  noticeWarningBadge: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: '#FFF7ED',
-    borderWidth: 2,
-    borderColor: '#FED7AA',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 18,
-  },
-  noticeCardTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#0A1931',
-    textAlign: 'center',
-    marginBottom: 10,
-    letterSpacing: -0.2,
-  },
-  noticeCardMessage: {
-    fontSize: 14.5,
-    color: '#475569',
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 24,
-    paddingHorizontal: 4,
-  },
-  noticeOkBtn: {
-    width: '100%',
-    height: 50,
-    backgroundColor: '#F05A22',
-    borderRadius: 25,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#F05A22',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  noticeOkBtnText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  // Alert Card
-  alertCard: {
-    width: '100%',
-    maxWidth: 360,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    paddingHorizontal: 26,
-    paddingTop: 28,
-    paddingBottom: 24,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.12,
-    shadowRadius: 24,
-    elevation: 8,
-    position: 'relative',
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 6,
   },
   modalCloseXBtn: {
     position: 'absolute',
@@ -859,60 +583,90 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
+    backgroundColor: '#F4F5F7',
     justifyContent: 'center',
+    alignItems: 'center',
     zIndex: 10,
   },
-  alertWarningBadge: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: '#FFF7ED',
-    borderWidth: 2,
-    borderColor: '#FED7AA',
-    alignItems: 'center',
+  noticeWarningBadge: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#FFF0EA',
     justifyContent: 'center',
-    marginBottom: 18,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  noticeCardTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#172B4D',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  noticeCardMessage: {
+    fontSize: 14,
+    color: '#5E6C84',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  noticeOkBtn: {
+    width: '100%',
+    height: 46,
+    backgroundColor: '#F15A24',
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  noticeOkBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  alertCard: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  alertWarningBadge: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#FFF0EA',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
   },
   alertCardTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#0A1931',
-    marginBottom: 10,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#172B4D',
+    marginBottom: 8,
     textAlign: 'center',
-    letterSpacing: -0.2,
   },
   notRegisteredHeadline: {
-    fontSize: 14.5,
-    fontWeight: '700',
-    color: '#C2410C',
-    textAlign: 'center',
-    marginBottom: 12,
-    lineHeight: 21,
-    backgroundColor: '#FFF7ED',
-    borderWidth: 1,
-    borderColor: '#FFEDD5',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    overflow: 'hidden',
-  },
-  alertCardBodyBold: {
-    fontSize: 14.5,
-    fontWeight: '700',
-    color: '#1E293B',
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#D32F2F',
     textAlign: 'center',
     marginBottom: 8,
-    lineHeight: 21,
   },
   alertCardBody: {
-    fontSize: 13.5,
-    color: '#64748B',
+    fontSize: 13,
+    color: '#5E6C84',
     textAlign: 'center',
-    lineHeight: 21,
-    marginBottom: 22,
-    paddingHorizontal: 4,
+    lineHeight: 18,
+    marginBottom: 20,
   },
   alertActionsWrap: {
     width: '100%',
@@ -922,52 +676,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F05A22',
-    height: 50,
-    borderRadius: 25,
+    height: 48,
+    backgroundColor: '#F15A24',
+    borderRadius: 10,
     gap: 8,
-    shadowColor: '#F05A22',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.28,
-    shadowRadius: 8,
-    elevation: 4,
   },
   alertPrimaryBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
     color: '#FFFFFF',
-    fontSize: 15.5,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
-  alertOutlineBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFF7ED',
-    borderWidth: 1.5,
-    borderColor: '#FED7AA',
-    height: 48,
-    borderRadius: 24,
-    gap: 8,
-  },
-  alertOutlineBtnText: {
-    color: '#C2410C',
-    fontSize: 14.5,
-    fontWeight: '700',
   },
   alertSecondaryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    height: 46,
-    borderRadius: 23,
-    gap: 6,
+    height: 44,
+    backgroundColor: '#F4F5F7',
+    borderRadius: 10,
+    gap: 8,
   },
   alertSecondaryBtnText: {
-    color: '#475569',
     fontSize: 14,
     fontWeight: '600',
+    color: '#475569',
   },
 });
