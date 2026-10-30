@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#D9E0E8',
     borderRadius: 12,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     justifyContent: 'center',
   },
   containerWithLabel: {
