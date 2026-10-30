@@ -70,10 +70,10 @@ describe('THE TRUCKX - Premium Mobile Login & Authentication Architecture', () =
       expect(mobileFieldCode).toContain('10');
     });
 
-    it('implements custom Remember Me checkbox and functional Forgot Number recovery flow', () => {
+    it('implements custom Remember Me checkbox and omits forgot number option on login screen', () => {
       expect(loginScreenCode).toContain('CustomCheckbox');
-      expect(loginScreenCode).toContain('ForgotNumberModal');
-      expect(loginScreenCode).toContain('Forgot Number?');
+      expect(loginScreenCode).not.toContain('Forgot Number?');
+      expect(loginScreenCode).not.toContain('ForgotNumberModal');
       const forgotModalCode = fs.readFileSync(path.join(authComponentsDir, 'ForgotNumberModal.tsx'), 'utf-8');
       expect(forgotModalCode).toContain('Account Recovery');
       expect(forgotModalCode).toContain('1800-TRUCKX');

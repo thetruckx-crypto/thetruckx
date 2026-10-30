@@ -28,7 +28,6 @@ import {
   AccountTypeSelector,
   AccountTypeBottomSheet,
   ErrorMessage,
-  ForgotNumberModal,
 } from '../../../components/auth';
 import { authService, AuthSessionData } from '../../../services/authService';
 import { MobileRole } from '../../../types';
@@ -57,7 +56,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   const [rememberMe, setRememberMe] = useState(true);
   const [role, setRole] = useState<MobileRole>(selectedRole);
   const [isRoleSheetVisible, setIsRoleSheetVisible] = useState(false);
-  const [isForgotModalVisible, setIsForgotModalVisible] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [inlineError, setInlineError] = useState<string | null>(null);
@@ -240,21 +238,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               error={inlineError || undefined}
             />
 
-            {/* Remember Me & Forgot Number Row */}
+            {/* Remember Me Option */}
             <View style={styles.optionsRow}>
               <CustomCheckbox
                 checked={rememberMe}
                 onChange={setRememberMe}
                 label="Remember Me"
               />
-
-              <TouchableOpacity
-                onPress={() => setIsForgotModalVisible(true)}
-                activeOpacity={0.7}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Text style={styles.forgotText}>Forgot Number?</Text>
-              </TouchableOpacity>
             </View>
 
             {/* Inline Error Message */}
@@ -304,17 +294,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         selectedRole={role}
         onSelectRole={handleSelectRole}
         onClose={() => setIsRoleSheetVisible(false)}
-      />
-
-      {/* Forgot Number Dedicated Recovery Modal */}
-      <ForgotNumberModal
-        visible={isForgotModalVisible}
-        currentRole={role}
-        onClose={() => setIsForgotModalVisible(false)}
-        onRecovered={(foundMobile) => {
-          setMobileNumber(foundMobile);
-          setIsForgotModalVisible(false);
-        }}
       />
 
       {/* Notice Popup Modal */}
@@ -525,15 +504,9 @@ const styles = StyleSheet.create({
   },
   optionsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: 14,
     marginBottom: 20,
-  },
-  forgotText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#F15A24',
   },
   primaryBtn: {
     marginTop: 4,
