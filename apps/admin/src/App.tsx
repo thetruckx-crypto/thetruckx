@@ -472,8 +472,24 @@ function AdminShell() {
 
   // Sidebar responsive & collapse state
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 1024);
-  const [desktopCollapsed, setDesktopCollapsed] = useState(false);
+  const [desktopCollapsed, setDesktopCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('thetruckx_admin_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [isSmallScreen, setIsSmallScreen] = useState(window.innerWidth < 1024);
+
+  const toggleDesktopSidebar = () => {
+    setDesktopCollapsed(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('thetruckx_admin_sidebar_collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  };
 
   useEffect(() => {
     const handleResize = () => {
@@ -788,8 +804,96 @@ function AdminShell() {
     }
   };
 
-  const sidebarWidth = isSmallScreen ? 270 : (desktopCollapsed ? 74 : 270);
+  const sidebarWidth = isSmallScreen ? 280 : (desktopCollapsed ? 84 : 280);
   const placeholderModules: string[] = [];
+
+  const renderNavItem = (
+    navKey: string,
+    route: string,
+    label: string,
+    IconComponent: React.ComponentType<{ size?: string | number; className?: string }> | React.ComponentType<any>,
+    badgeCount?: number
+  ) => {
+    const active = isNav(navKey);
+    const handleClick = () => {
+      if (navKey === 'notifications') {
+        setIsNotifOpen(true);
+      } else {
+        navTo(route);
+      }
+    };
+
+    return (
+      <div
+        key={navKey}
+        className={`nav-item ${active ? 'active-orange' : ''}`}
+        onClick={handleClick}
+        title={desktopCollapsed && !isSmallScreen ? undefined : label}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleClick();
+          }
+        }}
+        aria-label={label}
+        aria-current={active ? 'page' : undefined}
+      >
+        <IconComponent size={18} />
+        <span>{label}</span>
+        {Boolean(badgeCount && badgeCount > 0) && (
+          <span className="nav-badge-red">{badgeCount}</span>
+        )}
+        <ChevronRight size={14} className="nav-chevron" />
+        {desktopCollapsed && !isSmallScreen && (
+          <div className="nav-item-floating-tooltip">
+            {label}
+            {Boolean(badgeCount && badgeCount > 0) ? ` (${badgeCount})` : ''}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderSectionHeader = (
+    sectionKey: string,
+    label: string,
+    shortLetter: string
+  ) => {
+    if (desktopCollapsed && !isSmallScreen) {
+      return (
+        <div className="nav-collapsed-group-badge" title={`Group ${shortLetter}: ${label}`}>
+          <span>{shortLetter}</span>
+          <div className="nav-item-floating-tooltip">
+            {label}
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div
+        className="nav-section-label clickable"
+        onClick={() => toggleSection(sectionKey)}
+        title={`Toggle ${label}`}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            toggleSection(sectionKey);
+          }
+        }}
+        aria-expanded={!collapsedSections[sectionKey]}
+      >
+        <span>{label}</span>
+        <ChevronDown
+          size={13}
+          className={`section-chevron ${collapsedSections[sectionKey] ? 'rotated' : ''}`}
+        />
+      </div>
+    );
+  };
 
   return (
     <div className="admin-shell">
@@ -810,7 +914,7 @@ function AdminShell() {
         style={{
           width: `${sidebarWidth}px`,
           left: isSmallScreen ? (sidebarOpen ? 0 : `-${sidebarWidth + 6}px`) : 0,
-          transition: 'left 0.3s cubic-bezier(0.16,1,0.3,1), width 0.3s cubic-bezier(0.16,1,0.3,1)',
+          transition: 'left 0.25s cubic-bezier(0.16,1,0.3,1), width 0.25s cubic-bezier(0.16,1,0.3,1)',
           zIndex: isSmallScreen ? 200 : 40,
           boxShadow: sidebarOpen && isSmallScreen ? '4px 0 32px rgba(23,43,77,0.25)' : 'none',
         }}
@@ -839,24 +943,9 @@ function AdminShell() {
              ══════════════════════════════════════════════════════════════════════════ */}
           {hasPermission('dashboard', 'view') && (
             <div className="nav-section-group">
-              <div
-                className="nav-section-label clickable"
-                onClick={() => toggleSection('overview')}
-                title="Toggle Overview"
-              >
-                <span>A. OVERVIEW</span>
-                <ChevronDown size={13} className={`section-chevron ${collapsedSections.overview ? 'rotated' : ''}`} />
-              </div>
-              {!collapsedSections.overview && (
-                <div
-                  className={`nav-item ${isNav('dashboard') ? 'active-orange' : ''}`}
-                  onClick={() => navTo('/admin/dashboard')}
-                  title="Dashboard"
-                >
-                  <LayoutDashboard size={18} />
-                  <span>Dashboard</span>
-                  <ChevronRight size={14} className="nav-chevron" />
-                </div>
+              {renderSectionHeader('overview', 'A. OVERVIEW', 'A')}
+              {(!collapsedSections.overview || (desktopCollapsed && !isSmallScreen)) && (
+                renderNavItem('dashboard', '/admin/dashboard', 'Dashboard', LayoutDashboard)
               )}
             </div>
           )}
@@ -870,92 +959,19 @@ function AdminShell() {
             hasPermission('bookings', 'view') ||
             hasPermission('payments', 'view')) && (
             <div className="nav-section-group">
-              <div
-                className="nav-section-label clickable"
-                onClick={() => toggleSection('client')}
-                title="Toggle Client Management"
-              >
-                <span>B. CLIENT MANAGEMENT</span>
-                <ChevronDown size={13} className={`section-chevron ${collapsedSections.client ? 'rotated' : ''}`} />
-              </div>
-              {!collapsedSections.client && (
+              {renderSectionHeader('client', 'B. CLIENT MANAGEMENT', 'B')}
+              {(!collapsedSections.client || (desktopCollapsed && !isSmallScreen)) && (
                 <>
-                  {/* 2. Clients */}
-                  {hasPermission('clients', 'view') && (
-                    <div
-                      className={`nav-item ${isNav('clients') ? 'active-orange' : ''}`}
-                      onClick={() => navTo('/admin/clients')}
-                      title="Clients"
-                    >
-                      <Users size={18} />
-                      <span>Clients</span>
-                      {Boolean(navBadges.clients && navBadges.clients > 0) && (
-                        <span className="nav-badge-red">{navBadges.clients}</span>
-                      )}
-                      <ChevronRight size={14} className="nav-chevron" />
-                    </div>
-                  )}
-
-                  {/* 3. Client Requirements */}
-                  {hasPermission('requirements', 'view') && (
-                    <div
-                      className={`nav-item ${isNav('requirements') ? 'active-orange' : ''}`}
-                      onClick={() => navTo('/admin/requirements')}
-                      title="Client Requirements"
-                    >
-                      <FileSpreadsheet size={18} />
-                      <span>Client Requirements</span>
-                      {Boolean(navBadges.requirements && navBadges.requirements > 0) && (
-                        <span className="nav-badge-red">{navBadges.requirements}</span>
-                      )}
-                      <ChevronRight size={14} className="nav-chevron" />
-                    </div>
-                  )}
-
-                  {/* 4. Client Quotations */}
-                  {(hasPermission('pricing', 'view') || hasPermission('quotations', 'view')) && (
-                    <div
-                      className={`nav-item ${isNav('client-quotations') ? 'active-orange' : ''}`}
-                      onClick={() => navTo('/admin/pricing')}
-                      title="Client Quotations"
-                    >
-                      <Receipt size={18} />
-                      <span>Client Quotations</span>
-                      <ChevronRight size={14} className="nav-chevron" />
-                    </div>
-                  )}
-
-                  {/* 5. Bookings */}
-                  {hasPermission('bookings', 'view') && (
-                    <div
-                      className={`nav-item ${isNav('bookings') ? 'active-orange' : ''}`}
-                      onClick={() => navTo('/admin/bookings')}
-                      title="Bookings"
-                    >
-                      <CalendarCheck size={18} />
-                      <span>Bookings</span>
-                      {Boolean(navBadges.bookings && navBadges.bookings > 0) && (
-                        <span className="nav-badge-red">{navBadges.bookings}</span>
-                      )}
-                      <ChevronRight size={14} className="nav-chevron" />
-                    </div>
-                  )}
-
-                  {/* 6. Client Payments */}
-                  {hasPermission('payments', 'view') && (
-                    <div
-                      className={`nav-item ${isNav('client-payments') ? 'active-orange' : ''}`}
-                      onClick={() => navTo('/admin/payments?tab=client')}
-                      title="Client Payments"
-                    >
-                      <IndianRupee size={18} />
-                      <span>Client Payments</span>
-                      {Boolean(navBadges.payments && navBadges.payments > 0) && (
-                        <span className="nav-badge-red">{navBadges.payments}</span>
-                      )}
-                      <ChevronRight size={14} className="nav-chevron" />
-                    </div>
-                  )}
+                  {hasPermission('clients', 'view') &&
+                    renderNavItem('clients', '/admin/clients', 'Clients', Users, navBadges.clients)}
+                  {hasPermission('requirements', 'view') &&
+                    renderNavItem('requirements', '/admin/requirements', 'Client Requirements', FileSpreadsheet, navBadges.requirements)}
+                  {(hasPermission('pricing', 'view') || hasPermission('quotations', 'view')) &&
+                    renderNavItem('client-quotations', '/admin/pricing', 'Client Quotations', Receipt)}
+                  {hasPermission('bookings', 'view') &&
+                    renderNavItem('bookings', '/admin/bookings', 'Bookings', CalendarCheck, navBadges.bookings)}
+                  {hasPermission('payments', 'view') &&
+                    renderNavItem('client-payments', '/admin/payments?tab=client', 'Client Payments', IndianRupee, navBadges.payments)}
                 </>
               )}
             </div>
@@ -970,131 +986,25 @@ function AdminShell() {
             hasPermission('drivers', 'view') ||
             hasPermission('payments', 'view')) && (
             <div className="nav-section-group">
-              <div
-                className="nav-section-label clickable"
-                onClick={() => toggleSection('vendor')}
-                title="Toggle Vendor Management"
-              >
-                <span>C. VENDOR MANAGEMENT</span>
-                <ChevronDown size={13} className={`section-chevron ${collapsedSections.vendor ? 'rotated' : ''}`} />
-              </div>
-              {!collapsedSections.vendor && (
+              {renderSectionHeader('vendor', 'C. VENDOR MANAGEMENT', 'C')}
+              {(!collapsedSections.vendor || (desktopCollapsed && !isSmallScreen)) && (
                 <>
-                  {/* 7. Vendors */}
-                  {hasPermission('vendors', 'view') && (
-                    <div
-                      className={`nav-item ${isNav('vendors') ? 'active-orange' : ''}`}
-                      onClick={() => navTo('/admin/vendors')}
-                      title="Vendors"
-                    >
-                      <Building2 size={18} />
-                      <span>Vendors</span>
-                      {Boolean(navBadges.vendors && navBadges.vendors > 0) && (
-                        <span className="nav-badge-red">{navBadges.vendors}</span>
-                      )}
-                      <ChevronRight size={14} className="nav-chevron" />
-                    </div>
-                  )}
-
-                  {/* 8. Vendor Verification */}
-                  {hasPermission('vendors', 'view') && (
-                    <div
-                      className={`nav-item ${isNav('vendor-verification') ? 'active-orange' : ''}`}
-                      onClick={() => navTo('/admin/vendors/verification-requests')}
-                      title="Vendor Verification"
-                    >
-                      <UserCheck size={18} />
-                      <span>Vendor Verification</span>
-                      {Boolean(navBadges.vendors && navBadges.vendors > 0) && (
-                        <span className="nav-badge-red">{navBadges.vendors}</span>
-                      )}
-                      <ChevronRight size={14} className="nav-chevron" />
-                    </div>
-                  )}
-
-                  {/* 9. Sourcing & RFQ */}
-                  {hasPermission('quotations', 'view') && (
-                    <div
-                      className={`nav-item ${isNav('sourcing-rfq') ? 'active-orange' : ''}`}
-                      onClick={() => navTo('/admin/quotations?tab=rfq')}
-                      title="Sourcing & RFQ"
-                    >
-                      <Layers size={18} />
-                      <span>Sourcing & RFQ</span>
-                      {Boolean(navBadges.quotations && navBadges.quotations > 0) && (
-                        <span className="nav-badge-red">{navBadges.quotations}</span>
-                      )}
-                      <ChevronRight size={14} className="nav-chevron" />
-                    </div>
-                  )}
-
-                  {/* 10. Vendor Quotations */}
-                  {hasPermission('quotations', 'view') && (
-                    <div
-                      className={`nav-item ${isNav('vendor-quotations') ? 'active-orange' : ''}`}
-                      onClick={() => navTo('/admin/vendor-quotations')}
-                      title="Vendor Quotations"
-                    >
-                      <DollarSign size={18} />
-                      <span>Vendor Quotations</span>
-                      <ChevronRight size={14} className="nav-chevron" />
-                    </div>
-                  )}
-
-                  {/* 11. Fleet & Vehicles */}
-                  {hasPermission('fleet', 'view') && (
-                    <div
-                      className={`nav-item ${isNav('fleet') ? 'active-orange' : ''}`}
-                      onClick={() => navTo('/admin/fleet')}
-                      title="Fleet & Vehicles"
-                    >
-                      <Truck size={18} />
-                      <span>Fleet & Vehicles</span>
-                      <ChevronRight size={14} className="nav-chevron" />
-                    </div>
-                  )}
-
-                  {/* 12. Drivers */}
-                  {hasPermission('drivers', 'view') && (
-                    <div
-                      className={`nav-item ${isNav('drivers') ? 'active-orange' : ''}`}
-                      onClick={() => navTo('/admin/drivers')}
-                      title="Drivers"
-                    >
-                      <Users size={18} />
-                      <span>Drivers</span>
-                      {Boolean(navBadges.drivers && navBadges.drivers > 0) && (
-                        <span className="nav-badge-red">{navBadges.drivers}</span>
-                      )}
-                      <ChevronRight size={14} className="nav-chevron" />
-                    </div>
-                  )}
-
-                  {/* 13. Vehicle & Driver Assignment */}
-                  {hasPermission('fleet', 'view') && (
-                    <div
-                      className={`nav-item ${isNav('fleet-assignment') ? 'active-orange' : ''}`}
-                      onClick={() => navTo('/admin/fleet/tie-up-approval')}
-                      title="Vehicle & Driver Assignment"
-                    >
-                      <ShieldCheck size={18} />
-                      <span>Vehicle & Driver Assignment</span>
-                      <ChevronRight size={14} className="nav-chevron" />
-                    </div>
-                  )}
-
-                  {/* 14. Vendor Payments & Settlements */}
-                  {hasPermission('payments', 'view') && (
-                    <div
-                      className={`nav-item ${isNav('vendor-payments') ? 'active-orange' : ''}`}
-                      onClick={() => navTo('/admin/payments?tab=vendor')}
-                      title="Vendor Payments & Settlements"
-                    >
-                      <IndianRupee size={18} />
-                      <span>Vendor Payments & Settlements</span>
-                      <ChevronRight size={14} className="nav-chevron" />
-                    </div>
-                  )}
+                  {hasPermission('vendors', 'view') &&
+                    renderNavItem('vendors', '/admin/vendors', 'Vendors', Building2, navBadges.vendors)}
+                  {hasPermission('vendors', 'view') &&
+                    renderNavItem('vendor-verification', '/admin/vendors/verification-requests', 'Vendor Verification', UserCheck, navBadges.vendors)}
+                  {hasPermission('quotations', 'view') &&
+                    renderNavItem('sourcing-rfq', '/admin/quotations?tab=rfq', 'Sourcing & RFQ', Layers, navBadges.quotations)}
+                  {hasPermission('quotations', 'view') &&
+                    renderNavItem('vendor-quotations', '/admin/vendor-quotations', 'Vendor Quotations', DollarSign)}
+                  {hasPermission('fleet', 'view') &&
+                    renderNavItem('fleet', '/admin/fleet', 'Fleet & Vehicles', Truck)}
+                  {hasPermission('drivers', 'view') &&
+                    renderNavItem('drivers', '/admin/drivers', 'Drivers', Users, navBadges.drivers)}
+                  {hasPermission('fleet', 'view') &&
+                    renderNavItem('fleet-assignment', '/admin/fleet/tie-up-approval', 'Vehicle & Driver Assignment', ShieldCheck)}
+                  {hasPermission('payments', 'view') &&
+                    renderNavItem('vendor-payments', '/admin/payments?tab=vendor', 'Vendor Payments & Settlements', IndianRupee)}
                 </>
               )}
             </div>
@@ -1108,73 +1018,17 @@ function AdminShell() {
             hasPermission('weighbridge', 'view') ||
             hasPermission('pod', 'view')) && (
             <div className="nav-section-group">
-              <div
-                className="nav-section-label clickable"
-                onClick={() => toggleSection('operations')}
-                title="Toggle Trip Operations"
-              >
-                <span>D. TRIP OPERATIONS</span>
-                <ChevronDown size={13} className={`section-chevron ${collapsedSections.operations ? 'rotated' : ''}`} />
-              </div>
-              {!collapsedSections.operations && (
+              {renderSectionHeader('operations', 'D. TRIP OPERATIONS', 'D')}
+              {(!collapsedSections.operations || (desktopCollapsed && !isSmallScreen)) && (
                 <>
-                  {/* 15. Pre-Trip & Document Verification */}
-                  {hasPermission('documents', 'view') && (
-                    <div
-                      className={`nav-item ${isNav('documents') ? 'active-orange' : ''}`}
-                      onClick={() => navTo('/admin/documents')}
-                      title="Pre-Trip & Document Verification"
-                    >
-                      <ShieldCheck size={18} />
-                      <span>Pre-Trip & Document Verification</span>
-                      {Boolean(navBadges.documents && navBadges.documents > 0) && (
-                        <span className="nav-badge-red">{navBadges.documents}</span>
-                      )}
-                      <ChevronRight size={14} className="nav-chevron" />
-                    </div>
-                  )}
-
-                  {/* 16. Trip Tracking */}
-                  {hasPermission('tracking', 'view') && (
-                    <div
-                      className={`nav-item ${isNav('tracking') ? 'active-orange' : ''}`}
-                      onClick={() => navTo('/admin/tracking')}
-                      title="Trip Tracking"
-                    >
-                      <Compass size={18} />
-                      <span>Trip Tracking</span>
-                      <ChevronRight size={14} className="nav-chevron" />
-                    </div>
-                  )}
-
-                  {/* 17. Weighbridge & Freight Bills */}
-                  {hasPermission('weighbridge', 'view') && (
-                    <div
-                      className={`nav-item ${isNav('weighbridge') ? 'active-orange' : ''}`}
-                      onClick={() => navTo('/admin/weighbridge')}
-                      title="Weighbridge & Freight Bills"
-                    >
-                      <Scale size={18} />
-                      <span>Weighbridge & Freight Bills</span>
-                      <ChevronRight size={14} className="nav-chevron" />
-                    </div>
-                  )}
-
-                  {/* 18. POD & Trip Closure */}
-                  {hasPermission('pod', 'view') && (
-                    <div
-                      className={`nav-item ${isNav('pod') ? 'active-orange' : ''}`}
-                      onClick={() => navTo('/admin/pod')}
-                      title="POD & Trip Closure"
-                    >
-                      <CheckSquare size={18} />
-                      <span>POD & Trip Closure</span>
-                      {Boolean(navBadges.pod && navBadges.pod > 0) && (
-                        <span className="nav-badge-red">{navBadges.pod}</span>
-                      )}
-                      <ChevronRight size={14} className="nav-chevron" />
-                    </div>
-                  )}
+                  {hasPermission('documents', 'view') &&
+                    renderNavItem('documents', '/admin/documents', 'Pre-Trip & Document Verification', ShieldCheck, navBadges.documents)}
+                  {hasPermission('tracking', 'view') &&
+                    renderNavItem('tracking', '/admin/tracking', 'Trip Tracking', Compass)}
+                  {hasPermission('weighbridge', 'view') &&
+                    renderNavItem('weighbridge', '/admin/weighbridge', 'Weighbridge & Freight Bills', Scale)}
+                  {hasPermission('pod', 'view') &&
+                    renderNavItem('pod', '/admin/pod', 'POD & Trip Closure', CheckSquare, navBadges.pod)}
                 </>
               )}
             </div>
@@ -1185,61 +1039,14 @@ function AdminShell() {
              ══════════════════════════════════════════════════════════════════════════ */}
           {(hasPermission('exceptions', 'view') || hasPermission('communications', 'view')) && (
             <div className="nav-section-group">
-              <div
-                className="nav-section-label clickable"
-                onClick={() => toggleSection('exceptions')}
-                title="Toggle Exceptions & Communications"
-              >
-                <span>E. EXCEPTIONS & COMMUNICATIONS</span>
-                <ChevronDown size={13} className={`section-chevron ${collapsedSections.exceptions ? 'rotated' : ''}`} />
-              </div>
-              {!collapsedSections.exceptions && (
+              {renderSectionHeader('exceptions', 'E. EXCEPTIONS & COMMUNICATIONS', 'E')}
+              {(!collapsedSections.exceptions || (desktopCollapsed && !isSmallScreen)) && (
                 <>
-                  {/* 19. Exceptions */}
-                  {hasPermission('exceptions', 'view') && (
-                    <div
-                      className={`nav-item ${isNav('exceptions') ? 'active-orange' : ''}`}
-                      onClick={() => navTo('/admin/exceptions')}
-                      title="Exceptions"
-                    >
-                      <AlertTriangle size={18} />
-                      <span>Exceptions</span>
-                      {Boolean(navBadges.exceptions && navBadges.exceptions > 0) && (
-                        <span className="nav-badge-red">{navBadges.exceptions}</span>
-                      )}
-                      <ChevronRight size={14} className="nav-chevron" />
-                    </div>
-                  )}
-
-                  {/* 20. Communications */}
-                  {hasPermission('communications', 'view') && (
-                    <div
-                      className={`nav-item ${isNav('communications') ? 'active-orange' : ''}`}
-                      onClick={() => navTo('/admin/communications')}
-                      title="Communications"
-                    >
-                      <MessageSquare size={18} />
-                      <span>Communications</span>
-                      {Boolean(unreadChatCount > 0) && (
-                        <span className="nav-badge-red">{unreadChatCount}</span>
-                      )}
-                      <ChevronRight size={14} className="nav-chevron" />
-                    </div>
-                  )}
-
-                  {/* 21. Notifications */}
-                  <div
-                    className={`nav-item ${isNav('notifications') ? 'active-orange' : ''}`}
-                    onClick={() => setIsNotifOpen(true)}
-                    title="Notifications"
-                  >
-                    <Bell size={18} />
-                    <span>Notifications</span>
-                    {Boolean(unreadNotifCount > 0) && (
-                      <span className="nav-badge-red">{unreadNotifCount}</span>
-                    )}
-                    <ChevronRight size={14} className="nav-chevron" />
-                  </div>
+                  {hasPermission('exceptions', 'view') &&
+                    renderNavItem('exceptions', '/admin/exceptions', 'Exceptions', AlertTriangle, navBadges.exceptions)}
+                  {hasPermission('communications', 'view') &&
+                    renderNavItem('communications', '/admin/communications', 'Communications', MessageSquare, unreadChatCount)}
+                  {renderNavItem('notifications', '#notifications', 'Notifications', Bell, unreadNotifCount)}
                 </>
               )}
             </div>
@@ -1250,41 +1057,13 @@ function AdminShell() {
              ══════════════════════════════════════════════════════════════════════════ */}
           {(hasPermission('reports', 'view') || adminProfile?.role === 'SUPER_ADMIN') && (
             <div className="nav-section-group">
-              <div
-                className="nav-section-label clickable"
-                onClick={() => toggleSection('reports')}
-                title="Toggle Reports & Analytics"
-              >
-                <span>F. REPORTS & ANALYTICS</span>
-                <ChevronDown size={13} className={`section-chevron ${collapsedSections.reports ? 'rotated' : ''}`} />
-              </div>
-              {!collapsedSections.reports && (
+              {renderSectionHeader('reports', 'F. REPORTS & ANALYTICS', 'F')}
+              {(!collapsedSections.reports || (desktopCollapsed && !isSmallScreen)) && (
                 <>
-                  {/* 22. Reports & Analytics */}
-                  {hasPermission('reports', 'view') && (
-                    <div
-                      className={`nav-item ${isNav('reports') ? 'active-orange' : ''}`}
-                      onClick={() => navTo('/admin/reports')}
-                      title="Reports & Analytics"
-                    >
-                      <BarChart3 size={18} />
-                      <span>Reports & Analytics</span>
-                      <ChevronRight size={14} className="nav-chevron" />
-                    </div>
-                  )}
-
-                  {/* 23. Commercial Analytics */}
-                  {(adminProfile?.role === 'SUPER_ADMIN' || hasPermission('reports', 'view')) && (
-                    <div
-                      className={`nav-item ${isNav('superadmin/analytics') ? 'active-orange' : ''}`}
-                      onClick={() => navTo('/admin/superadmin/analytics')}
-                      title="Commercial Analytics"
-                    >
-                      <TrendingUp size={18} />
-                      <span>Commercial Analytics</span>
-                      <ChevronRight size={14} className="nav-chevron" />
-                    </div>
-                  )}
+                  {hasPermission('reports', 'view') &&
+                    renderNavItem('reports', '/admin/reports', 'Reports & Analytics', BarChart3)}
+                  {(adminProfile?.role === 'SUPER_ADMIN' || hasPermission('reports', 'view')) &&
+                    renderNavItem('superadmin/analytics', '/admin/superadmin/analytics', 'Commercial Analytics', TrendingUp)}
                 </>
               )}
             </div>
@@ -1296,59 +1075,13 @@ function AdminShell() {
           {/* Section: Settings (Super Admin Only) */}
           {adminProfile?.role === 'SUPER_ADMIN' && (
             <div className="nav-section-group">
-              <div
-                className="nav-section-label clickable"
-                onClick={() => toggleSection('access')}
-                title="Toggle Access & Configuration"
-              >
-                <span>G. ACCESS & CONFIGURATION</span>
-                <ChevronDown size={13} className={`section-chevron ${collapsedSections.access ? 'rotated' : ''}`} />
-              </div>
-              {!collapsedSections.access && (
+              {renderSectionHeader('access', 'G. ACCESS & CONFIGURATION', 'G')}
+              {(!collapsedSections.access || (desktopCollapsed && !isSmallScreen)) && (
                 <>
-                  {/* 24. Users & Permissions */}
-                  <div
-                    className={`nav-item ${isNav('superadmin/users') ? 'active-orange' : ''}`}
-                    onClick={() => navTo('/admin/superadmin/users')}
-                    title="Users & Permissions"
-                  >
-                    <Users size={18} />
-                    <span>Users & Permissions</span>
-                    <ChevronRight size={14} className="nav-chevron" />
-                  </div>
-
-                  {/* 25. RBAC Roles */}
-                  <div
-                    className={`nav-item ${isNav('superadmin/rbac') ? 'active-orange' : ''}`}
-                    onClick={() => navTo('/admin/superadmin/rbac')}
-                    title="RBAC Roles"
-                  >
-                    <Shield size={18} />
-                    <span>RBAC Roles</span>
-                    <ChevronRight size={14} className="nav-chevron" />
-                  </div>
-
-                  {/* 26. System Settings */}
-                  <div
-                    className={`nav-item ${isNav('settings') ? 'active-orange' : ''}`}
-                    onClick={() => navTo('/admin/settings')}
-                    title="System Settings"
-                  >
-                    <Settings size={18} />
-                    <span>System Settings</span>
-                    <ChevronRight size={14} className="nav-chevron" />
-                  </div>
-
-                  {/* 27. System Parameters */}
-                  <div
-                    className={`nav-item ${isNav('superadmin/system-parameters') ? 'active-orange' : ''}`}
-                    onClick={() => navTo('/admin/superadmin/system-parameters')}
-                    title="System Parameters"
-                  >
-                    <Sliders size={18} />
-                    <span>System Parameters</span>
-                    <ChevronRight size={14} className="nav-chevron" />
-                  </div>
+                  {renderNavItem('superadmin/users', '/admin/superadmin/users', 'Users & Permissions', Users)}
+                  {renderNavItem('superadmin/rbac', '/admin/superadmin/rbac', 'RBAC Roles', Shield)}
+                  {renderNavItem('settings', '/admin/settings', 'System Settings', Settings)}
+                  {renderNavItem('superadmin/system-parameters', '/admin/superadmin/system-parameters', 'System Parameters', Sliders)}
                 </>
               )}
             </div>
@@ -1359,37 +1092,11 @@ function AdminShell() {
              ══════════════════════════════════════════════════════════════════════════ */}
           {adminProfile?.role === 'SUPER_ADMIN' && (
             <div className="nav-section-group">
-              <div
-                className="nav-section-label clickable"
-                onClick={() => toggleSection('superadmin')}
-                title="Toggle Super Admin"
-              >
-                <span>H. SUPER ADMIN</span>
-                <ChevronDown size={13} className={`section-chevron ${collapsedSections.superadmin ? 'rotated' : ''}`} />
-              </div>
-              {!collapsedSections.superadmin && (
+              {renderSectionHeader('superadmin', 'H. SUPER ADMIN', 'H')}
+              {(!collapsedSections.superadmin || (desktopCollapsed && !isSmallScreen)) && (
                 <>
-                  {/* 28. Admin Users */}
-                  <div
-                    className={`nav-item ${isNav('superadmin/admin-users') ? 'active-orange' : ''}`}
-                    onClick={() => navTo('/admin/superadmin/users')}
-                    title="Admin Users"
-                  >
-                    <Users size={18} />
-                    <span>Admin Users</span>
-                    <ChevronRight size={14} className="nav-chevron" />
-                  </div>
-
-                  {/* 29. Audit Logs */}
-                  <div
-                    className={`nav-item ${isNav('superadmin/audit-logs') ? 'active-orange' : ''}`}
-                    onClick={() => navTo('/admin/superadmin/audit-logs')}
-                    title="Audit Logs"
-                  >
-                    <FileText size={18} />
-                    <span>Audit Logs</span>
-                    <ChevronRight size={14} className="nav-chevron" />
-                  </div>
+                  {renderNavItem('superadmin/admin-users', '/admin/superadmin/users', 'Admin Users', Users)}
+                  {renderNavItem('superadmin/audit-logs', '/admin/superadmin/audit-logs', 'Audit Logs', FileText)}
                 </>
               )}
             </div>
@@ -1399,25 +1106,25 @@ function AdminShell() {
 
       {/* ── MAIN ── */}
       <main
-        className="admin-main"
+        className={`admin-main ${desktopCollapsed && !isSmallScreen ? 'collapsed' : ''}`}
         style={!isSmallScreen ? {
           marginLeft: sidebarOpen ? `${sidebarWidth}px` : '0',
-          transition: 'margin-left 0.3s cubic-bezier(0.4,0,0.2,1)',
+          transition: 'margin-left 0.25s cubic-bezier(0.16,1,0.3,1)',
         } : { marginLeft: 0 }}
       >
         <header className="admin-topbar">
           <div className="topbar-left">
             <button
               className="topbar-menu-toggle"
-              title="Toggle Navigation Sidebar"
+              title={isSmallScreen ? "Toggle Navigation Sidebar" : (desktopCollapsed ? "Expand Navigation Sidebar" : "Collapse Navigation Sidebar")}
               onClick={() => {
                 if (isSmallScreen) {
                   setSidebarOpen(p => !p);
                 } else {
-                  setDesktopCollapsed(p => !p);
+                  toggleDesktopSidebar();
                 }
               }}
-              aria-label={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+              aria-label={isSmallScreen ? (sidebarOpen ? 'Close sidebar' : 'Open sidebar') : (desktopCollapsed ? 'Expand sidebar' : 'Collapse sidebar')}
             >
               <Menu size={20} />
             </button>
