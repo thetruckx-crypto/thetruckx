@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Users,
   CheckCircle2,
@@ -79,6 +80,7 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
   onNavigateToVehicleDirectory,
 }) => {
   const { hasPermission, adminProfile } = useAuth();
+  const [searchParams] = useSearchParams();
   const canDelete = hasPermission('drivers', 'delete');
   const canEdit = hasPermission('drivers', 'edit');
   const canApprove = hasPermission('drivers', 'approve');
@@ -181,6 +183,13 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
   }>({});
   const [createErrors, setCreateErrors] = useState<Record<string, string>>({});
   const [isCreatingDriver, setIsCreatingDriver] = useState(false);
+
+  // Automatically open Add Driver modal if navigated with ?action=create or ?new=true
+  useEffect(() => {
+    if (searchParams.get('action') === 'create' || searchParams.get('new') === 'true') {
+      setIsCreateModalOpen(true);
+    }
+  }, [searchParams]);
 
   // Delete Driver State
   const [deletingDriver, setDeletingDriver] = useState<any | null>(null);

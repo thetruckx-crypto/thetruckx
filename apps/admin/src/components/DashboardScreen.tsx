@@ -123,22 +123,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const [recentActivities, setRecentActivities] = useState<ActivityItem[]>([]);
   const [upcomingDeadlines, setUpcomingDeadlines] = useState<DeadlineItem[]>([]);
 
-  // Modal State
-  const [activeModal, setActiveModal] = useState<null | 'requirement' | 'booking' | 'client' | 'vendor'>(null);
-  const [isSubmittingModal, setIsSubmittingModal] = useState(false);
-  const [availableClients, setAvailableClients] = useState<any[]>([]);
-  const [modalForm, setModalForm] = useState({
-    clientId: '',
-    clientName: '',
-    origin: '',
-    destination: '',
-    vehicleNo: '',
-    freight: '',
-    truckType: '',
-    name: '',
-    contact: '',
-    city: '',
-  });
+
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -182,11 +167,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       const vendors = vendorsRes.data || [];
       const drivers = driversRes.data || [];
       const docs = docsRes.data || [];
-
-      setAvailableClients(clients);
-      if (clients.length > 0 && !modalForm.clientId) {
-        setModalForm(prev => ({ ...prev, clientId: clients[0].id, clientName: clients[0].company_name }));
-      }
 
       // Calculate actual KPIs directly from records
       const totalClientsCount = clients.length;
@@ -412,95 +392,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     }
   };
 
-  const handleOpenCreateModal = (type: 'requirement' | 'booking' | 'client' | 'vendor') => {
-    setShowCreateDropdown(false);
-    setActiveModal(type);
-  };
 
-  const handleModalSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmittingModal(true);
-
-    try {
-      if (activeModal === 'requirement') {
-        const newReqId = `REQ-${Date.now().toString().slice(-8)}`;
-        const { error } = await supabase.from('requirements').insert([{
-          id: newReqId,
-          client_id: modalForm.clientId || availableClients[0]?.id,
-          pickup_address: modalForm.origin,
-          destination_address: modalForm.destination,
-          pickup_pincode: '500001',
-          destination_pincode: '530001',
-          vehicle_type: modalForm.truckType || '32 Feet Container',
-          material_type: 'General Cargo',
-          required_capacity_mt: 20,
-          loading_datetime: new Date(Date.now() + 86400000).toISOString(),
-          status: 'UNDER_REVIEW',
-          created_at: new Date().toISOString(),
-        }]);
-
-        if (error) throw error;
-        showToast(`Requirement #${newReqId} created successfully`);
-      } else if (activeModal === 'booking') {
-        const newBokId = `BOK-${Date.now().toString().slice(-8)}`;
-        const { error } = await supabase.from('bookings').insert([{
-          id: newBokId,
-          client_id: modalForm.clientId || availableClients[0]?.id,
-          booking_status: 'CONFIRMED',
-          payment_status: 'PAYMENT_PENDING',
-          confirmed_at: new Date().toISOString(),
-        }]);
-
-        if (error) throw error;
-        showToast(`Booking #${newBokId} created successfully`);
-      } else if (activeModal === 'client') {
-        const newCliId = `CLI-${Date.now().toString().slice(-8)}`;
-        const { error } = await supabase.from('client_companies').insert([{
-          id: newCliId,
-          company_name: modalForm.name,
-          city: modalForm.city,
-          status: 'PENDING',
-          created_at: new Date().toISOString(),
-        }]);
-
-        if (error) throw error;
-        showToast(`Client "${modalForm.name}" registered successfully`);
-      } else if (activeModal === 'vendor') {
-        const newVenId = `VEN-${Date.now().toString().slice(-8)}`;
-        const { error } = await supabase.from('vendor_companies').insert([{
-          id: newVenId,
-          vendor_name: modalForm.name,
-          address: modalForm.city,
-          status: 'PENDING',
-          onboarding_source: 'ADMIN',
-          created_at: new Date().toISOString(),
-        }]);
-
-        if (error) throw error;
-        showToast(`Vendor "${modalForm.name}" registered successfully`);
-      }
-
-      setActiveModal(null);
-      setModalForm({
-        clientId: availableClients[0]?.id || '',
-        clientName: '',
-        origin: '',
-        destination: '',
-        vehicleNo: '',
-        freight: '',
-        truckType: '',
-        name: '',
-        contact: '',
-        city: '',
-      });
-      loadDashboardData();
-    } catch (err: any) {
-      console.error('Modal submission failed:', err);
-      showToast(`Error: ${err.message || 'Action could not be completed'}`);
-    } finally {
-      setIsSubmittingModal(false);
-    }
-  };
 
   return (
     <div className="dashboard-page-wrapper">
@@ -545,28 +437,28 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
             {showCreateDropdown && (
               <div className="create-dropdown-menu">
-                <button className="dropdown-item" onClick={() => handleOpenCreateModal('requirement')}>
+                <button className="dropdown-item" onClick={() => { setShowCreateDropdown(false); onNavigateSection('requirements/new'); }}>
                   <FileText size={16} className="item-icon gold" />
                   <div>
                     <div className="item-title">New Transport Requirement</div>
                     <div className="item-desc">Create RFQ for bidding</div>
                   </div>
                 </button>
-                <button className="dropdown-item" onClick={() => handleOpenCreateModal('booking')}>
+                <button className="dropdown-item" onClick={() => { setShowCreateDropdown(false); onNavigateSection('bookings/new'); }}>
                   <Truck size={16} className="item-icon blue" />
                   <div>
                     <div className="item-title">Confirm Booking</div>
                     <div className="item-desc">Allocate truck and driver</div>
                   </div>
                 </button>
-                <button className="dropdown-item" onClick={() => handleOpenCreateModal('client')}>
+                <button className="dropdown-item" onClick={() => { setShowCreateDropdown(false); onNavigateSection('clients/new'); }}>
                   <Plus size={16} className="item-icon green" />
                   <div>
                     <div className="item-title">Add Client Account</div>
                     <div className="item-desc">Register new consignor</div>
                   </div>
                 </button>
-                <button className="dropdown-item" onClick={() => handleOpenCreateModal('vendor')}>
+                <button className="dropdown-item" onClick={() => { setShowCreateDropdown(false); onNavigateSection('vendors/new'); }}>
                   <Plus size={16} className="item-icon amber" />
                   <div>
                     <div className="item-title">Add Vendor Account</div>
@@ -932,46 +824,52 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             </div>
           </div>
           <div className="quick-actions-grid">
-            <button className="action-tile-btn peach" onClick={() => handleOpenCreateModal('requirement')}>
+            <button className="action-tile-btn peach" onClick={() => onNavigateSection('requirements/new')}>
               <div className="action-tile-icon peach">
-                <FileText size={18} />
+                <FileText size={20} />
               </div>
               <span className="action-tile-label">Create Requirement</span>
+              <span className="action-tile-sub">Post Freight RFQ</span>
             </button>
 
-            <button className="action-tile-btn blue" onClick={() => handleOpenCreateModal('booking')}>
+            <button className="action-tile-btn blue" onClick={() => onNavigateSection('bookings/new')}>
               <div className="action-tile-icon blue">
-                <Truck size={18} />
+                <Truck size={20} />
               </div>
               <span className="action-tile-label">Add Booking</span>
+              <span className="action-tile-sub">Confirm Consignment</span>
             </button>
 
             <button className="action-tile-btn mint" onClick={() => onNavigateSection('fleet')}>
               <div className="action-tile-icon mint">
-                <Truck size={18} />
+                <Truck size={20} />
               </div>
               <span className="action-tile-label">Manage Fleet</span>
+              <span className="action-tile-sub">Vehicles & Tie-ups</span>
             </button>
 
-            <button className="action-tile-btn purple" onClick={() => onNavigateSection('drivers')}>
+            <button className="action-tile-btn purple" onClick={() => onNavigateSection('drivers?action=create')}>
               <div className="action-tile-icon purple">
-                <User size={18} />
+                <User size={20} />
               </div>
               <span className="action-tile-label">Add Driver</span>
+              <span className="action-tile-sub">Verify & Register DL</span>
             </button>
 
-            <button className="action-tile-btn peach" onClick={() => onNavigateSection('pricing')}>
+            <button className="action-tile-btn peach" onClick={() => onNavigateSection('pricing?action=create')}>
               <div className="action-tile-icon peach">
-                <Receipt size={18} />
+                <Receipt size={20} />
               </div>
               <span className="action-tile-label">Create Quote</span>
+              <span className="action-tile-sub">Pricing Wizard</span>
             </button>
 
             <button className="action-tile-btn sky" onClick={() => onNavigateSection('reports')}>
               <div className="action-tile-icon sky">
-                <BarChart3 size={18} />
+                <BarChart3 size={20} />
               </div>
               <span className="action-tile-label">Generate Report</span>
+              <span className="action-tile-sub">Export Analytics</span>
             </button>
           </div>
         </div>
@@ -987,188 +885,38 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           <div className="useful-links-grid">
             <button className="useful-link-tile blue" onClick={() => onNavigateSection('clients')}>
               <div className="useful-link-icon blue">
-                <Users size={18} />
+                <Users size={20} />
               </div>
               <span className="useful-link-label">Client Management</span>
+              <span className="useful-link-sub">Shippers & KYC</span>
             </button>
 
             <button className="useful-link-tile orange" onClick={() => onNavigateSection('vendors')}>
               <div className="useful-link-icon orange">
-                <Building2 size={18} />
+                <Building2 size={20} />
               </div>
               <span className="useful-link-label">Vendor Management</span>
+              <span className="useful-link-sub">Fleet Partners</span>
             </button>
 
             <button className="useful-link-tile sky" onClick={() => onNavigateSection('tracking')}>
               <div className="useful-link-icon sky">
-                <Compass size={18} />
+                <Compass size={20} />
               </div>
               <span className="useful-link-label">Trip Tracking</span>
+              <span className="useful-link-sub">Live Shipments</span>
             </button>
 
             <button className="useful-link-tile purple" onClick={() => onNavigateSection('reports')}>
               <div className="useful-link-icon purple">
-                <BarChart3 size={18} />
+                <BarChart3 size={20} />
               </div>
-              <span className="useful-link-label">Reports & Analytics</span>
+              <span className="useful-link-label">Reports & BI</span>
+              <span className="useful-link-sub">Audits & Activity</span>
             </button>
           </div>
         </div>
       </section>
-
-      {/* ── Create Modal ── */}
-      {activeModal && (
-        <div className="create-modal-backdrop" onClick={() => setActiveModal(null)}>
-          <div className="create-modal-card" onClick={(e) => e.stopPropagation()}>
-            <div className="create-modal-header">
-              <div>
-                <h3 className="create-modal-title">
-                  {activeModal === 'requirement' && 'New Transport Requirement'}
-                  {activeModal === 'booking' && 'Confirm New Booking'}
-                  {activeModal === 'client' && 'Register Client Account'}
-                  {activeModal === 'vendor' && 'Register Vendor Fleet'}
-                </h3>
-                <p className="create-modal-subtitle">
-                  {activeModal === 'requirement' && 'Create RFQ quotation request'}
-                  {activeModal === 'booking' && 'Allocate vehicle and driver'}
-                  {activeModal === 'client' && 'Add new enterprise shipper'}
-                  {activeModal === 'vendor' && 'Add new fleet provider'}
-                </p>
-              </div>
-              <button className="create-modal-close-btn" onClick={() => setActiveModal(null)}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleModalSubmit}>
-              <div className="create-modal-body">
-                {activeModal === 'requirement' && (
-                  <>
-                    <div className="form-group-grid">
-                      <div className="form-field-group">
-                        <label className="form-field-label">Client</label>
-                        <select
-                          className="form-field-input"
-                          value={modalForm.clientId}
-                          onChange={(e) => setModalForm({ ...modalForm, clientId: e.target.value })}
-                        >
-                          {availableClients.map(c => (
-                            <option key={c.id} value={c.id}>{c.company_name}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="form-field-group">
-                        <label className="form-field-label">Truck Type</label>
-                        <input
-                          type="text"
-                          required
-                          value={modalForm.truckType}
-                          onChange={(e) => setModalForm({ ...modalForm, truckType: e.target.value })}
-                          className="form-field-input"
-                          placeholder="e.g. 32 Feet Container"
-                        />
-                      </div>
-                    </div>
-                    <div className="form-group-grid">
-                      <div className="form-field-group">
-                        <label className="form-field-label">Origin</label>
-                        <input
-                          type="text"
-                          required
-                          value={modalForm.origin}
-                          onChange={(e) => setModalForm({ ...modalForm, origin: e.target.value })}
-                          className="form-field-input"
-                          placeholder="e.g. Hyderabad"
-                        />
-                      </div>
-                      <div className="form-field-group">
-                        <label className="form-field-label">Destination</label>
-                        <input
-                          type="text"
-                          required
-                          value={modalForm.destination}
-                          onChange={(e) => setModalForm({ ...modalForm, destination: e.target.value })}
-                          className="form-field-input"
-                          placeholder="e.g. Visakhapatnam"
-                        />
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                {activeModal === 'booking' && (
-                  <>
-                    <div className="form-group-grid">
-                      <div className="form-field-group">
-                        <label className="form-field-label">Client</label>
-                        <select
-                          className="form-field-input"
-                          value={modalForm.clientId}
-                          onChange={(e) => setModalForm({ ...modalForm, clientId: e.target.value })}
-                        >
-                          {availableClients.map(c => (
-                            <option key={c.id} value={c.id}>{c.company_name}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="form-field-group">
-                        <label className="form-field-label">Vehicle Registration</label>
-                        <input
-                          type="text"
-                          required
-                          value={modalForm.vehicleNo}
-                          onChange={(e) => setModalForm({ ...modalForm, vehicleNo: e.target.value })}
-                          className="form-field-input"
-                        />
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                {(activeModal === 'client' || activeModal === 'vendor') && (
-                  <>
-                    <div className="form-group-grid">
-                      <div className="form-field-group">
-                        <label className="form-field-label">
-                          {activeModal === 'client' ? 'Company Name' : 'Fleet Name'}
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={modalForm.name}
-                          onChange={(e) => setModalForm({ ...modalForm, name: e.target.value })}
-                          className="form-field-input"
-                        />
-                      </div>
-                      <div className="form-field-group">
-                        <label className="form-field-label">City</label>
-                        <input
-                          type="text"
-                          required
-                          value={modalForm.city}
-                          onChange={(e) => setModalForm({ ...modalForm, city: e.target.value })}
-                          className="form-field-input"
-                          placeholder="e.g. Hyderabad"
-                        />
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              <div className="create-modal-footer">
-                <button type="button" className="btn-cancel-modal" onClick={() => setActiveModal(null)}>
-                  Cancel
-                </button>
-                <button type="submit" disabled={isSubmittingModal} className="btn-submit-modal">
-                  <Plus size={15} />
-                  <span>{isSubmittingModal ? 'Saving...' : 'Create'}</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

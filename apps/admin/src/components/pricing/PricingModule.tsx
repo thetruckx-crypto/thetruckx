@@ -660,6 +660,12 @@ export const PricingModule: React.FC<PricingModuleProps> = ({
         if (matchingReq) {
           handleStartWizardWithRequirement(matchingReq, queryQuoteId || undefined);
         }
+      } else if (searchParams.get('action') === 'create' || searchParams.get('new') === 'true') {
+        if (mappedReqs.length > 0) {
+          handleStartWizardWithRequirement(mappedReqs[0]);
+        } else {
+          setIsCreateWizardOpen(true);
+        }
       }
     } catch (err: any) {
       console.error('Error loading pricing data:', err);

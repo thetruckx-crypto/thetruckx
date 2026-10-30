@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   BarChart3, Download, Calendar, Filter, FileText, TrendingUp, Truck,
   IndianRupee, AlertTriangle, RefreshCw, CheckCircle, Clock, Shield,
-  ArrowUpDown, Users
+  ArrowUpDown, Users, User, Package
 } from "lucide-react";
 import { supabase } from "../../utils/supabase";
 
@@ -14,12 +14,15 @@ interface ReportDef {
 }
 
 const REPORTS: ReportDef[] = [
-  { id: "revenue",    name: "Revenue & Billing",      description: "Booking amounts, margins, and invoice breakdown",    icon: TrendingUp   },
-  { id: "trips",      name: "Trip Operations",        description: "Assigned trips, delivery status, and freight rates", icon: Truck        },
-  { id: "clients",    name: "Client Accounts",        description: "Registered clients, bookings count, and activity",   icon: Users        },
-  { id: "vendors",    name: "Vendor Fleets",          description: "Approved transport vendors and vehicle assignments", icon: BarChart3    },
-  { id: "vehicles",   name: "Vehicle Utilization",    description: "Registered vehicle inventory and active trips",      icon: Truck        },
-  { id: "audit_logs", name: "System Audit Logs",      description: "Real administrative access and modification records", icon: Shield       },
+  { id: "revenue",      name: "Revenue & Billing",       description: "Booking amounts, margins, and invoice breakdown",    icon: TrendingUp   },
+  { id: "trips",        name: "Trip Operations",         description: "Assigned trips, delivery status, and freight rates", icon: Truck        },
+  { id: "requirements", name: "Requirements (RFQ)",      description: "Freight requirements, requested corridors & status", icon: Package      },
+  { id: "bookings",     name: "Confirmed Bookings",      description: "Confirmed cargo orders, status, and payment terms",  icon: CheckCircle  },
+  { id: "clients",      name: "Client Accounts",         description: "Registered clients, bookings count, and activity",   icon: Users        },
+  { id: "vendors",      name: "Vendor Fleets",           description: "Approved transport vendors and vehicle assignments", icon: BarChart3    },
+  { id: "vehicles",     name: "Vehicle Utilization",     description: "Registered vehicle inventory and active trips",      icon: Truck        },
+  { id: "drivers",      name: "Driver Verification",     description: "Chauffeur directory, licences and verification",     icon: User         },
+  { id: "audit_logs",   name: "System Audit Logs",       description: "Real administrative access and modification records", icon: Shield       },
 ];
 
 export const ReportsModule: React.FC = () => {
@@ -69,6 +72,39 @@ export const ReportsModule: React.FC = () => {
 
         if (fromDate) query = query.gte("created_at", `${fromDate}T00:00:00.000Z`);
         if (toDate) query = query.lte("created_at", `${toDate}T23:59:59.999Z`);
+
+        const { data, error } = await query;
+        if (error) throw error;
+        setRecords(data || []);
+      } else if (selectedReport === "requirements") {
+        let query = supabase
+          .from("requirements")
+          .select("id, requirement_code, client_id, pickup_address, destination_address, vehicle_type, required_capacity_mt, material_type, status, created_at, client_companies(company_name)")
+          .order("created_at", { ascending: false });
+
+        if (fromDate) query = query.gte("created_at", `${fromDate}T00:00:00.000Z`);
+        if (toDate) query = query.lte("created_at", `${toDate}T23:59:59.999Z`);
+
+        const { data, error } = await query;
+        if (error) throw error;
+        setRecords(data || []);
+      } else if (selectedReport === "bookings") {
+        let query = supabase
+          .from("bookings")
+          .select("id, booking_code, requirement_id, client_id, booking_status, payment_status, grand_total, amount_received, confirmed_at, created_at, client_companies(company_name)")
+          .order("created_at", { ascending: false });
+
+        if (fromDate) query = query.gte("created_at", `${fromDate}T00:00:00.000Z`);
+        if (toDate) query = query.lte("created_at", `${toDate}T23:59:59.999Z`);
+
+        const { data, error } = await query;
+        if (error) throw error;
+        setRecords(data || []);
+      } else if (selectedReport === "drivers") {
+        let query = supabase
+          .from("drivers")
+          .select("id, full_name, mobile, licence_number, status, verification_status, created_at")
+          .order("created_at", { ascending: false });
 
         const { data, error } = await query;
         if (error) throw error;
@@ -157,6 +193,44 @@ export const ReportsModule: React.FC = () => {
         `"${r.vendor_companies?.vendor_name || "Vendor"}"`,
         r.vendor_rate,
         r.trip_status,
+        new Date(r.created_at).toLocaleDateString()
+      ]);
+      csvContent = [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+    } else if (selectedReport === "requirements") {
+      const headers = ["Requirement ID", "Client", "Origin", "Destination", "Vehicle Type", "Weight (MT)", "Commodity", "Status", "Created At"];
+      const rows = records.map(r => [
+        r.requirement_code || r.id,
+        `"${r.client_companies?.company_name || "Client"}"`,
+        `"${r.pickup_address || "—"}"`,
+        `"${r.destination_address || "—"}"`,
+        r.vehicle_type,
+        r.required_capacity_mt || "—",
+        `"${r.material_type || "General"}"`,
+        r.status,
+        new Date(r.created_at).toLocaleDateString()
+      ]);
+      csvContent = [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+    } else if (selectedReport === "bookings") {
+      const headers = ["Booking ID", "Client", "Requirement ID", "Status", "Payment Status", "Grand Total", "Confirmed On"];
+      const rows = records.map(r => [
+        r.booking_code || r.id,
+        `"${r.client_companies?.company_name || "Client"}"`,
+        r.requirement_id,
+        r.booking_status,
+        r.payment_status,
+        r.grand_total || 0,
+        r.confirmed_at ? new Date(r.confirmed_at).toLocaleDateString() : "—"
+      ]);
+      csvContent = [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+    } else if (selectedReport === "drivers") {
+      const headers = ["Driver ID", "Full Name", "Mobile", "Licence Number", "Status", "Verification", "Registered On"];
+      const rows = records.map(r => [
+        r.id,
+        `"${r.full_name}"`,
+        r.mobile,
+        r.licence_number || "—",
+        r.status,
+        r.verification_status || "PENDING",
         new Date(r.created_at).toLocaleDateString()
       ]);
       csvContent = [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
@@ -418,6 +492,39 @@ export const ReportsModule: React.FC = () => {
                       <th>Created</th>
                     </>
                   )}
+                  {selectedReport === "requirements" && (
+                    <>
+                      <th>Requirement ID</th>
+                      <th>Client Shipper</th>
+                      <th>Route / Corridor</th>
+                      <th>Vehicle Type</th>
+                      <th>Weight</th>
+                      <th>Commodity</th>
+                      <th>Status</th>
+                      <th>Created</th>
+                    </>
+                  )}
+                  {selectedReport === "bookings" && (
+                    <>
+                      <th>Booking ID</th>
+                      <th>Client</th>
+                      <th>Requirement Ref</th>
+                      <th>Booking Status</th>
+                      <th>Payment Status</th>
+                      <th>Grand Total</th>
+                      <th>Confirmed</th>
+                    </>
+                  )}
+                  {selectedReport === "drivers" && (
+                    <>
+                      <th>Driver Name</th>
+                      <th>Mobile Number</th>
+                      <th>Licence Number</th>
+                      <th>Status</th>
+                      <th>Verification</th>
+                      <th>Registered</th>
+                    </>
+                  )}
                   {selectedReport === "clients" && (
                     <>
                       <th>Company Name</th>
@@ -483,6 +590,39 @@ export const ReportsModule: React.FC = () => {
                         <td>{r.vendor_companies?.vendor_name || "Vendor"}</td>
                         <td>₹{Number(r.vendor_rate || 0).toLocaleString("en-IN")}</td>
                         <td><span className="status-badge" style={{ background: "#FEF3EE", color: "#F45325" }}>{r.trip_status}</span></td>
+                        <td>{new Date(r.created_at).toLocaleDateString()}</td>
+                      </>
+                    )}
+                    {selectedReport === "requirements" && (
+                      <>
+                        <td style={{ fontWeight: 700 }}>{r.requirement_code || r.id}</td>
+                        <td>{r.client_companies?.company_name || "Shipper"}</td>
+                        <td>{r.pickup_address?.slice(0, 20)} → {r.destination_address?.slice(0, 20)}</td>
+                        <td>{r.vehicle_type}</td>
+                        <td>{r.required_capacity_mt || 20} MT</td>
+                        <td>{r.material_type || "General"}</td>
+                        <td><span className="status-badge" style={{ background: "#FEF3EE", color: "#F45325" }}>{r.status}</span></td>
+                        <td>{new Date(r.created_at).toLocaleDateString()}</td>
+                      </>
+                    )}
+                    {selectedReport === "bookings" && (
+                      <>
+                        <td style={{ fontWeight: 700 }}>{r.booking_code || r.id}</td>
+                        <td>{r.client_companies?.company_name || "Client"}</td>
+                        <td>{r.requirement_id}</td>
+                        <td><span className="status-badge" style={{ background: "#ECFDF5", color: "#10B981" }}>{r.booking_status}</span></td>
+                        <td><span className="status-badge" style={{ background: "#EFF6FF", color: "#2563EB" }}>{r.payment_status}</span></td>
+                        <td style={{ fontWeight: 700, color: "#0F172A" }}>₹{Number(r.grand_total || 0).toLocaleString("en-IN")}</td>
+                        <td>{r.confirmed_at ? new Date(r.confirmed_at).toLocaleDateString() : "—"}</td>
+                      </>
+                    )}
+                    {selectedReport === "drivers" && (
+                      <>
+                        <td style={{ fontWeight: 700 }}>{r.full_name}</td>
+                        <td>{r.mobile}</td>
+                        <td>{r.licence_number || "—"}</td>
+                        <td><span className="status-badge" style={{ background: "#FEF3EE", color: "#F45325" }}>{r.status}</span></td>
+                        <td><span className="status-badge" style={{ background: r.verification_status === "APPROVED" ? "#ECFDF5" : "#FEF3EE", color: r.verification_status === "APPROVED" ? "#10B981" : "#F45325" }}>{r.verification_status || "PENDING"}</span></td>
                         <td>{new Date(r.created_at).toLocaleDateString()}</td>
                       </>
                     )}

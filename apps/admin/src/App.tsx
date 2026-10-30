@@ -32,14 +32,17 @@ const VendorVerificationRequests = React.lazy(() => import('./components/vendors
 const VendorDocumentApprovals = React.lazy(() => import('./components/vendors/VendorDocumentApprovals').then(m => ({ default: m.VendorDocumentApprovals })));
 const SharedVehicleMasterDirectory = React.lazy(() => import('./components/fleet/SharedVehicleMasterDirectory').then(m => ({ default: m.SharedVehicleMasterDirectory })));
 const VehicleVerificationScreen = React.lazy(() => import('./components/fleet/VehicleVerificationScreen').then(m => ({ default: m.VehicleVerificationScreen })));
+const VehicleComplianceWorkspace = React.lazy(() => import('./components/fleet/VehicleComplianceWorkspace').then(m => ({ default: m.VehicleComplianceWorkspace })));
 const VendorVehicleTieupApproval = React.lazy(() => import('./components/fleet/VendorVehicleTieupApproval').then(m => ({ default: m.VendorVehicleTieupApproval })));
 const CreateSharedVehicle = React.lazy(() => import('./components/fleet/CreateSharedVehicle').then(m => ({ default: m.CreateSharedVehicle })));
 const DriverVerificationQueue = React.lazy(() => import('./components/drivers/DriverVerificationQueue').then(m => ({ default: m.DriverVerificationQueue })));
 const PricingModule = React.lazy(() => import('./components/pricing/PricingModule').then(m => ({ default: m.PricingModule })));
 const RequirementsModule = React.lazy(() => import('./components/requirements/RequirementsModule').then(m => ({ default: m.RequirementsModule })));
+const CreateRequirement = React.lazy(() => import('./components/requirements/CreateRequirement').then(m => ({ default: m.CreateRequirement })));
 const QuotationsModule = React.lazy(() => import('./components/quotations/QuotationsModule').then(m => ({ default: m.QuotationsModule })));
 const VendorQuotationsModule = React.lazy(() => import('./components/quotations/VendorQuotationsModule').then(m => ({ default: m.VendorQuotationsModule })));
 const BookingsModule = React.lazy(() => import('./components/bookings/BookingsModule').then(m => ({ default: m.BookingsModule })));
+const CreateBooking = React.lazy(() => import('./components/bookings/CreateBooking').then(m => ({ default: m.CreateBooking })));
 const DocumentClearanceModule = React.lazy(() => import('./components/documents/DocumentClearanceModule').then(m => ({ default: m.DocumentClearanceModule })));
 const TrackingModule = React.lazy(() => import('./components/tracking/TrackingModule').then(m => ({ default: m.TrackingModule })));
 const TripDetailView = React.lazy(() => import('./components/tracking/TripDetailView').then(m => ({ default: m.TripDetailView })));
@@ -431,69 +434,25 @@ function VendorDocumentApprovalsRoute() {
   );
 }
 
-// ─── Vehicle Verification Route ───────────────────────────────────────────────
+// ─── Vehicle Verification & Compliance Route ─────────────────────────────────
 function VehicleVerificationRoute() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [vehicleId, setVehicleId] = useState<string | null>(id || null);
-  const [resolving, setResolving] = useState(!id);
 
-  useEffect(() => {
-    if (!id) {
-      (async () => {
-        try {
-          const res = await getVehicles({}, { page: 1, pageSize: 1 });
-          if (res.vehicles.length > 0) {
-            setVehicleId(res.vehicles[0].id);
-          } else {
-            setVehicleId(null);
-          }
-        } catch {
-          setVehicleId(null);
-        } finally {
-          setResolving(false);
-        }
-      })();
-    } else {
-      setVehicleId(id);
-      setResolving(false);
-    }
-  }, [id]);
-
-  if (resolving) {
+  if (!id) {
     return (
-      <div style={{ padding: '3rem', textAlign: 'center', color: '#F45325' }}>
-        Loading vehicle verification record...
-      </div>
-    );
-  }
-
-  if (!vehicleId) {
-    return (
-      <div style={{ padding: '3rem', textAlign: 'center', color: '#64748B' }}>
-        <p style={{ fontSize: '1.1rem', marginBottom: '1rem' }}>No vehicles currently registered in the database.</p>
-        <button
-          onClick={() => navigate('/admin/fleet')}
-          style={{
-            padding: '8px 16px',
-            backgroundColor: '#F45325',
-            color: '#FFFFFF',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontWeight: 600,
-          }}
-        >
-          Return to Fleet Directory
-        </button>
-      </div>
+      <VehicleComplianceWorkspace
+        onNavigateToVehicleDirectory={() => navigate('/admin/fleet')}
+        onNavigateToVerification={(vehId) => navigate(`/admin/fleet/verification/${vehId}`)}
+        onNavigateToAddVehicle={() => navigate('/admin/fleet/new')}
+      />
     );
   }
 
   return (
     <VehicleVerificationScreen
-      vehicleId={vehicleId}
-      onBack={() => navigate('/admin/fleet')}
+      vehicleId={id}
+      onBack={() => navigate('/admin/fleet/compliance')}
       onNavigateToTieups={(_vehId) => navigate('/admin/fleet/tie-up-approval')}
     />
   );
@@ -1564,12 +1523,24 @@ function AdminShell() {
                     onOpenNotifications={() => setIsNotifOpen(true)}
                     onQuickAction={(action) => {
                       const map: Record<string, string> = {
-                        requirement: '/admin/requirements', booking: '/admin/bookings',
-                        client: '/admin/clients', vendor: '/admin/vendors',
+                        requirement: '/admin/requirements/new',
+                        booking: '/admin/bookings/new',
+                        client: '/admin/clients/new',
+                        vendor: '/admin/vendors/new',
+                        fleet: '/admin/fleet',
+                        driver: '/admin/drivers?action=create',
+                        pricing: '/admin/pricing?action=create',
+                        reports: '/admin/reports',
                       };
                       if (map[action]) navigate(map[action]);
                     }}
-                    onNavigateSection={(section) => navigate(`/admin/${section}`)}
+                    onNavigateSection={(section) => {
+                      if (section.startsWith('/')) {
+                        navigate(section);
+                      } else {
+                        navigate(`/admin/${section}`);
+                      }
+                    }}
                   />
                 </RequirePermission>
               } />
@@ -1638,6 +1609,7 @@ function AdminShell() {
                     onNavigateToAddVehicle={() => navigate('/admin/fleet/new')}
                     onNavigateToVendorProfile={(id) => navigate(`/admin/vendors/${id}`)}
                     onNavigateToDriverProfile={(_id) => navigate('/admin/drivers')}
+                    onNavigateToCompliance={() => navigate('/admin/fleet/compliance')}
                   />
                 </RequirePermission>
               } />
@@ -1655,6 +1627,11 @@ function AdminShell() {
                 </RequirePermission>
               } />
               <Route path="fleet/verification/:id" element={
+                <RequirePermission module="fleet">
+                  <VehicleVerificationRoute />
+                </RequirePermission>
+              } />
+              <Route path="fleet/compliance" element={
                 <RequirePermission module="fleet">
                   <VehicleVerificationRoute />
                 </RequirePermission>
@@ -1696,6 +1673,14 @@ function AdminShell() {
                   />
                 </RequirePermission>
               } />
+              <Route path="requirements/new" element={
+                <RequirePermission module="requirements" action="create">
+                  <CreateRequirement
+                    onBack={() => navigate('/admin/requirements')}
+                    onCreated={(id) => navigate(`/admin/requirements/${id}`)}
+                  />
+                </RequirePermission>
+              } />
               <Route path="requirements/:id" element={
                 <RequirePermission module="requirements">
                   <RequirementsModule 
@@ -1728,11 +1713,28 @@ function AdminShell() {
                 </RequirePermission>
               } />
 
+              {/* Sourcing & RFQ Alias */}
+              <Route path="sourcing-rfq" element={
+                <RequirePermission module="quotations">
+                  <QuotationsModule 
+                    onNavigateToComparison={(id) => navigate(`/admin/quotations/${id}`)}
+                  />
+                </RequirePermission>
+              } />
+
               {/* Bookings Module */}
               <Route path="bookings" element={
                 <RequirePermission module="bookings">
                   <BookingsModule 
                     onNavigateToDetail={(id) => navigate(`/admin/bookings/${id}`)}
+                  />
+                </RequirePermission>
+              } />
+              <Route path="bookings/new" element={
+                <RequirePermission module="bookings" action="create">
+                  <CreateBooking
+                    onBack={() => navigate('/admin/bookings')}
+                    onCreated={(id) => navigate(`/admin/bookings/${id}`)}
                   />
                 </RequirePermission>
               } />

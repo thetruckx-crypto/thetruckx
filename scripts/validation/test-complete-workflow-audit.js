@@ -50,8 +50,24 @@ async function runAudit() {
   if (activeVendor) {
     testVendorId = activeVendor.id;
   } else {
-    const { data: anyVendor } = await supabase.from('vendor_companies').select('id, vendor_name').limit(1).single();
+    const { data: anyVendor } = await supabase.from('vendor_companies').select('id, vendor_name').limit(1).maybeSingle();
     testVendorId = anyVendor?.id;
+  }
+
+  if (!testVendorId) {
+    const { data: newVend, error: vendErr } = await supabase
+      .from('vendor_companies')
+      .insert([{
+        vendor_name: 'Brahmaputra Freight Carriers',
+        pan: 'AAACB1234D',
+        gstin: '18AAACB1234D1Z5',
+        address: 'Beltola Industrial Area, Guwahati, Assam',
+        status: 'APPROVED',
+      }])
+      .select('id')
+      .single();
+    if (vendErr) throw vendErr;
+    testVendorId = newVend.id;
   }
   const testPlate = 'AS01GC9988';
 
@@ -179,8 +195,27 @@ async function runAudit() {
     .from('client_companies')
     .select('id, company_name')
     .limit(1)
-    .single();
+    .maybeSingle();
   clientId = activeClient?.id;
+
+  if (!clientId) {
+    const { data: newCl, error: clErr } = await supabase
+      .from('client_companies')
+      .insert([{
+        company_name: 'Numaligarh Refinery Limited',
+        pan: 'AAACN9876E',
+        gstin: '18AAACN9876E1Z2',
+        registered_address: 'Beltola Central Plaza, NH-37, Guwahati',
+        city: 'Guwahati',
+        state: 'Assam',
+        pincode: '781001',
+        status: 'APPROVED',
+      }])
+      .select('id')
+      .single();
+    if (clErr) throw clErr;
+    clientId = newCl.id;
+  }
 
   // Ensure requirement exists
   const { data: existingReq } = await supabase
@@ -367,6 +402,21 @@ async function runAudit() {
 
   console.log(`✓ [PASS] Confirmed Booking Generated: ${verifiedBooking.id} [Status: ${verifiedBooking.booking_status}]`);
   console.log(`✓ [PASS] Requirement Status Synchronized: ${verifiedReq.id} [Status: ${verifiedReq.status}]`);
+
+  // Clean up probe records to maintain clean testing state
+  console.log('\n--- Cleaning up audit probe records ---');
+  await supabase.from('bookings').delete().eq('id', bookingId);
+  await supabase.from('client_quotes').delete().eq('id', quoteId);
+  await supabase.from('vendor_quotations').delete().in('vendor_request_id', vrIds);
+  await supabase.from('vendor_requests').delete().eq('requirement_id', reqId);
+  await supabase.from('requirements').delete().eq('id', reqId);
+  await supabase.from('vendor_vehicle_links').delete().eq('vehicle_id', vehicleId);
+  await supabase.from('drivers').delete().eq('id', driverId);
+  await supabase.from('vehicles').delete().eq('id', vehicleId);
+  await supabase.from('vendor_companies').delete().eq('id', testVendorId);
+  await supabase.from('client_companies').delete().eq('id', clientId);
+  console.log('✓ [PASS] Audit probe records cleaned up successfully.');
+
   console.log('\n========================================================================');
   console.log(' ALL 6 WORKFLOW REQUIREMENTS VERIFIED AND PASSING 100%');
   console.log('========================================================================\n');

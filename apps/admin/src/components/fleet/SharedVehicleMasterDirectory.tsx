@@ -64,6 +64,7 @@ import { DocumentPreviewModal } from '../common/DocumentPreviewModal';
 interface SharedVehicleMasterDirectoryProps {
   onNavigateToVerification: (vehicleId: string) => void;
   onNavigateToAddVehicle: () => void;
+  onNavigateToCompliance?: () => void;
   onNavigateToVendorProfile?: (vendorId: string) => void;
   onNavigateToDriverProfile?: (driverId: string) => void;
 }
@@ -136,6 +137,7 @@ function formatVehicleCategory(cat?: string | null): string {
 export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectoryProps> = ({
   onNavigateToVerification,
   onNavigateToAddVehicle,
+  onNavigateToCompliance,
   onNavigateToVendorProfile,
   onNavigateToDriverProfile,
 }) => {
@@ -1546,6 +1548,16 @@ export const SharedVehicleMasterDirectory: React.FC<SharedVehicleMasterDirectory
           >
             <Download size={15} />
             <span>Export</span>
+          </button>
+
+          <button
+            onClick={() => onNavigateToCompliance ? onNavigateToCompliance() : onNavigateToVerification('')}
+            className="btn-header-secondary"
+            title="Centralized Vehicle Compliance Workspace"
+            id="btn-compliance-workspace"
+          >
+            <ShieldCheck size={15} />
+            <span>Compliance Workspace</span>
           </button>
 
           {onNavigateToAddVehicle && (
