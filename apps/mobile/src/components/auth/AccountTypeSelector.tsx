@@ -63,6 +63,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     minHeight: 64,
+    marginBottom: 16,
   },
   textWrap: {
     flex: 1,

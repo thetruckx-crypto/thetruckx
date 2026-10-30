@@ -229,6 +229,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             <AccountTypeSelector
               selectedRole={role}
               onPress={() => setIsRoleSheetVisible(true)}
+              style={styles.accountTypeSelector}
             />
 
             {/* Mobile Number Field */}
@@ -501,6 +502,9 @@ const styles = StyleSheet.create({
   },
   formContainer: {
     paddingHorizontal: 24,
+  },
+  accountTypeSelector: {
+    marginBottom: 16,
   },
   optionsRow: {
     flexDirection: 'row',

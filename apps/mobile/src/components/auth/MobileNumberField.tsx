@@ -14,6 +14,7 @@ import { ChevronDown, X } from 'lucide-react-native';
 interface MobileNumberFieldProps {
   value: string;
   onChangeText: (text: string) => void;
+  label?: string;
   error?: string | null;
   onClear?: () => void;
   autoFocus?: boolean;
@@ -24,6 +25,7 @@ interface MobileNumberFieldProps {
 export const MobileNumberField: React.FC<MobileNumberFieldProps> = ({
   value,
   onChangeText,
+  label,
   error,
   onClear,
   autoFocus = false,
@@ -48,15 +50,18 @@ export const MobileNumberField: React.FC<MobileNumberFieldProps> = ({
       <View
         style={[
           styles.container,
+          label ? styles.containerWithLabel : styles.containerWithoutLabel,
           isFocused && styles.containerFocused,
           error ? styles.containerError : null,
           disabled ? styles.containerDisabled : null,
         ]}
       >
-        {/* Floating Label */}
-        <Text style={[styles.floatingLabel, isFocused && styles.floatingLabelFocused, error ? styles.floatingLabelError : null]}>
-          Mobile Number
-        </Text>
+        {/* Floating Label (rendered only if explicitly provided) */}
+        {label ? (
+          <Text style={[styles.floatingLabel, isFocused && styles.floatingLabelFocused, error ? styles.floatingLabelError : null]}>
+            {label}
+          </Text>
+        ) : null}
 
         <View style={styles.inputRow}>
           {/* Country Selector (India +91) */}
@@ -119,10 +124,15 @@ const styles = StyleSheet.create({
     borderColor: '#D9E0E8',
     borderRadius: 12,
     paddingHorizontal: 14,
+    justifyContent: 'center',
+  },
+  containerWithLabel: {
     paddingTop: 10,
     paddingBottom: 10,
     minHeight: 64,
-    justifyContent: 'center',
+  },
+  containerWithoutLabel: {
+    height: 56,
   },
   containerFocused: {
     borderColor: '#F15A24',
