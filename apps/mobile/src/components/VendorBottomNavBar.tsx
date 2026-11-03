@@ -1,146 +1,152 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
-import { Home, Package, Navigation, Truck, Grid2x2 } from 'lucide-react-native';
+import { Home, Layers, ClipboardList, CheckCircle2, User, MoreHorizontal } from 'lucide-react-native';
 
-export type VendorNavTab = 'HOME' | 'LOADS' | 'TRIPS' | 'FLEET' | 'MORE';
+export type VendorNavTab =
+  | 'HOME'
+  | 'LOADS'
+  | 'QUOTATIONS'
+  | 'BOOKINGS'
+  | 'MORE'
+  | 'TRIPS'
+  | 'FLEET'
+  | 'PROFILE';
 
 interface VendorBottomNavBarProps {
   activeTab: VendorNavTab | string;
   onSelectTab: (tab: VendorNavTab) => void;
-  onOpenMore?: () => void;
+  unreadCount?: number;
 }
 
 /**
- * VendorBottomNavBar — Mobile Carrier Dashboard 5-Tab Navigation:
- * Tab 1: Home — Carrier Control Tower (Vendor Dashboard)
- * Tab 2: Loads — Available Transport Loads (Live RFQs)
- * Tab 3: Trips — Active Trips & Live Shipments
- * Tab 4: Fleet — Fleet & Driver Management
- * Tab 5: More — Secondary Features (Quotations, Bookings, Reports, KYC, Profile)
+ * VendorBottomNavBar — THE TRUCKX 5-Tab Navigation for Fleet Transporters & Vendors:
+ * Tab 1: Home — Vendor Dashboard & Quick Access
+ * Tab 2: Loads — Available Freight Requirements & Open Market Bids
+ * Tab 3: Quotations — Submitted Bids & Rate Negotiations
+ * Tab 4: Bookings — Awarded Orders & Active Consignments
+ * Tab 5: More — Fleet, Drivers, Regional Hubs, Financials & Profile
  */
 export const VendorBottomNavBar: React.FC<VendorBottomNavBarProps> = ({
   activeTab,
   onSelectTab,
-  onOpenMore,
+  unreadCount = 0,
 }) => {
-  const isHome = activeTab === 'HOME' || activeTab === 'DASHBOARD';
-  const isLoads = activeTab === 'LOADS' || activeTab === 'REQUIREMENTS';
-  const isTrips = activeTab === 'TRIPS';
-  const isFleet = activeTab === 'FLEET' || activeTab === 'DRIVERS';
-  const isMore = activeTab === 'MORE';
-
-  const handleTabPress = (tab: VendorNavTab) => {
-    if (tab === 'MORE') {
-      if (onOpenMore) {
-        onOpenMore();
-      } else {
-        onSelectTab('MORE');
-      }
-    } else {
-      onSelectTab(tab);
-    }
-  };
+  const isHomeActive = activeTab === 'HOME';
+  const isLoadsActive = activeTab === 'LOADS';
+  const isQuotationsActive = activeTab === 'QUOTATIONS';
+  const isBookingsActive = activeTab === 'BOOKINGS';
+  const isMoreActive = activeTab === 'MORE' || activeTab === 'PROFILE';
 
   return (
     <View style={styles.bottomTabBar} accessibilityRole="tablist">
       {/* Tab 1: Home */}
       <TouchableOpacity
         style={styles.tabItem}
-        onPress={() => handleTabPress('HOME')}
+        onPress={() => onSelectTab('HOME')}
         activeOpacity={0.8}
         accessibilityRole="tab"
-        accessibilityState={{ selected: isHome }}
-        accessibilityLabel="Carrier Control Tower Home"
+        accessibilityState={{ selected: isHomeActive }}
+        accessibilityLabel="Home Tab"
       >
-        {isHome && <View style={styles.activeTabIndicator} />}
-        <Home
-          size={22}
-          color={isHome ? '#FF5A1F' : '#68768A'}
-          strokeWidth={isHome ? 2.5 : 1.8}
-        />
-        <Text style={[styles.tabLabel, isHome && styles.tabLabelActive]}>
+        <View style={[styles.tabIconWrap, isHomeActive && styles.tabIconWrapActive]}>
+          <Home
+            size={20}
+            color={isHomeActive ? '#F05A22' : '#64748B'}
+            strokeWidth={isHomeActive ? 2.4 : 1.8}
+          />
+        </View>
+        <Text style={[styles.tabLabel, isHomeActive && styles.tabLabelActive]}>
           Home
         </Text>
+        {isHomeActive && <View style={styles.activeTabIndicator} />}
       </TouchableOpacity>
 
       {/* Tab 2: Loads */}
       <TouchableOpacity
         style={styles.tabItem}
-        onPress={() => handleTabPress('LOADS')}
+        onPress={() => onSelectTab('LOADS')}
         activeOpacity={0.8}
         accessibilityRole="tab"
-        accessibilityState={{ selected: isLoads }}
-        accessibilityLabel="Available Loads & Live RFQs"
+        accessibilityState={{ selected: isLoadsActive }}
+        accessibilityLabel="Available Loads Tab"
       >
-        {isLoads && <View style={styles.activeTabIndicator} />}
-        <Package
-          size={22}
-          color={isLoads ? '#FF5A1F' : '#68768A'}
-          strokeWidth={isLoads ? 2.5 : 1.8}
-        />
-        <Text style={[styles.tabLabel, isLoads && styles.tabLabelActive]}>
+        <View style={[styles.tabIconWrap, isLoadsActive && styles.tabIconWrapActive]}>
+          <Layers
+            size={20}
+            color={isLoadsActive ? '#F05A22' : '#64748B'}
+            strokeWidth={isLoadsActive ? 2.4 : 1.8}
+          />
+        </View>
+        <Text style={[styles.tabLabel, isLoadsActive && styles.tabLabelActive]}>
           Loads
         </Text>
+        {isLoadsActive && <View style={styles.activeTabIndicator} />}
       </TouchableOpacity>
 
-      {/* Tab 3: Trips */}
+      {/* Tab 3: Quotations */}
       <TouchableOpacity
         style={styles.tabItem}
-        onPress={() => handleTabPress('TRIPS')}
+        onPress={() => onSelectTab('QUOTATIONS')}
         activeOpacity={0.8}
         accessibilityRole="tab"
-        accessibilityState={{ selected: isTrips }}
-        accessibilityLabel="Active Trips"
+        accessibilityState={{ selected: isQuotationsActive }}
+        accessibilityLabel="My Quotations Tab"
       >
-        {isTrips && <View style={styles.activeTabIndicator} />}
-        <Navigation
-          size={21}
-          color={isTrips ? '#FF5A1F' : '#68768A'}
-          strokeWidth={isTrips ? 2.5 : 1.8}
-        />
-        <Text style={[styles.tabLabel, isTrips && styles.tabLabelActive]}>
-          Trips
+        <View style={[styles.tabIconWrap, isQuotationsActive && styles.tabIconWrapActive]}>
+          <ClipboardList
+            size={20}
+            color={isQuotationsActive ? '#F05A22' : '#64748B'}
+            strokeWidth={isQuotationsActive ? 2.4 : 1.8}
+          />
+        </View>
+        <Text style={[styles.tabLabel, isQuotationsActive && styles.tabLabelActive]}>
+          Quotations
         </Text>
+        {isQuotationsActive && <View style={styles.activeTabIndicator} />}
       </TouchableOpacity>
 
-      {/* Tab 4: Fleet */}
+      {/* Tab 4: Bookings */}
       <TouchableOpacity
         style={styles.tabItem}
-        onPress={() => handleTabPress('FLEET')}
+        onPress={() => onSelectTab('BOOKINGS')}
         activeOpacity={0.8}
         accessibilityRole="tab"
-        accessibilityState={{ selected: isFleet }}
-        accessibilityLabel="Fleet Management & Drivers"
+        accessibilityState={{ selected: isBookingsActive }}
+        accessibilityLabel="Awarded Bookings Tab"
       >
-        {isFleet && <View style={styles.activeTabIndicator} />}
-        <Truck
-          size={22}
-          color={isFleet ? '#FF5A1F' : '#68768A'}
-          strokeWidth={isFleet ? 2.5 : 1.8}
-        />
-        <Text style={[styles.tabLabel, isFleet && styles.tabLabelActive]}>
-          Fleet
+        <View style={[styles.tabIconWrap, isBookingsActive && styles.tabIconWrapActive]}>
+          <CheckCircle2
+            size={20}
+            color={isBookingsActive ? '#F05A22' : '#64748B'}
+            strokeWidth={isBookingsActive ? 2.4 : 1.8}
+          />
+        </View>
+        <Text style={[styles.tabLabel, isBookingsActive && styles.tabLabelActive]}>
+          Bookings
         </Text>
+        {isBookingsActive && <View style={styles.activeTabIndicator} />}
       </TouchableOpacity>
 
-      {/* Tab 5: More */}
+      {/* Tab 5: More / Profile */}
       <TouchableOpacity
         style={styles.tabItem}
-        onPress={() => handleTabPress('MORE')}
+        onPress={() => onSelectTab('MORE')}
         activeOpacity={0.8}
         accessibilityRole="tab"
-        accessibilityState={{ selected: isMore }}
-        accessibilityLabel="More Carrier Options"
+        accessibilityState={{ selected: isMoreActive }}
+        accessibilityLabel="More Options Tab"
       >
-        {isMore && <View style={styles.activeTabIndicator} />}
-        <Grid2x2
-          size={21}
-          color={isMore ? '#FF5A1F' : '#68768A'}
-          strokeWidth={isMore ? 2.5 : 1.8}
-        />
-        <Text style={[styles.tabLabel, isMore && styles.tabLabelActive]}>
+        <View style={[styles.tabIconWrap, isMoreActive && styles.tabIconWrapActive]}>
+          <MoreHorizontal
+            size={20}
+            color={isMoreActive ? '#F05A22' : '#64748B'}
+            strokeWidth={isMoreActive ? 2.4 : 1.8}
+          />
+        </View>
+        <Text style={[styles.tabLabel, isMoreActive && styles.tabLabelActive]}>
           More
         </Text>
+        {isMoreActive && <View style={styles.activeTabIndicator} />}
       </TouchableOpacity>
     </View>
   );
@@ -149,45 +155,55 @@ export const VendorBottomNavBar: React.FC<VendorBottomNavBarProps> = ({
 const styles = StyleSheet.create({
   bottomTabBar: {
     flexDirection: 'row',
-    height: Platform.OS === 'ios' ? 84 : 66,
+    height: Platform.OS === 'ios' ? 78 : 66,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: '#E6EAF0',
-    paddingBottom: Platform.OS === 'ios' ? 22 : 8,
+    borderTopColor: '#F1F5F9',
+    paddingBottom: Platform.OS === 'ios' ? 20 : 6,
     paddingTop: 6,
-    elevation: 12,
-    shadowColor: '#000',
+    elevation: 10,
+    shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    position: 'relative',
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
   },
   tabItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 4,
     position: 'relative',
-    height: '100%',
+    paddingHorizontal: 2,
+  },
+  tabIconWrap: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  tabIconWrapActive: {
+    backgroundColor: '#FFF7ED',
+  },
+  tabLabel: {
+    fontSize: 10,
+    color: '#64748B',
+    marginTop: 2,
+    fontWeight: '600',
+    letterSpacing: -0.2,
+    textAlign: 'center',
+  },
+  tabLabelActive: {
+    color: '#F05A22',
+    fontWeight: '800',
   },
   activeTabIndicator: {
     position: 'absolute',
     top: -6,
-    width: 36,
+    width: 28,
     height: 3,
-    borderRadius: 2,
-    backgroundColor: '#FF5A1F',
-  },
-  tabLabel: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: '#68768A',
-    marginTop: 4,
-  },
-  tabLabelActive: {
-    color: '#FF5A1F',
-    fontWeight: '700',
+    backgroundColor: '#F05A22',
+    borderBottomLeftRadius: 3,
+    borderBottomRightRadius: 3,
   },
 });

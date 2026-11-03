@@ -345,6 +345,11 @@ export const VendorDriverManagementScreen: React.FC<VendorDriverManagementScreen
                     </View>
                     <View style={{ flex: 1, marginLeft: 12 }}>
                       <Text style={styles.driverName}>{driver.fullName}</Text>
+                      {driver.driverCode && (
+                        <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#64748B', marginTop: 1 }}>
+                          {driver.driverCode}
+                        </Text>
+                      )}
                       <Text style={styles.driverPhone}>{driver.mobile}</Text>
                     </View>
                     <View style={[styles.statusBadge, isVerified ? styles.statusVerified : styles.statusPending]}>

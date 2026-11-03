@@ -1,0 +1,526 @@
+[
+  {
+    "relativePath": "auth/index.ts",
+    "name": "index"
+  },
+  {
+    "relativePath": "auth/login/ChooseAccountTypeScreen.tsx",
+    "name": "ChooseAccountTypeScreen"
+  },
+  {
+    "relativePath": "auth/login/index.ts",
+    "name": "index"
+  },
+  {
+    "relativePath": "auth/login/LoginScreen.tsx",
+    "name": "LoginScreen"
+  },
+  {
+    "relativePath": "auth/otp/index.ts",
+    "name": "index"
+  },
+  {
+    "relativePath": "auth/otp/OtpScreen.tsx",
+    "name": "OtpScreen"
+  },
+  {
+    "relativePath": "auth/password/CreateNewPasswordScreen.tsx",
+    "name": "CreateNewPasswordScreen"
+  },
+  {
+    "relativePath": "auth/password/ForgotPasswordScreen.tsx",
+    "name": "ForgotPasswordScreen"
+  },
+  {
+    "relativePath": "auth/password/index.ts",
+    "name": "index"
+  },
+  {
+    "relativePath": "auth/password/PasswordResetSuccessScreen.tsx",
+    "name": "PasswordResetSuccessScreen"
+  },
+  {
+    "relativePath": "auth/registration/index.ts",
+    "name": "index"
+  },
+  {
+    "relativePath": "auth/registration/RegistrationScreen.tsx",
+    "name": "RegistrationScreen"
+  },
+  {
+    "relativePath": "auth/registration/RegistrationStatusScreen.tsx",
+    "name": "RegistrationStatusScreen"
+  },
+  {
+    "relativePath": "client/bookings/BookingConfirmationScreen.tsx",
+    "name": "BookingConfirmationScreen"
+  },
+  {
+    "relativePath": "client/bookings/BookingDetailsScreen.tsx",
+    "name": "BookingDetailsScreen"
+  },
+  {
+    "relativePath": "client/bookings/index.ts",
+    "name": "index"
+  },
+  {
+    "relativePath": "client/bookings/MyBookingsScreen.tsx",
+    "name": "MyBookingsScreen"
+  },
+  {
+    "relativePath": "client/dashboard/ClientDashboardScreen.tsx",
+    "name": "ClientDashboardScreen"
+  },
+  {
+    "relativePath": "client/dashboard/index.ts",
+    "name": "index"
+  },
+  {
+    "relativePath": "client/index.ts",
+    "name": "index"
+  },
+  {
+    "relativePath": "client/onboarding/ClientBusinessDetailsScreen.tsx",
+    "name": "ClientBusinessDetailsScreen"
+  },
+  {
+    "relativePath": "client/onboarding/ClientDocumentUploadScreen.tsx",
+    "name": "ClientDocumentUploadScreen"
+  },
+  {
+    "relativePath": "client/onboarding/ClientProfileSetupScreen.tsx",
+    "name": "ClientProfileSetupScreen"
+  },
+  {
+    "relativePath": "client/onboarding/ClientRegistrationConfirmationScreen.tsx",
+    "name": "ClientRegistrationConfirmationScreen"
+  },
+  {
+    "relativePath": "client/onboarding/ClientRegistrationReviewScreen.tsx",
+    "name": "ClientRegistrationReviewScreen"
+  },
+  {
+    "relativePath": "client/onboarding/index.ts",
+    "name": "index"
+  },
+  {
+    "relativePath": "client/quotations/index.ts",
+    "name": "index"
+  },
+  {
+    "relativePath": "client/quotations/QuotationComparisonScreen.tsx",
+    "name": "QuotationComparisonScreen"
+  },
+  {
+    "relativePath": "client/quotations/QuotationDetailsScreen.tsx",
+    "name": "QuotationDetailsScreen"
+  },
+  {
+    "relativePath": "client/quotations/QuotationsListScreen.tsx",
+    "name": "QuotationsListScreen"
+  },
+  {
+    "relativePath": "client/requirements/CargoDetailsScreen.tsx",
+    "name": "CargoDetailsScreen"
+  },
+  {
+    "relativePath": "client/requirements/CreateTransportRequirementScreen.tsx",
+    "name": "CreateTransportRequirementScreen"
+  },
+  {
+    "relativePath": "client/requirements/index.ts",
+    "name": "index"
+  },
+  {
+    "relativePath": "client/requirements/MyRequirementsScreen.tsx",
+    "name": "MyRequirementsScreen"
+  },
+  {
+    "relativePath": "client/requirements/PickupDeliveryDetailsScreen.tsx",
+    "name": "PickupDeliveryDetailsScreen"
+  },
+  {
+    "relativePath": "client/requirements/RequirementConfirmationScreen.tsx",
+    "name": "RequirementConfirmationScreen"
+  },
+  {
+    "relativePath": "client/requirements/RequirementDetailsScreen.tsx",
+    "name": "RequirementDetailsScreen"
+  },
+  {
+    "relativePath": "client/requirements/RequirementReviewScreen.tsx",
+    "name": "RequirementReviewScreen"
+  },
+  {
+    "relativePath": "client/shipments/index.ts",
+    "name": "index"
+  },
+  {
+    "relativePath": "client/shipments/MyShipmentsScreen.tsx",
+    "name": "MyShipmentsScreen"
+  },
+  {
+    "relativePath": "client/shipments/ProofOfDeliveryScreen.tsx",
+    "name": "ProofOfDeliveryScreen"
+  },
+  {
+    "relativePath": "client/shipments/ShipmentDocumentsScreen.tsx",
+    "name": "ShipmentDocumentsScreen"
+  },
+  {
+    "relativePath": "client/shipments/ShipmentTrackingScreen.tsx",
+    "name": "ShipmentTrackingScreen"
+  },
+  {
+    "relativePath": "common/index.ts",
+    "name": "index"
+  },
+  {
+    "relativePath": "common/notifications/index.ts",
+    "name": "index"
+  },
+  {
+    "relativePath": "common/notifications/NotificationDetailsScreen.tsx",
+    "name": "NotificationDetailsScreen"
+  },
+  {
+    "relativePath": "common/notifications/NotificationPermissionScreen.tsx",
+    "name": "NotificationPermissionScreen"
+  },
+  {
+    "relativePath": "common/notifications/NotificationsScreen.tsx",
+    "name": "NotificationsScreen"
+  },
+  {
+    "relativePath": "common/onboarding/index.ts",
+    "name": "index"
+  },
+  {
+    "relativePath": "common/onboarding/OnboardingScreen.tsx",
+    "name": "OnboardingScreen"
+  },
+  {
+    "relativePath": "common/onboarding/SplashScreen.tsx",
+    "name": "SplashScreen"
+  },
+  {
+    "relativePath": "common/onboarding/WelcomeToNeclScreen.tsx",
+    "name": "WelcomeToNeclScreen"
+  },
+  {
+    "relativePath": "common/profile/EditProfileScreen.tsx",
+    "name": "EditProfileScreen"
+  },
+  {
+    "relativePath": "common/profile/index.ts",
+    "name": "index"
+  },
+  {
+    "relativePath": "common/profile/ProfileScreen.tsx",
+    "name": "ProfileScreen"
+  },
+  {
+    "relativePath": "common/profile/SavedAddressesScreen.tsx",
+    "name": "SavedAddressesScreen"
+  },
+  {
+    "relativePath": "common/settings/HelpSupportScreen.tsx",
+    "name": "HelpSupportScreen"
+  },
+  {
+    "relativePath": "common/settings/index.ts",
+    "name": "index"
+  },
+  {
+    "relativePath": "common/settings/SettingsScreen.tsx",
+    "name": "SettingsScreen"
+  },
+  {
+    "relativePath": "common/settings/TermsPrivacyScreen.tsx",
+    "name": "TermsPrivacyScreen"
+  },
+  {
+    "relativePath": "driver/dashboard/DriverDashboardScreen.tsx",
+    "name": "DriverDashboardScreen"
+  },
+  {
+    "relativePath": "driver/dashboard/index.ts",
+    "name": "index"
+  },
+  {
+    "relativePath": "driver/documents/DriverDocumentsScreen.tsx",
+    "name": "DriverDocumentsScreen"
+  },
+  {
+    "relativePath": "driver/documents/index.ts",
+    "name": "index"
+  },
+  {
+    "relativePath": "driver/index.ts",
+    "name": "index"
+  },
+  {
+    "relativePath": "driver/registration/DriverApplicationReviewScreen.tsx",
+    "name": "DriverApplicationReviewScreen"
+  },
+  {
+    "relativePath": "driver/registration/DriverDocumentCorrectionScreen.tsx",
+    "name": "DriverDocumentCorrectionScreen"
+  },
+  {
+    "relativePath": "driver/registration/DriverDocumentUploadScreen.tsx",
+    "name": "DriverDocumentUploadScreen"
+  },
+  {
+    "relativePath": "driver/registration/DriverLicenceDetailsScreen.tsx",
+    "name": "DriverLicenceDetailsScreen"
+  },
+  {
+    "relativePath": "driver/registration/DriverOnboardingScreen.tsx",
+    "name": "DriverOnboardingScreen"
+  },
+  {
+    "relativePath": "driver/registration/DriverPersonalInfoScreen.tsx",
+    "name": "DriverPersonalInfoScreen"
+  },
+  {
+    "relativePath": "driver/registration/DriverRegistrationScreen.tsx",
+    "name": "DriverRegistrationScreen"
+  },
+  {
+    "relativePath": "driver/registration/DriverSubmissionConfirmationScreen.tsx",
+    "name": "DriverSubmissionConfirmationScreen"
+  },
+  {
+    "relativePath": "driver/registration/DriverVehicleAssociationScreen.tsx",
+    "name": "DriverVehicleAssociationScreen"
+  },
+  {
+    "relativePath": "driver/registration/DriverVerificationStatusScreen.tsx",
+    "name": "DriverVerificationStatusScreen"
+  },
+  {
+    "relativePath": "driver/registration/index.ts",
+    "name": "index"
+  },
+  {
+    "relativePath": "driver/trips/DriverAssignedTripsScreen.tsx",
+    "name": "DriverAssignedTripsScreen"
+  },
+  {
+    "relativePath": "driver/trips/DriverDeliveryConfirmationScreen.tsx",
+    "name": "DriverDeliveryConfirmationScreen"
+  },
+  {
+    "relativePath": "driver/trips/DriverPickupConfirmationScreen.tsx",
+    "name": "DriverPickupConfirmationScreen"
+  },
+  {
+    "relativePath": "driver/trips/DriverPodUploadScreen.tsx",
+    "name": "DriverPodUploadScreen"
+  },
+  {
+    "relativePath": "driver/trips/DriverTripCompletionScreen.tsx",
+    "name": "DriverTripCompletionScreen"
+  },
+  {
+    "relativePath": "driver/trips/DriverTripDetailsScreen.tsx",
+    "name": "DriverTripDetailsScreen"
+  },
+  {
+    "relativePath": "driver/trips/DriverTripHistoryScreen.tsx",
+    "name": "DriverTripHistoryScreen"
+  },
+  {
+    "relativePath": "driver/trips/DriverTripProgressScreen.tsx",
+    "name": "DriverTripProgressScreen"
+  },
+  {
+    "relativePath": "driver/trips/index.ts",
+    "name": "index"
+  },
+  {
+    "relativePath": "index.ts",
+    "name": "index"
+  },
+  {
+    "relativePath": "vendor/bookings/index.ts",
+    "name": "index"
+  },
+  {
+    "relativePath": "vendor/bookings/VendorAssignDriverScreen.tsx",
+    "name": "VendorAssignDriverScreen"
+  },
+  {
+    "relativePath": "vendor/bookings/VendorAssignmentConfirmationScreen.tsx",
+    "name": "VendorAssignmentConfirmationScreen"
+  },
+  {
+    "relativePath": "vendor/bookings/VendorAssignVehicleScreen.tsx",
+    "name": "VendorAssignVehicleScreen"
+  },
+  {
+    "relativePath": "vendor/bookings/VendorAwardedBookingsScreen.tsx",
+    "name": "VendorAwardedBookingsScreen"
+  },
+  {
+    "relativePath": "vendor/bookings/VendorBookingDetailsScreen.tsx",
+    "name": "VendorBookingDetailsScreen"
+  },
+  {
+    "relativePath": "vendor/dashboard/index.ts",
+    "name": "index"
+  },
+  {
+    "relativePath": "vendor/dashboard/VendorDashboardScreen.tsx",
+    "name": "VendorDashboardScreen"
+  },
+  {
+    "relativePath": "vendor/dashboard/VendorOperationsHubModal.tsx",
+    "name": "VendorOperationsHubModal"
+  },
+  {
+    "relativePath": "vendor/dashboard/VendorReportsModal.tsx",
+    "name": "VendorReportsModal"
+  },
+  {
+    "relativePath": "vendor/fleet/index.ts",
+    "name": "index"
+  },
+  {
+    "relativePath": "vendor/fleet/VendorDriverManagementScreen.tsx",
+    "name": "VendorDriverManagementScreen"
+  },
+  {
+    "relativePath": "vendor/fleet/VendorFleetManagementScreen.tsx",
+    "name": "VendorFleetManagementScreen"
+  },
+  {
+    "relativePath": "vendor/hubs/index.ts",
+    "name": "index"
+  },
+  {
+    "relativePath": "vendor/hubs/VendorAssetHubScreen.tsx",
+    "name": "VendorAssetHubScreen"
+  },
+  {
+    "relativePath": "vendor/hubs/VendorBookingsHubScreen.tsx",
+    "name": "VendorBookingsHubScreen"
+  },
+  {
+    "relativePath": "vendor/hubs/VendorComplianceHubScreen.tsx",
+    "name": "VendorComplianceHubScreen"
+  },
+  {
+    "relativePath": "vendor/hubs/VendorLoadsHubScreen.tsx",
+    "name": "VendorLoadsHubScreen"
+  },
+  {
+    "relativePath": "vendor/hubs/VendorQuotationsHubScreen.tsx",
+    "name": "VendorQuotationsHubScreen"
+  },
+  {
+    "relativePath": "vendor/hubs/VendorRegistrationHubScreen.tsx",
+    "name": "VendorRegistrationHubScreen"
+  },
+  {
+    "relativePath": "vendor/hubs/VendorTripsHubScreen.tsx",
+    "name": "VendorTripsHubScreen"
+  },
+  {
+    "relativePath": "vendor/index.ts",
+    "name": "index"
+  },
+  {
+    "relativePath": "vendor/registration/index.ts",
+    "name": "index"
+  },
+  {
+    "relativePath": "vendor/registration/VendorAddressContactScreen.tsx",
+    "name": "VendorAddressContactScreen"
+  },
+  {
+    "relativePath": "vendor/registration/VendorApplicationReviewScreen.tsx",
+    "name": "VendorApplicationReviewScreen"
+  },
+  {
+    "relativePath": "vendor/registration/VendorBusinessInfoScreen.tsx",
+    "name": "VendorBusinessInfoScreen"
+  },
+  {
+    "relativePath": "vendor/registration/VendorDocumentCorrectionScreen.tsx",
+    "name": "VendorDocumentCorrectionScreen"
+  },
+  {
+    "relativePath": "vendor/registration/VendorDocumentUploadScreen.tsx",
+    "name": "VendorDocumentUploadScreen"
+  },
+  {
+    "relativePath": "vendor/registration/VendorFleetInfoScreen.tsx",
+    "name": "VendorFleetInfoScreen"
+  },
+  {
+    "relativePath": "vendor/registration/VendorOperatingLocationsScreen.tsx",
+    "name": "VendorOperatingLocationsScreen"
+  },
+  {
+    "relativePath": "vendor/registration/VendorRegistrationScreen.tsx",
+    "name": "VendorRegistrationScreen"
+  },
+  {
+    "relativePath": "vendor/registration/VendorSubmissionConfirmationScreen.tsx",
+    "name": "VendorSubmissionConfirmationScreen"
+  },
+  {
+    "relativePath": "vendor/registration/VendorTransportServicesScreen.tsx",
+    "name": "VendorTransportServicesScreen"
+  },
+  {
+    "relativePath": "vendor/registration/VendorVerificationStatusScreen.tsx",
+    "name": "VendorVerificationStatusScreen"
+  },
+  {
+    "relativePath": "vendor/rfqs/index.ts",
+    "name": "index"
+  },
+  {
+    "relativePath": "vendor/rfqs/VendorQuotationConfirmationScreen.tsx",
+    "name": "VendorQuotationConfirmationScreen"
+  },
+  {
+    "relativePath": "vendor/rfqs/VendorQuotationDetailsScreen.tsx",
+    "name": "VendorQuotationDetailsScreen"
+  },
+  {
+    "relativePath": "vendor/rfqs/VendorQuotationsListScreen.tsx",
+    "name": "VendorQuotationsListScreen"
+  },
+  {
+    "relativePath": "vendor/rfqs/VendorRequirementDetailsScreen.tsx",
+    "name": "VendorRequirementDetailsScreen"
+  },
+  {
+    "relativePath": "vendor/rfqs/VendorRequirementsScreen.tsx",
+    "name": "VendorRequirementsScreen"
+  },
+  {
+    "relativePath": "vendor/rfqs/VendorSubmitQuotationScreen.tsx",
+    "name": "VendorSubmitQuotationScreen"
+  },
+  {
+    "relativePath": "vendor/trips/index.ts",
+    "name": "index"
+  },
+  {
+    "relativePath": "vendor/trips/VendorTripDetailsScreen.tsx",
+    "name": "VendorTripDetailsScreen"
+  },
+  {
+    "relativePath": "vendor/trips/VendorTripDocumentsScreen.tsx",
+    "name": "VendorTripDocumentsScreen"
+  },
+  {
+    "relativePath": "vendor/trips/VendorTripManagementScreen.tsx",
+    "name": "VendorTripManagementScreen"
+  }
+]

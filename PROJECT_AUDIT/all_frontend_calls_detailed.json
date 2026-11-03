@@ -1,0 +1,1114 @@
+[
+  {
+    "file": "apps/mobile/src/screens/client/requirements/PickupDeliveryDetailsScreen.tsx",
+    "call": "`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(\n          trimmed"
+  },
+  {
+    "file": "apps/mobile/src/services/authService.ts",
+    "call": "`${getBackendApiUrl("
+  },
+  {
+    "file": "apps/mobile/src/services/authService.ts",
+    "supabase": "check_client_account_status"
+  },
+  {
+    "file": "apps/mobile/src/services/authService.ts",
+    "supabase": "auth_audit_log"
+  },
+  {
+    "file": "apps/mobile/src/services/authService.ts",
+    "supabase": "client_users"
+  },
+  {
+    "file": "apps/mobile/src/services/authService.ts",
+    "supabase": "vendor_users"
+  },
+  {
+    "file": "apps/mobile/src/services/authService.ts",
+    "supabase": "drivers"
+  },
+  {
+    "file": "apps/mobile/src/services/authService.ts",
+    "supabase": "client_users"
+  },
+  {
+    "file": "apps/mobile/src/services/authService.ts",
+    "supabase": "vendor_users"
+  },
+  {
+    "file": "apps/mobile/src/services/authService.ts",
+    "supabase": "drivers"
+  },
+  {
+    "file": "apps/mobile/src/services/authService.ts",
+    "supabase": "client_users"
+  },
+  {
+    "file": "apps/mobile/src/services/authService.ts",
+    "supabase": "vendor_users"
+  },
+  {
+    "file": "apps/mobile/src/services/authService.ts",
+    "supabase": "drivers"
+  },
+  {
+    "file": "apps/mobile/src/services/authService.ts",
+    "supabase": "auth_audit_log"
+  },
+  {
+    "file": "apps/mobile/src/services/authService.ts",
+    "supabase": "client_users"
+  },
+  {
+    "file": "apps/mobile/src/services/authService.ts",
+    "supabase": "vendor_users"
+  },
+  {
+    "file": "apps/mobile/src/services/authService.ts",
+    "supabase": "drivers"
+  },
+  {
+    "file": "apps/mobile/src/services/authService.ts",
+    "supabase": "otp_verifications"
+  },
+  {
+    "file": "apps/mobile/src/services/authService.ts",
+    "supabase": "auth_audit_log"
+  },
+  {
+    "file": "apps/mobile/src/services/authService.ts",
+    "supabase": "auth_audit_log"
+  },
+  {
+    "file": "apps/mobile/src/services/clientService.ts",
+    "call": "`${getBackendApiUrl("
+  },
+  {
+    "file": "apps/mobile/src/services/clientService.ts",
+    "call": "`${getBackendApiUrl("
+  },
+  {
+    "file": "apps/mobile/src/services/clientService.ts",
+    "call": "`${backendUrl}/client/quotes/${quoteId}/accept`"
+  },
+  {
+    "file": "apps/mobile/src/services/clientService.ts",
+    "call": "`${getBackendApiUrl("
+  },
+  {
+    "file": "apps/mobile/src/services/clientService.ts",
+    "call": "`${getBackendApiUrl("
+  },
+  {
+    "file": "apps/mobile/src/services/clientService.ts",
+    "call": "`${getBackendApiUrl("
+  },
+  {
+    "file": "apps/mobile/src/services/clientService.ts",
+    "call": "`${getBackendApiUrl("
+  },
+  {
+    "file": "apps/mobile/src/services/clientService.ts",
+    "supabase": "documents"
+  },
+  {
+    "file": "apps/mobile/src/services/clientService.ts",
+    "supabase": "auth_audit_log"
+  },
+  {
+    "file": "apps/mobile/src/services/clientService.ts",
+    "supabase": "documents"
+  },
+  {
+    "file": "apps/mobile/src/services/clientService.ts",
+    "supabase": "check_client_account_status"
+  },
+  {
+    "file": "apps/mobile/src/services/clientService.ts",
+    "supabase": "documents"
+  },
+  {
+    "file": "apps/mobile/src/services/clientService.ts",
+    "supabase": "auth_audit_log"
+  },
+  {
+    "file": "apps/mobile/src/services/clientService.ts",
+    "supabase": "requirements"
+  },
+  {
+    "file": "apps/mobile/src/services/clientService.ts",
+    "supabase": "auth_audit_log"
+  },
+  {
+    "file": "apps/mobile/src/services/clientService.ts",
+    "supabase": "rpc_accept_quotation_and_create_booking"
+  },
+  {
+    "file": "apps/mobile/src/services/clientService.ts",
+    "supabase": "client_quotes"
+  },
+  {
+    "file": "apps/mobile/src/services/clientService.ts",
+    "supabase": "bookings"
+  },
+  {
+    "file": "apps/mobile/src/services/clientService.ts",
+    "supabase": "vendor_quotations"
+  },
+  {
+    "file": "apps/mobile/src/services/clientService.ts",
+    "supabase": "auth_audit_log"
+  },
+  {
+    "file": "apps/mobile/src/services/clientService.ts",
+    "supabase": "rpc_reject_client_quotation"
+  },
+  {
+    "file": "apps/mobile/src/services/clientService.ts",
+    "supabase": "auth_audit_log"
+  },
+  {
+    "file": "apps/mobile/src/services/documentWorkflowService.ts",
+    "supabase": "weighments"
+  },
+  {
+    "file": "apps/mobile/src/services/documentWorkflowService.ts",
+    "supabase": "weighments"
+  },
+  {
+    "file": "apps/mobile/src/services/driverService.ts",
+    "call": "`${getBackendApiUrl("
+  },
+  {
+    "file": "apps/mobile/src/services/driverService.ts",
+    "call": "`${getBackendApiUrl("
+  },
+  {
+    "file": "apps/mobile/src/services/driverService.ts",
+    "call": "`${getBackendApiUrl("
+  },
+  {
+    "file": "apps/mobile/src/services/driverService.ts",
+    "call": "`${getBackendApiUrl("
+  },
+  {
+    "file": "apps/mobile/src/services/driverService.ts",
+    "call": "`${getBackendApiUrl("
+  },
+  {
+    "file": "apps/mobile/src/services/driverService.ts",
+    "call": "`${getBackendApiUrl("
+  },
+  {
+    "file": "apps/mobile/src/services/driverService.ts",
+    "call": "`${getBackendApiUrl("
+  },
+  {
+    "file": "apps/mobile/src/services/driverService.ts",
+    "call": "`${getBackendApiUrl("
+  },
+  {
+    "file": "apps/mobile/src/services/driverService.ts",
+    "call": "`${getBackendApiUrl("
+  },
+  {
+    "file": "apps/mobile/src/services/driverService.ts",
+    "call": "`${getBackendApiUrl("
+  },
+  {
+    "file": "apps/mobile/src/services/driverService.ts",
+    "call": "`${getBackendApiUrl("
+  },
+  {
+    "file": "apps/mobile/src/services/driverService.ts",
+    "call": "`${getBackendApiUrl("
+  },
+  {
+    "file": "apps/mobile/src/services/driverService.ts",
+    "call": "`${getBackendApiUrl("
+  },
+  {
+    "file": "apps/mobile/src/services/driverService.ts",
+    "call": "`${getBackendApiUrl("
+  },
+  {
+    "file": "apps/mobile/src/services/driverService.ts",
+    "call": "`${getBackendApiUrl("
+  },
+  {
+    "file": "apps/mobile/src/services/driverService.ts",
+    "call": "`${getBackendApiUrl("
+  },
+  {
+    "file": "apps/mobile/src/services/driverService.ts",
+    "call": "`${getBackendApiUrl("
+  },
+  {
+    "file": "apps/mobile/src/services/driverService.ts",
+    "supabase": "drivers"
+  },
+  {
+    "file": "apps/mobile/src/services/driverService.ts",
+    "supabase": "drivers"
+  },
+  {
+    "file": "apps/mobile/src/services/driverService.ts",
+    "supabase": "drivers"
+  },
+  {
+    "file": "apps/mobile/src/services/driverService.ts",
+    "supabase": "documents"
+  },
+  {
+    "file": "apps/mobile/src/services/driverService.ts",
+    "supabase": "drivers"
+  },
+  {
+    "file": "apps/mobile/src/services/driverService.ts",
+    "supabase": "documents"
+  },
+  {
+    "file": "apps/mobile/src/services/driverService.ts",
+    "supabase": "weighments"
+  },
+  {
+    "file": "apps/mobile/src/services/driverService.ts",
+    "supabase": "trips"
+  },
+  {
+    "file": "apps/mobile/src/services/notificationService.ts",
+    "call": "`${getApiBaseUrl("
+  },
+  {
+    "file": "apps/mobile/src/services/notificationService.ts",
+    "call": "`${getApiBaseUrl("
+  },
+  {
+    "file": "apps/mobile/src/services/pincodeService.ts",
+    "call": "`https://api.postalpincode.in/pincode/${clean}`"
+  },
+  {
+    "file": "apps/mobile/src/services/vendorService.ts",
+    "call": "`${getBackendApiUrl("
+  },
+  {
+    "file": "apps/mobile/src/services/vendorService.ts",
+    "call": "`${getBackendApiUrl("
+  },
+  {
+    "file": "apps/mobile/src/services/vendorService.ts",
+    "call": "`${getBackendApiUrl("
+  },
+  {
+    "file": "apps/mobile/src/services/vendorService.ts",
+    "call": "`${getBackendApiUrl("
+  },
+  {
+    "file": "apps/mobile/src/services/vendorService.ts",
+    "call": "`${getBackendApiUrl("
+  },
+  {
+    "file": "apps/mobile/src/services/vendorService.ts",
+    "call": "`${getBackendApiUrl("
+  },
+  {
+    "file": "apps/mobile/src/services/vendorService.ts",
+    "call": "`${getBackendApiUrl("
+  },
+  {
+    "file": "apps/mobile/src/services/vendorService.ts",
+    "call": "`${getBackendApiUrl("
+  },
+  {
+    "file": "apps/mobile/src/services/vendorService.ts",
+    "supabase": "vendor_users"
+  },
+  {
+    "file": "apps/mobile/src/services/vendorService.ts",
+    "supabase": "regional_hubs"
+  },
+  {
+    "file": "apps/mobile/src/services/vendorService.ts",
+    "supabase": "vendor_users"
+  },
+  {
+    "file": "apps/mobile/src/services/vendorService.ts",
+    "supabase": "documents"
+  },
+  {
+    "file": "apps/mobile/src/services/vendorService.ts",
+    "supabase": "documents"
+  },
+  {
+    "file": "apps/mobile/src/services/vendorService.ts",
+    "supabase": "documents"
+  },
+  {
+    "file": "apps/mobile/src/services/vendorService.ts",
+    "supabase": "auth_audit_log"
+  },
+  {
+    "file": "apps/mobile/src/services/vendorService.ts",
+    "supabase": "auth_audit_log"
+  },
+  {
+    "file": "apps/mobile/src/services/vendorService.ts",
+    "supabase": "documents"
+  },
+  {
+    "file": "apps/mobile/src/services/vendorService.ts",
+    "supabase": "trips"
+  },
+  {
+    "file": "apps/mobile/src/utils/idGenerator.ts",
+    "supabase": "generate_truckx_id"
+  },
+  {
+    "file": "apps/mobile/src/utils/mobileStorageHelper.ts",
+    "call": "workingUri"
+  },
+  {
+    "file": "apps/mobile/src/utils/mobileStorageHelper.ts",
+    "call": "workingUri"
+  },
+  {
+    "file": "apps/admin/src/App.tsx",
+    "supabase": "admin_users"
+  },
+  {
+    "file": "apps/admin/src/App.tsx",
+    "supabase": "requirements"
+  },
+  {
+    "file": "apps/admin/src/App.tsx",
+    "supabase": "vendor_requests"
+  },
+  {
+    "file": "apps/admin/src/App.tsx",
+    "supabase": "bookings"
+  },
+  {
+    "file": "apps/admin/src/App.tsx",
+    "supabase": "documents"
+  },
+  {
+    "file": "apps/admin/src/App.tsx",
+    "supabase": "documents"
+  },
+  {
+    "file": "apps/admin/src/App.tsx",
+    "supabase": "bookings"
+  },
+  {
+    "file": "apps/admin/src/App.tsx",
+    "supabase": "drivers"
+  },
+  {
+    "file": "apps/admin/src/App.tsx",
+    "supabase": "vendor_companies"
+  },
+  {
+    "file": "apps/admin/src/App.tsx",
+    "supabase": "client_companies"
+  },
+  {
+    "file": "apps/admin/src/App.tsx",
+    "supabase": "exceptions"
+  },
+  {
+    "file": "apps/admin/src/App.tsx",
+    "supabase": "chat_messages"
+  },
+  {
+    "file": "apps/admin/src/components/bookings/BookingsModule.tsx",
+    "call": "\"/api/bookings/emergency-direct-create\""
+  },
+  {
+    "file": "apps/admin/src/components/bookings/BookingsModule.tsx",
+    "supabase": "bookings"
+  },
+  {
+    "file": "apps/admin/src/components/bookings/BookingsModule.tsx",
+    "supabase": "bookings"
+  },
+  {
+    "file": "apps/admin/src/components/bookings/BookingsModule.tsx",
+    "supabase": "bookings"
+  },
+  {
+    "file": "apps/admin/src/components/bookings/BookingsModule.tsx",
+    "supabase": "bookings"
+  },
+  {
+    "file": "apps/admin/src/components/bookings/BookingsModule.tsx",
+    "supabase": "bookings"
+  },
+  {
+    "file": "apps/admin/src/components/bookings/BookingsModule.tsx",
+    "supabase": "bookings"
+  },
+  {
+    "file": "apps/admin/src/components/bookings/BookingsModule.tsx",
+    "supabase": "client_companies"
+  },
+  {
+    "file": "apps/admin/src/components/bookings/BookingsModule.tsx",
+    "supabase": "vehicles"
+  },
+  {
+    "file": "apps/admin/src/components/bookings/BookingsModule.tsx",
+    "supabase": "drivers"
+  },
+  {
+    "file": "apps/admin/src/components/bookings/BookingsModule.tsx",
+    "supabase": "vendor_companies"
+  },
+  {
+    "file": "apps/admin/src/components/bookings/BookingsModule.tsx",
+    "supabase": "vendor_companies"
+  },
+  {
+    "file": "apps/admin/src/components/bookings/BookingsModule.tsx",
+    "supabase": "vehicles"
+  },
+  {
+    "file": "apps/admin/src/components/bookings/BookingsModule.tsx",
+    "supabase": "drivers"
+  },
+  {
+    "file": "apps/admin/src/components/clients/ClientDirectory.tsx",
+    "supabase": "client_companies"
+  },
+  {
+    "file": "apps/admin/src/components/clients/ClientDirectory.tsx",
+    "supabase": "client_companies"
+  },
+  {
+    "file": "apps/admin/src/components/clients/ClientDirectory.tsx",
+    "supabase": "client_companies"
+  },
+  {
+    "file": "apps/admin/src/components/clients/ClientDirectory.tsx",
+    "supabase": "client_companies"
+  },
+  {
+    "file": "apps/admin/src/components/clients/ClientDirectory.tsx",
+    "supabase": "client_users"
+  },
+  {
+    "file": "apps/admin/src/components/clients/ClientDirectory.tsx",
+    "supabase": "admin_review_client_registration"
+  },
+  {
+    "file": "apps/admin/src/components/clients/ClientDirectory.tsx",
+    "supabase": "auth_audit_log"
+  },
+  {
+    "file": "apps/admin/src/components/clients/ClientDirectory.tsx",
+    "supabase": "auth_audit_log"
+  },
+  {
+    "file": "apps/admin/src/components/clients/ClientInstantApprovalReflection.test.ts",
+    "supabase": "admin_review_client_registration"
+  },
+  {
+    "file": "apps/admin/src/components/clients/ClientInstantApprovalReflection.test.ts",
+    "supabase": "admin_review_client_registration"
+  },
+  {
+    "file": "apps/admin/src/components/clients/ClientInstantApprovalReflection.test.ts",
+    "supabase": "check_client_account_status"
+  },
+  {
+    "file": "apps/admin/src/components/clients/ClientProfile.tsx",
+    "supabase": "vehicles"
+  },
+  {
+    "file": "apps/admin/src/components/clients/ClientProfile.tsx",
+    "supabase": "drivers"
+  },
+  {
+    "file": "apps/admin/src/components/clients/ClientProfile.tsx",
+    "supabase": "vendor_companies"
+  },
+  {
+    "file": "apps/admin/src/components/clients/ClientProfile.tsx",
+    "supabase": "client_quotes"
+  },
+  {
+    "file": "apps/admin/src/components/clients/ClientProfile.tsx",
+    "supabase": "admin_review_client_document"
+  },
+  {
+    "file": "apps/admin/src/components/clients/ClientProfile.tsx",
+    "supabase": "admin_review_client_document"
+  },
+  {
+    "file": "apps/admin/src/components/clients/ClientProfile.tsx",
+    "supabase": "admin_review_client_document"
+  },
+  {
+    "file": "apps/admin/src/components/clients/ClientProfile.tsx",
+    "supabase": "admin_review_client_registration"
+  },
+  {
+    "file": "apps/admin/src/components/clients/ClientProfile.tsx",
+    "supabase": "auth_audit_log"
+  },
+  {
+    "file": "apps/admin/src/components/clients/ClientProfile.tsx",
+    "supabase": "admin_review_client_registration"
+  },
+  {
+    "file": "apps/admin/src/components/clients/ClientProfile.tsx",
+    "supabase": "auth_audit_log"
+  },
+  {
+    "file": "apps/admin/src/components/clients/ClientProfile.tsx",
+    "supabase": "admin_review_client_registration"
+  },
+  {
+    "file": "apps/admin/src/components/clients/ClientProfile.tsx",
+    "supabase": "auth_audit_log"
+  },
+  {
+    "file": "apps/admin/src/components/clients/ClientProfile.tsx",
+    "supabase": "auth_audit_log"
+  },
+  {
+    "file": "apps/admin/src/components/clients/ClientProfile.tsx",
+    "supabase": "auth_audit_log"
+  },
+  {
+    "file": "apps/admin/src/components/clients/ClientProfile.tsx",
+    "supabase": "auth_audit_log"
+  },
+  {
+    "file": "apps/admin/src/components/clients/ClientProfile.tsx",
+    "supabase": "requirements"
+  },
+  {
+    "file": "apps/admin/src/components/clients/ClientProfile.tsx",
+    "supabase": "auth_audit_log"
+  },
+  {
+    "file": "apps/admin/src/components/clients/ClientProfile.tsx",
+    "supabase": "bookings"
+  },
+  {
+    "file": "apps/admin/src/components/clients/ClientShipmentsIntegration.test.ts",
+    "supabase": "trips"
+  },
+  {
+    "file": "apps/admin/src/components/clients/ClientShipmentsIntegration.test.ts",
+    "supabase": "bookings"
+  },
+  {
+    "file": "apps/admin/src/components/clients/ClientShipmentsIntegration.test.ts",
+    "supabase": "requirements"
+  },
+  {
+    "file": "apps/admin/src/components/clients/CreateClient.tsx",
+    "supabase": "documents"
+  },
+  {
+    "file": "apps/admin/src/components/clients/CreateClient.tsx",
+    "supabase": "documents"
+  },
+  {
+    "file": "apps/admin/src/components/common/DocumentPreviewModal.tsx",
+    "call": "fullSigned"
+  },
+  {
+    "file": "apps/admin/src/components/common/DocumentPreviewModal.tsx",
+    "call": "fileUrlOrPath"
+  },
+  {
+    "file": "apps/admin/src/components/common/DocumentPreviewModal.tsx",
+    "call": "fullUrl"
+  },
+  {
+    "file": "apps/admin/src/components/common/DocumentPreviewModal.tsx",
+    "call": "validSignedUrl"
+  },
+  {
+    "file": "apps/admin/src/components/common/DocumentPreviewModal.tsx",
+    "call": "resolvedUrl"
+  },
+  {
+    "file": "apps/admin/src/components/DashboardScreen.tsx",
+    "supabase": "requirements"
+  },
+  {
+    "file": "apps/admin/src/components/DashboardScreen.tsx",
+    "supabase": "bookings"
+  },
+  {
+    "file": "apps/admin/src/components/DashboardScreen.tsx",
+    "supabase": "trips"
+  },
+  {
+    "file": "apps/admin/src/components/DashboardScreen.tsx",
+    "supabase": "client_companies"
+  },
+  {
+    "file": "apps/admin/src/components/DashboardScreen.tsx",
+    "supabase": "vendor_companies"
+  },
+  {
+    "file": "apps/admin/src/components/DashboardScreen.tsx",
+    "supabase": "drivers"
+  },
+  {
+    "file": "apps/admin/src/components/DashboardScreen.tsx",
+    "supabase": "documents"
+  },
+  {
+    "file": "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+    "call": "\"/api/notifications/send-push\""
+  },
+  {
+    "file": "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+    "call": "\"/api/notifications/send-push\""
+  },
+  {
+    "file": "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+    "call": "\"/api/notifications/send-push\""
+  },
+  {
+    "file": "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+    "call": "\"/api/notifications/send-push\""
+  },
+  {
+    "file": "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+    "supabase": "bookings"
+  },
+  {
+    "file": "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+    "supabase": "vehicles"
+  },
+  {
+    "file": "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+    "supabase": "drivers"
+  },
+  {
+    "file": "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+    "supabase": "documents"
+  },
+  {
+    "file": "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+    "supabase": "audit_logs"
+  },
+  {
+    "file": "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+    "supabase": "audit_logs"
+  },
+  {
+    "file": "apps/admin/src/components/drivers/DriverVerificationQueue.tsx",
+    "supabase": "trips"
+  },
+  {
+    "file": "apps/admin/src/components/drivers/DriverVerificationQueue.tsx",
+    "supabase": "trips"
+  },
+  {
+    "file": "apps/admin/src/components/drivers/DriverVerificationQueue.tsx",
+    "supabase": "documents"
+  },
+  {
+    "file": "apps/admin/src/components/exceptions/ExceptionDetailView.tsx",
+    "supabase": "exceptions"
+  },
+  {
+    "file": "apps/admin/src/components/exceptions/ExceptionsModule.tsx",
+    "supabase": "exceptions"
+  },
+  {
+    "file": "apps/admin/src/components/exceptions/ExceptionsModule.tsx",
+    "supabase": "exceptions"
+  },
+  {
+    "file": "apps/admin/src/components/exceptions/ExceptionsModule.tsx",
+    "supabase": "exceptions"
+  },
+  {
+    "file": "apps/admin/src/components/exceptions/ExceptionsModule.tsx",
+    "supabase": "exceptions"
+  },
+  {
+    "file": "apps/admin/src/components/exceptions/ExceptionsModule.tsx",
+    "supabase": "exceptions"
+  },
+  {
+    "file": "apps/admin/src/components/exceptions/ExceptionsModule.tsx",
+    "supabase": "exceptions"
+  },
+  {
+    "file": "apps/admin/src/components/fleet/SharedVehicleMasterDirectory.tsx",
+    "supabase": "trips"
+  },
+  {
+    "file": "apps/admin/src/components/fleet/SharedVehicleMasterDirectory.tsx",
+    "supabase": "vehicles"
+  },
+  {
+    "file": "apps/admin/src/components/fleet/SharedVehicleMasterDirectory.tsx",
+    "supabase": "vehicles"
+  },
+  {
+    "file": "apps/admin/src/components/GlobalSearchModal.tsx",
+    "supabase": "client_companies"
+  },
+  {
+    "file": "apps/admin/src/components/GlobalSearchModal.tsx",
+    "supabase": "vendor_companies"
+  },
+  {
+    "file": "apps/admin/src/components/GlobalSearchModal.tsx",
+    "supabase": "vehicles"
+  },
+  {
+    "file": "apps/admin/src/components/GlobalSearchModal.tsx",
+    "supabase": "drivers"
+  },
+  {
+    "file": "apps/admin/src/components/GlobalSearchModal.tsx",
+    "supabase": "requirements"
+  },
+  {
+    "file": "apps/admin/src/components/GlobalSearchModal.tsx",
+    "supabase": "bookings"
+  },
+  {
+    "file": "apps/admin/src/components/GlobalSearchModal.tsx",
+    "supabase": "trips"
+  },
+  {
+    "file": "apps/admin/src/components/GlobalSearchModal.tsx",
+    "supabase": "vendor_quotations"
+  },
+  {
+    "file": "apps/admin/src/components/GlobalSearchModal.tsx",
+    "supabase": "documents"
+  },
+  {
+    "file": "apps/admin/src/components/payments/PaymentsModule.tsx",
+    "supabase": "payment_records"
+  },
+  {
+    "file": "apps/admin/src/components/payments/PaymentsModule.tsx",
+    "supabase": "payment_records"
+  },
+  {
+    "file": "apps/admin/src/components/payments/PaymentsModule.tsx",
+    "supabase": "bookings"
+  },
+  {
+    "file": "apps/admin/src/components/payments/PaymentsModule.tsx",
+    "supabase": "payment_records"
+  },
+  {
+    "file": "apps/admin/src/components/requirements/RequirementsModule.tsx",
+    "call": "\"/api/notifications/send-push\""
+  },
+  {
+    "file": "apps/admin/src/components/requirements/RequirementsModule.tsx",
+    "call": "\"/api/notifications/send-push\""
+  },
+  {
+    "file": "apps/admin/src/components/requirements/RequirementsModule.tsx",
+    "call": "\"/api/notifications/send-push\""
+  },
+  {
+    "file": "apps/admin/src/components/requirements/RequirementsModule.tsx",
+    "call": "\"/api/notifications/send-push\""
+  },
+  {
+    "file": "apps/admin/src/components/requirements/RequirementsModule.tsx",
+    "supabase": "audit_logs"
+  },
+  {
+    "file": "apps/admin/src/components/requirements/RequirementsModule.tsx",
+    "supabase": "audit_logs"
+  },
+  {
+    "file": "apps/admin/src/components/requirements/RequirementsModule.tsx",
+    "supabase": "audit_logs"
+  },
+  {
+    "file": "apps/admin/src/components/requirements/RequirementsModule.tsx",
+    "supabase": "bookings"
+  },
+  {
+    "file": "apps/admin/src/components/requirements/RequirementsModule.tsx",
+    "supabase": "audit_logs"
+  },
+  {
+    "file": "apps/admin/src/components/settings/SettingsModule.tsx",
+    "supabase": "regional_hubs"
+  },
+  {
+    "file": "apps/admin/src/components/superadmin/SuperAdminModules.tsx",
+    "supabase": "admin_users"
+  },
+  {
+    "file": "apps/admin/src/components/superadmin/SuperAdminModules.tsx",
+    "supabase": "admin_users"
+  },
+  {
+    "file": "apps/admin/src/components/superadmin/SuperAdminModules.tsx",
+    "supabase": "client_users"
+  },
+  {
+    "file": "apps/admin/src/components/superadmin/SuperAdminModules.tsx",
+    "supabase": "vendor_users"
+  },
+  {
+    "file": "apps/admin/src/components/superadmin/SuperAdminModules.tsx",
+    "supabase": "drivers"
+  },
+  {
+    "file": "apps/admin/src/components/superadmin/SuperAdminModules.tsx",
+    "supabase": "client_users"
+  },
+  {
+    "file": "apps/admin/src/components/superadmin/SuperAdminModules.tsx",
+    "supabase": "vendor_users"
+  },
+  {
+    "file": "apps/admin/src/components/superadmin/SuperAdminModules.tsx",
+    "supabase": "drivers"
+  },
+  {
+    "file": "apps/admin/src/components/superadmin/SuperAdminModules.tsx",
+    "supabase": "role_change_requests"
+  },
+  {
+    "file": "apps/admin/src/components/superadmin/SuperAdminModules.tsx",
+    "supabase": "bookings"
+  },
+  {
+    "file": "apps/admin/src/components/superadmin/SuperAdminModules.tsx",
+    "supabase": "payment_records"
+  },
+  {
+    "file": "apps/admin/src/components/superadmin/SuperAdminModules.tsx",
+    "supabase": "audit_logs"
+  },
+  {
+    "file": "apps/admin/src/components/superadmin/SuperAdminModules.tsx",
+    "supabase": "system_parameters"
+  },
+  {
+    "file": "apps/admin/src/components/superadmin/SuperAdminModules.tsx",
+    "supabase": "system_parameters"
+  },
+  {
+    "file": "apps/admin/src/components/tracking/TrackingModule.tsx",
+    "supabase": "trips"
+  },
+  {
+    "file": "apps/admin/src/components/tracking/TrackingModule.tsx",
+    "supabase": "trips"
+  },
+  {
+    "file": "apps/admin/src/components/tracking/TrackingModule.tsx",
+    "supabase": "trips"
+  },
+  {
+    "file": "apps/admin/src/components/tracking/TrackingModule.tsx",
+    "supabase": "trips"
+  },
+  {
+    "file": "apps/admin/src/components/tracking/TrackingModule.tsx",
+    "supabase": "trips"
+  },
+  {
+    "file": "apps/admin/src/components/tracking/TrackingModule.tsx",
+    "supabase": "bookings"
+  },
+  {
+    "file": "apps/admin/src/components/tracking/TrackingModule.tsx",
+    "supabase": "vehicles"
+  },
+  {
+    "file": "apps/admin/src/components/tracking/TrackingModule.tsx",
+    "supabase": "drivers"
+  },
+  {
+    "file": "apps/admin/src/components/tracking/TrackingModule.tsx",
+    "supabase": "vendor_companies"
+  },
+  {
+    "file": "apps/admin/src/components/tracking/TrackingModule.tsx",
+    "supabase": "exceptions"
+  },
+  {
+    "file": "apps/admin/src/components/tracking/TrackingModule.tsx",
+    "supabase": "requirements"
+  },
+  {
+    "file": "apps/admin/src/components/tracking/TripDetailView.tsx",
+    "supabase": "bookings"
+  },
+  {
+    "file": "apps/admin/src/components/tracking/TripDetailView.tsx",
+    "supabase": "vehicles"
+  },
+  {
+    "file": "apps/admin/src/components/tracking/TripDetailView.tsx",
+    "supabase": "drivers"
+  },
+  {
+    "file": "apps/admin/src/components/tracking/TripDetailView.tsx",
+    "supabase": "vendor_companies"
+  },
+  {
+    "file": "apps/admin/src/components/tracking/TripDetailView.tsx",
+    "supabase": "documents"
+  },
+  {
+    "file": "apps/admin/src/components/tracking/TripDetailView.tsx",
+    "supabase": "requirements"
+  },
+  {
+    "file": "apps/admin/src/components/tracking/TripDetailView.tsx",
+    "supabase": "client_companies"
+  },
+  {
+    "file": "apps/admin/src/components/tracking/TripDetailView.tsx",
+    "supabase": "bookings"
+  },
+  {
+    "file": "apps/admin/src/components/tracking/TripDetailView.tsx",
+    "supabase": "bookings"
+  },
+  {
+    "file": "apps/admin/src/components/vendors/DocumentRejectionModal.tsx",
+    "call": "'/api/notifications/send-push'"
+  },
+  {
+    "file": "apps/admin/src/components/vendors/DocumentRejectionModal.tsx",
+    "supabase": "audit_logs"
+  },
+  {
+    "file": "apps/admin/src/components/vendors/EditVendorModal.tsx",
+    "supabase": "auth_audit_log"
+  },
+  {
+    "file": "apps/admin/src/components/vendors/InviteVendor.tsx",
+    "supabase": "vendor_users"
+  },
+  {
+    "file": "apps/admin/src/components/vendors/InviteVendor.tsx",
+    "supabase": "vehicles"
+  },
+  {
+    "file": "apps/admin/src/components/vendors/InviteVendor.tsx",
+    "supabase": "documents"
+  },
+  {
+    "file": "apps/admin/src/components/vendors/InviteVendor.tsx",
+    "supabase": "documents"
+  },
+  {
+    "file": "apps/admin/src/components/vendors/InviteVendor.tsx",
+    "supabase": "auth_audit_log"
+  },
+  {
+    "file": "apps/admin/src/components/vendors/VendorDirectory.tsx",
+    "supabase": "documents"
+  },
+  {
+    "file": "apps/admin/src/components/vendors/VendorDirectory.tsx",
+    "supabase": "vendor_users"
+  },
+  {
+    "file": "apps/admin/src/components/vendors/VendorDirectory.tsx",
+    "supabase": "vendor_vehicle_links"
+  },
+  {
+    "file": "apps/admin/src/components/vendors/VendorDirectory.tsx",
+    "supabase": "drivers"
+  },
+  {
+    "file": "apps/admin/src/components/vendors/VendorDirectory.tsx",
+    "supabase": "auth_audit_log"
+  },
+  {
+    "file": "apps/admin/src/components/vendors/VendorProfile.tsx",
+    "supabase": "vendor_vehicle_links"
+  },
+  {
+    "file": "apps/admin/src/components/vendors/VendorProfile.tsx",
+    "supabase": "drivers"
+  },
+  {
+    "file": "apps/admin/src/components/vendors/VendorProfile.tsx",
+    "supabase": "trips"
+  },
+  {
+    "file": "apps/admin/src/components/vendors/VendorProfile.tsx",
+    "supabase": "auth_audit_log"
+  },
+  {
+    "file": "apps/admin/src/components/vendors/VendorProfile.tsx",
+    "supabase": "auth_audit_log"
+  },
+  {
+    "file": "apps/admin/src/components/weighbridge/WeighbridgeModule.tsx",
+    "supabase": "trips"
+  },
+  {
+    "file": "apps/admin/src/components/weighbridge/WeighbridgeModule.tsx",
+    "supabase": "vehicles"
+  },
+  {
+    "file": "apps/admin/src/components/weighbridge/WeighbridgeModule.tsx",
+    "supabase": "bookings"
+  },
+  {
+    "file": "apps/admin/src/context/AuthContext.tsx",
+    "call": "`${cleanBase}/admin/users/${userId}/permissions`"
+  },
+  {
+    "file": "apps/admin/src/services/documentWorkflowService.ts",
+    "call": "'/api/notifications/send-push'"
+  },
+  {
+    "file": "apps/admin/src/services/documentWorkflowService.ts",
+    "supabase": "audit_logs"
+  },
+  {
+    "file": "apps/admin/src/services/documentWorkflowService.ts",
+    "supabase": "audit_logs"
+  },
+  {
+    "file": "apps/admin/src/services/documentWorkflowService.ts",
+    "supabase": "audit_logs"
+  },
+  {
+    "file": "apps/admin/src/services/firebase.ts",
+    "call": "`${API_BASE_URL}/notifications/register-token`"
+  },
+  {
+    "file": "apps/admin/src/services/firebase.ts",
+    "call": "`${API_BASE_URL}/notifications/send-push`"
+  },
+  {
+    "file": "apps/admin/src/services/pincodeService.ts",
+    "call": "`https://api.postalpincode.in/pincode/${cleanedPin}`"
+  },
+  {
+    "file": "apps/admin/src/utils/api.ts",
+    "call": "`${API_BASE_URL}${cleanEndpoint}`"
+  },
+  {
+    "file": "apps/admin/src/utils/api.ts",
+    "call": "`${API_BASE_URL}${cleanEndpoint}`"
+  },
+  {
+    "file": "apps/admin/src/utils/idGenerator.ts",
+    "supabase": "generate_truckx_id"
+  }
+]

@@ -7,6 +7,9 @@ import {
   SafeAreaView,
   ScrollView,
   Modal,
+  Image,
+  Platform,
+  Clipboard,
 } from 'react-native';
 import {
   ArrowLeft,
@@ -21,8 +24,10 @@ import {
   Building2,
   Truck,
   UserCheck,
+  Copy,
 } from 'lucide-react-native';
 import { AuthSessionData, authService } from '../../../services/authService';
+import { formatDisplayId } from '../../../utils/idGenerator';
 
 interface ProfileScreenProps {
   session: AuthSessionData | null;
@@ -52,12 +57,21 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [profileName, setProfileName] = useState(session?.fullName || 'Pavani');
   const [profileOrg, setProfileOrg] = useState(session?.companyName || 'ABC Logistics Pvt Ltd');
+  const [photoUrl, setPhotoUrl] = useState(session?.profilePhotoUrl || '');
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  const handleCopy = (idValue: string, label: string) => {
+    Clipboard.setString(idValue);
+    setCopiedKey(label);
+    setTimeout(() => setCopiedKey(null), 2000);
+  };
 
   useEffect(() => {
     if (session?.fullName) setProfileName(session.fullName);
     if (session?.companyName) setProfileOrg(session.companyName);
+    if (session?.profilePhotoUrl) setPhotoUrl(session.profilePhotoUrl);
 
-    if (session?.mobile && (!session?.fullName || !session?.companyName)) {
+    if (session?.mobile) {
       (async () => {
         try {
           const cleanPhone = session.mobile.replace(/[^0-9]/g, '').slice(-10);
@@ -66,6 +80,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           if (target) {
             if (target.fullName) setProfileName(target.fullName);
             if (target.companyName) setProfileOrg(target.companyName);
+            if (target.profilePhotoUrl) setPhotoUrl(target.profilePhotoUrl);
           }
         } catch {}
       })();
@@ -77,8 +92,28 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const mobile = session?.mobile ? `+91 ${session.mobile}` : '+91 9876543210';
   const companyName = profileOrg;
 
+  // Account ID and Role-specific ID in canonical TRUCKX format
+  const accountId =
+    session?.accountId ||
+    formatDisplayId('AC', session?.userId, session?.createdAt);
+
+  const clientId =
+    session?.clientCode ||
+    session?.clientId ||
+    formatDisplayId('CL', session?.userId, session?.createdAt);
+
+  const vendorId =
+    session?.vendorCode ||
+    session?.vendorId ||
+    formatDisplayId('VE', session?.userId, session?.createdAt);
+
+  const driverId =
+    session?.driverCode ||
+    session?.driverId ||
+    formatDisplayId('DR', session?.userId, session?.createdAt);
+
   const roleLabelMap = {
-    CLIENT: 'Client / Shipper',
+    CLIENT: 'Client',
     VENDOR: 'Vendor / Transporter',
     DRIVER: 'Driver / Pilot',
   };
@@ -106,7 +141,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             onPress={onBack}
             accessibilityLabel="Back"
           >
-            <ArrowLeft size={20} color="#101D36" />
+            <ArrowLeft size={20} color="#0F172A" />
           </TouchableOpacity>
         ) : (
           <View style={{ width: 36 }} />
@@ -128,9 +163,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         >
           {/* Avatar with Orange Edit Badge */}
           <View style={styles.avatarWrap}>
-            <View style={styles.avatarCircle}>
-              <Text style={styles.avatarInitials}>{initials}</Text>
-            </View>
+            {photoUrl ? (
+              <Image source={{ uri: photoUrl }} style={styles.avatarImage} />
+            ) : (
+              <View style={styles.avatarCircle}>
+                <Text style={styles.avatarInitials}>{initials}</Text>
+              </View>
+            )}
             <View style={styles.avatarEditBadge}>
               <Edit3 size={11} color="#FFFFFF" strokeWidth={2.4} />
             </View>
@@ -145,15 +184,17 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
             {/* Role Badge */}
             <View style={styles.roleBadge}>
-              <FileText size={12} color="#F05A24" />
-              <Text style={styles.roleBadgeText}>{roleLabelMap[role]}</Text>
+              <FileText size={12} color="#F05A22" />
+              <Text style={styles.roleBadgeText}>{roleLabelMap[role] || 'Client'}</Text>
             </View>
 
-            {/* Organization */}
-            <View style={styles.organizationRow}>
-              <Building2 size={13} color="#64748B" />
-              <Text style={styles.orgLabel}>Organization </Text>
-              <Text style={styles.orgValue} numberOfLines={1}>
+            {/* Organization - clean multi-line display supporting long company names */}
+            <View style={styles.organizationBlock}>
+              <View style={styles.orgHeaderRow}>
+                <Building2 size={12} color="#64748B" />
+                <Text style={styles.orgLabel}>Organization</Text>
+              </View>
+              <Text style={styles.orgValue} numberOfLines={2}>
                 {companyName}
               </Text>
             </View>
@@ -162,6 +203,85 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           {/* Right Chevron */}
           <ChevronRight size={20} color="#94A3B8" />
         </TouchableOpacity>
+
+        {/* ── Permanent TRUCKX Identifiers Card (Copyable) ── */}
+        <View style={styles.idCard}>
+          <TouchableOpacity
+            style={styles.idBadgeCol}
+            onPress={() => handleCopy(accountId, 'Account ID')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.idHeaderRow}>
+              <Text style={styles.idBadgeLabel}>ACCOUNT ID</Text>
+              <Copy size={11} color="#F05A22" />
+            </View>
+            <Text style={styles.idBadgeValue} numberOfLines={1}>
+              {accountId}
+            </Text>
+            {copiedKey === 'Account ID' && (
+              <Text style={styles.copiedFeedback}>✓ Copied to clipboard</Text>
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.idVerticalDivider} />
+
+          {role === 'CLIENT' && (
+            <TouchableOpacity
+              style={styles.idBadgeCol}
+              onPress={() => handleCopy(clientId, 'Client ID')}
+              activeOpacity={0.7}
+            >
+              <View style={styles.idHeaderRow}>
+                <Text style={styles.idBadgeLabel}>CLIENT ID</Text>
+                <Copy size={11} color="#F05A22" />
+              </View>
+              <Text style={styles.idBadgeValue} numberOfLines={1}>
+                {clientId}
+              </Text>
+              {copiedKey === 'Client ID' && (
+                <Text style={styles.copiedFeedback}>✓ Copied to clipboard</Text>
+              )}
+            </TouchableOpacity>
+          )}
+
+          {role === 'VENDOR' && (
+            <TouchableOpacity
+              style={styles.idBadgeCol}
+              onPress={() => handleCopy(vendorId, 'Vendor ID')}
+              activeOpacity={0.7}
+            >
+              <View style={styles.idHeaderRow}>
+                <Text style={styles.idBadgeLabel}>VENDOR ID</Text>
+                <Copy size={11} color="#F05A22" />
+              </View>
+              <Text style={styles.idBadgeValue} numberOfLines={1}>
+                {vendorId}
+              </Text>
+              {copiedKey === 'Vendor ID' && (
+                <Text style={styles.copiedFeedback}>✓ Copied to clipboard</Text>
+              )}
+            </TouchableOpacity>
+          )}
+
+          {role === 'DRIVER' && (
+            <TouchableOpacity
+              style={styles.idBadgeCol}
+              onPress={() => handleCopy(driverId, 'Driver ID')}
+              activeOpacity={0.7}
+            >
+              <View style={styles.idHeaderRow}>
+                <Text style={styles.idBadgeLabel}>DRIVER ID</Text>
+                <Copy size={11} color="#F05A22" />
+              </View>
+              <Text style={styles.idBadgeValue} numberOfLines={1}>
+                {driverId}
+              </Text>
+              {copiedKey === 'Driver ID' && (
+                <Text style={styles.copiedFeedback}>✓ Copied to clipboard</Text>
+              )}
+            </TouchableOpacity>
+          )}
+        </View>
 
         {/* ── Section 1: ACCOUNT & PREFERENCES ── */}
         <Text style={styles.sectionHeader}>ACCOUNT & PREFERENCES</Text>
@@ -184,25 +304,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
           <View style={styles.itemDivider} />
 
-          {/* 2. Notifications */}
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={onNavigateToNotifications}
-            activeOpacity={0.75}
-          >
-            <View style={[styles.menuIconWrap, { backgroundColor: '#EFF6FF' }]}>
-              <Bell size={18} color="#2563EB" />
-            </View>
-            <View style={styles.menuTextCol}>
-              <Text style={styles.menuTitle}>Notifications</Text>
-              <Text style={styles.menuSubtitle}>View shipment & brokerage alerts</Text>
-            </View>
-            <ChevronRight size={18} color="#94A3B8" />
-          </TouchableOpacity>
-
-          <View style={styles.itemDivider} />
-
-          {/* 3. Saved Hubs & Addresses */}
+          {/* 2. Saved Hubs & Addresses */}
           <TouchableOpacity
             style={styles.menuItem}
             onPress={onNavigateToSavedAddresses || onNavigateToEditProfile}
@@ -310,7 +412,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         </TouchableOpacity>
 
         {/* ── Version Footer ── */}
-        <Text style={styles.versionText}>TRUCKS Logistics App v2.4.0 • Build 2026</Text>
+        <Text style={styles.versionText}>THE TRUCKX App v1.0 • Build 2026</Text>
       </ScrollView>
 
       {/* ── Logout Confirmation Modal ── */}
@@ -374,7 +476,7 @@ const styles = StyleSheet.create({
   topBarTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#101D36',
+    color: '#0F172A',
     textAlign: 'center',
   },
   backBtn: {
@@ -387,7 +489,7 @@ const styles = StyleSheet.create({
   },
   scrollContainer: {
     flexGrow: 1,
-    paddingBottom: 90,
+    paddingBottom: 130, // Increased padding to prevent bottom navigation bar truncation
   },
 
   /* User Profile Card */
@@ -420,8 +522,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  avatarImage: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    borderWidth: 2,
+    borderColor: '#FED7AA',
+  },
   avatarInitials: {
-    color: '#F05A24',
+    color: '#F05A22',
     fontSize: 26,
     fontWeight: '800',
   },
@@ -432,7 +541,7 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: '#F05A24',
+    backgroundColor: '#F05A22',
     borderWidth: 1.5,
     borderColor: '#FFFFFF',
     alignItems: 'center',
@@ -446,7 +555,7 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#101D36',
+    color: '#0F172A',
   },
   userPhone: {
     fontSize: 12.5,
@@ -468,7 +577,15 @@ const styles = StyleSheet.create({
   roleBadgeText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#F05A24',
+    color: '#F05A22',
+  },
+  organizationBlock: {
+    marginTop: 6,
+  },
+  orgHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   organizationRow: {
     flexDirection: 'row',
@@ -476,15 +593,66 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   orgLabel: {
-    fontSize: 11.5,
+    fontSize: 11,
     color: '#64748B',
-    marginLeft: 4,
+    fontWeight: '500',
   },
   orgValue: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: 1,
+    lineHeight: 16,
+  },
+  idCard: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginTop: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  idBadgeCol: {
+    flex: 1,
+  },
+  idHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  copiedFeedback: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#10B981',
+    marginTop: 2,
+  },
+  idVerticalDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#E2E8F0',
+    marginHorizontal: 12,
+  },
+  idBadgeLabel: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#94A3B8',
+    letterSpacing: 0.5,
+  },
+  idBadgeValue: {
     fontSize: 11.5,
     fontWeight: '700',
-    color: '#101D36',
-    flexShrink: 1,
+    color: '#0F172A',
+    marginTop: 2,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
 
   /* Menu Section & Cards */
@@ -533,7 +701,7 @@ const styles = StyleSheet.create({
   menuTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#101D36',
+    color: '#0F172A',
   },
   menuSubtitle: {
     fontSize: 11.5,
@@ -613,7 +781,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#101D36',
+    color: '#0F172A',
     marginBottom: 6,
   },
   modalDesc: {

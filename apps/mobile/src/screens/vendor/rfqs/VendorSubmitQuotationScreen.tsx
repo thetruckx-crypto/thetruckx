@@ -11,6 +11,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Modal,
 } from 'react-native';
 import {
   ChevronLeft,
@@ -51,6 +52,7 @@ export const VendorSubmitQuotationScreen: React.FC<VendorSubmitQuotationScreenPr
   
   const [loading, setLoading] = useState(false);
   const [loadingFleet, setLoadingFleet] = useState(true);
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -89,7 +91,7 @@ export const VendorSubmitQuotationScreen: React.FC<VendorSubmitQuotationScreenPr
   const capacityMt = requirement.requiredCapacityMt ? parseFloat(requirement.requiredCapacityMt) : 0;
   const ratePerMt = capacityMt > 0 && currentRateNum > 0 ? Math.round(currentRateNum / capacityMt) : null;
 
-  const handleSubmit = async () => {
+  const handleInitiateSubmit = () => {
     const rateNum = parseFloat(quotedRate.replace(/[^0-9.]/g, ''));
     if (!rateNum || rateNum < 1000) {
       Alert.alert('Required Rate', 'Please enter a valid quoted freight rate (min ₹1,000).');
@@ -101,6 +103,14 @@ export const VendorSubmitQuotationScreen: React.FC<VendorSubmitQuotationScreenPr
       Alert.alert('Required Field', 'Please enter estimated transit days.');
       return;
     }
+
+    setConfirmModalOpen(true);
+  };
+
+  const handleConfirmedSubmit = async () => {
+    if (loading) return;
+    const rateNum = parseFloat(quotedRate.replace(/[^0-9.]/g, ''));
+    const daysNum = parseInt(transitDays, 10);
 
     setLoading(true);
     try {
@@ -115,6 +125,7 @@ export const VendorSubmitQuotationScreen: React.FC<VendorSubmitQuotationScreenPr
       });
 
       if (res.success) {
+        setConfirmModalOpen(false);
         onSubmitSuccess({
           quotationId: res.quotationId,
           quotedRate: rateNum,
@@ -347,22 +358,112 @@ export const VendorSubmitQuotationScreen: React.FC<VendorSubmitQuotationScreenPr
             {/* Submit Action */}
             <TouchableOpacity
               style={[styles.goldBtn, loading && styles.goldBtnDisabled]}
-              onPress={handleSubmit}
+              onPress={handleInitiateSubmit}
               disabled={loading}
               activeOpacity={0.85}
             >
-              {loading ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <>
-                  <Text style={styles.goldBtnText}>Submit Freight Quotation</Text>
-                  <ArrowRight size={18} color="#FFFFFF" strokeWidth={2.5} />
-                </>
-              )}
+              <Text style={styles.goldBtnText}>Review & Submit Quotation</Text>
+              <ArrowRight size={18} color="#FFFFFF" strokeWidth={2.5} />
             </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* THE TRUCKX Themed Quotation Submission Confirmation Modal */}
+      <Modal
+        visible={confirmModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!loading) setConfirmModalOpen(false);
+        }}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => {
+            if (!loading) setConfirmModalOpen(false);
+          }}
+        >
+          <View style={styles.confirmModalCard} onStartShouldSetResponder={() => true}>
+            <View style={styles.confirmModalHeader}>
+              <View style={styles.confirmIconWrap}>
+                <DollarSign size={22} color="#F05A22" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.confirmModalTitle}>Confirm Freight Quotation</Text>
+                <Text style={styles.confirmModalSub}>THE TRUCKX Commercial Rate Commitment</Text>
+              </View>
+            </View>
+
+            <View style={styles.confirmDetailsBlock}>
+              <View style={styles.confirmRow}>
+                <Text style={styles.confirmRowLabel}>Requirement Ref</Text>
+                <Text style={styles.confirmRowVal}>{requirement.id || 'TRUCKX-REQ'}</Text>
+              </View>
+              <View style={styles.confirmRow}>
+                <Text style={styles.confirmRowLabel}>Route</Text>
+                <Text style={[styles.confirmRowVal, { flex: 1, textAlign: 'right' }]} numberOfLines={1}>
+                  {requirement.pickupAddress?.split(',')[0]} → {requirement.destinationAddress?.split(',')[0]}
+                </Text>
+              </View>
+              <View style={styles.confirmRow}>
+                <Text style={styles.confirmRowLabel}>Quoted Rate</Text>
+                <Text style={styles.confirmRateVal}>{formatINR(currentRateNum)}</Text>
+              </View>
+              {rateInWords ? (
+                <Text style={styles.confirmRateWords}>{rateInWords}</Text>
+              ) : null}
+              <View style={styles.confirmRow}>
+                <Text style={styles.confirmRowLabel}>Estimated Transit</Text>
+                <Text style={styles.confirmRowVal}>{transitDays} Business Days</Text>
+              </View>
+              {remarks.trim() ? (
+                <View style={styles.confirmRow}>
+                  <Text style={styles.confirmRowLabel}>Remarks</Text>
+                  <Text style={[styles.confirmRowVal, { flex: 1, textAlign: 'right' }]} numberOfLines={1}>
+                    {remarks.trim()}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+
+            <View style={styles.confirmNoticeBox}>
+              <ShieldCheck size={14} color="#10B981" />
+              <Text style={styles.confirmNoticeText}>
+                Your quotation rate will be submitted directly to client and compliance desk.
+              </Text>
+            </View>
+
+            {/* Action Buttons */}
+            <View style={styles.confirmActionsRow}>
+              <TouchableOpacity
+                style={styles.cancelModalBtn}
+                onPress={() => setConfirmModalOpen(false)}
+                disabled={loading}
+              >
+                <Text style={styles.cancelModalText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.submitModalBtn, loading && styles.submitModalBtnDisabled]}
+                onPress={handleConfirmedSubmit}
+                disabled={loading}
+                activeOpacity={0.85}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Text style={styles.submitModalText}>Confirm & Submit</Text>
+                    <ArrowRight size={16} color="#FFFFFF" strokeWidth={2.5} />
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -652,5 +753,137 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
     letterSpacing: 0.3,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  confirmModalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 22,
+    width: '100%',
+    maxWidth: 420,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  confirmModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  confirmIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFF7ED',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmModalTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  confirmModalSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  confirmDetailsBlock: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  confirmRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  confirmRowLabel: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  confirmRowVal: {
+    fontSize: 12.5,
+    color: '#0F172A',
+    fontWeight: '700',
+  },
+  confirmRateVal: {
+    fontSize: 17,
+    color: '#F05A22',
+    fontWeight: '800',
+  },
+  confirmRateWords: {
+    fontSize: 11,
+    color: '#64748B',
+    fontStyle: 'italic',
+    marginBottom: 6,
+    textAlign: 'right',
+  },
+  confirmNoticeBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 18,
+  },
+  confirmNoticeText: {
+    flex: 1,
+    fontSize: 11,
+    color: '#047857',
+    lineHeight: 15,
+  },
+  confirmActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  cancelModalBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelModalText: {
+    color: '#475569',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  submitModalBtn: {
+    flex: 1.5,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#F05A22',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  submitModalBtnDisabled: {
+    opacity: 0.6,
+  },
+  submitModalText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
   },
 });

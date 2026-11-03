@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { supabase } from "../../utils/supabase";
 import { pincodeService } from "../../services/pincodeService";
-import { generateDbNeclId } from "../../utils/idGenerator";
+import { generateDbTruckxId, generateDbNeclId } from "../../utils/idGenerator";
 import { draftService } from "../../services/draftService";
 import { optimizeFileForUpload, isCompressibleImage } from "../../utils/fileCompressor";
 import { apiFetch } from "../../utils/api";
@@ -285,10 +285,10 @@ export const CreateClient: React.FC<CreateClientProps> = ({ onBack, onCreated, d
         stepProgress: section4Complete
           ? "Step 4: Compliance Docs"
           : section3Complete
-          ? "Step 3: Primary Contact"
-          : section2Complete
-          ? "Step 2: Registered Office"
-          : "Step 1: Company Info",
+            ? "Step 3: Primary Contact"
+            : section2Complete
+              ? "Step 2: Registered Office"
+              : "Step 1: Company Info",
       });
 
       setActiveDraftId(saved.id);
@@ -583,9 +583,8 @@ export const CreateClient: React.FC<CreateClientProps> = ({ onBack, onCreated, d
     try {
       const gstinClean = form.gstin.trim().toUpperCase();
       const panClean = form.pan.trim().toUpperCase();
-      const fullAddress = `${form.address_line_1.trim()}${
-        form.address_line_2 ? ", " + form.address_line_2.trim() : ""
-      }, ${form.city.trim()}, ${form.state.trim()} - ${form.pincode.trim()}`;
+      const fullAddress = `${form.address_line_1.trim()}${form.address_line_2 ? ", " + form.address_line_2.trim() : ""
+        }, ${form.city.trim()}, ${form.state.trim()} - ${form.pincode.trim()}`;
       const mobileClean = form.mobile.replace(/\D/g, "").slice(-10);
 
       // 1. Check duplicate mobile number in client_users
@@ -619,8 +618,9 @@ export const CreateClient: React.FC<CreateClientProps> = ({ onBack, onCreated, d
       );
       const initialStatus = hasClientPendingDocs ? "PENDING_APPROVAL" : "PENDING_APPROVAL";
 
-      // 4. Generate standard NECL Unique Client ID: NECL-CL-DDMMYYYY-XXXXX
-      const generatedClientCode = await generateDbNeclId("CL");
+      // 4. Generate standard TRUCKX Unique Client ID and Account ID
+      const generatedClientCode = await generateDbTruckxId("CL");
+      const generatedAccountId = await generateDbTruckxId("AC");
 
       // 5. Insert into client_companies
       const { data: newCompany, error: compErr } = await supabase
@@ -630,6 +630,7 @@ export const CreateClient: React.FC<CreateClientProps> = ({ onBack, onCreated, d
           gstin: gstinClean,
           pan: panClean,
           client_code: generatedClientCode,
+          account_id: generatedAccountId,
           registered_address: fullAddress,
           city: form.city.trim(),
           state: form.state.trim(),
@@ -1750,9 +1751,9 @@ export const CreateClient: React.FC<CreateClientProps> = ({ onBack, onCreated, d
               <button
                 type="button"
                 style={{
-                  background: "#0F172A",
-                  color: "#FFFFFF",
-                  border: "none",
+                  background: "#FFFFFF",
+                  color: "#111827",
+                  border: "1px solid #D9E1EC",
                   borderRadius: "6px",
                   padding: "8px 16px",
                   fontWeight: 600,

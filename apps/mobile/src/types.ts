@@ -223,6 +223,7 @@ export interface TransportRequirementDraft {
   totalVehiclesCount?: number;
   totalRequirementEntriesCount?: number;
   budgetScope?: 'OVERALL' | 'INDIVIDUAL';
+  isBudgetEnabled?: boolean;
 
   // Step 2: Cargo Specifications & Overall Weight / Quantity
   materialType?: string;
@@ -376,15 +377,18 @@ export interface ShipmentItem {
 
 export interface AppNotificationItem {
   id: string;
-  category: 'shipment' | 'booking' | 'system' | 'driver' | 'account';
+  category: 'shipment' | 'booking' | 'system' | 'driver' | 'account' | 'quotation' | 'requirement' | 'payment' | 'document' | 'document_correction';
   title: string;
   subtitle: string;
   time: string;
   refId?: string;
   isRead: boolean;
+  read?: boolean;
   isImportant?: boolean;
   content?: string;
   createdAt?: string;
+  entityType?: 'REQUIREMENT' | 'QUOTATION' | 'BOOKING' | 'TRIP' | 'POD' | 'INVOICE' | 'SYSTEM' | 'DOCUMENT' | 'DOCUMENT_REJECTED';
+  entityId?: string;
 }
 
 export interface UserSettingsData {
@@ -437,6 +441,7 @@ export interface VendorVehicleConfig {
   capacityUnit: 'MT' | 'KG' | 'CBM';
   vehicleCount: number;
   ownership?: 'Owned' | 'Attached' | 'Both';
+  attachedOwnerName?: string;
   makeModel?: string;
   rcNumber?: string;
   driverName?: string;
@@ -524,6 +529,9 @@ export interface DriverTripItem {
   id: string;
   tripCode?: string;
   bookingId: string;
+  bookingCode?: string;
+  reqId?: string;
+  reqCode?: string;
   driverId?: string;
   driverName?: string;
   tripStatus: 'CREATED' | 'LORRY_ASSIGNED' | 'DISPATCHED' | 'AT_LOADING' | 'IN_TRANSIT' | 'AT_UNLOADING' | 'DELIVERED' | 'COMPLETED' | string;

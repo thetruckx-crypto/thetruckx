@@ -28,6 +28,7 @@ import {
 } from 'lucide-react-native';
 import { driverService } from '../../../services/driverService';
 import { DriverTripItem } from '../../../types';
+import { formatDisplayId } from '../../../utils/idGenerator';
 
 interface DriverTripDetailsScreenProps {
   tripId: string;
@@ -137,7 +138,7 @@ export const DriverTripDetailsScreen: React.FC<DriverTripDetailsScreenProps> = (
                   <Text style={styles.statusText}>{trip.tripStatus.replace(/_/g, ' ')}</Text>
                 </View>
                 <Text style={styles.tripId}>
-                  #{trip.id.replace(/[^a-zA-Z0-9]/g, '').slice(-8).toUpperCase()}
+                  {trip.tripCode || formatDisplayId('TR', trip.startedAt, trip.id)}
                 </Text>
               </View>
 
@@ -225,6 +226,41 @@ export const DriverTripDetailsScreen: React.FC<DriverTripDetailsScreenProps> = (
                     <Text style={styles.actionNavText}>Navigate</Text>
                   </TouchableOpacity>
                 </View>
+              </View>
+            </View>
+
+            {/* Canonical Identifiers Card */}
+            <View style={styles.sectionCard}>
+              <View style={styles.cardHeader}>
+                <FileText size={16} color="#F05A22" />
+                <Text style={styles.cardHeaderText}>Trip & Booking Identifiers</Text>
+              </View>
+
+              <View style={styles.infoRow}>
+                <Text style={styles.label}>Trip ID:</Text>
+                <Text style={[styles.value, { color: '#F05A22', fontWeight: '700' }]}>
+                  {trip.tripCode || formatDisplayId('TR', trip.startedAt, trip.id)}
+                </Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={styles.label}>Booking ID:</Text>
+                <Text style={styles.value}>
+                  {trip.bookingCode || formatDisplayId('BK', trip.startedAt, trip.bookingId)}
+                </Text>
+              </View>
+              {trip.reqCode ? (
+                <View style={styles.infoRow}>
+                  <Text style={styles.label}>Requirement ID:</Text>
+                  <Text style={styles.value}>{trip.reqCode}</Text>
+                </View>
+              ) : null}
+              <View style={styles.infoRow}>
+                <Text style={styles.label}>Digital LR Number:</Text>
+                <Text style={styles.value}>{trip.lrNumber || trip.tripCode || formatDisplayId('TR', trip.startedAt, trip.id)}</Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={styles.label}>Client Enterprise:</Text>
+                <Text style={styles.value}>{trip.clientName}</Text>
               </View>
             </View>
 

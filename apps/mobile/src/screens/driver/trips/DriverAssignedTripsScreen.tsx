@@ -23,6 +23,7 @@ import {
 } from 'lucide-react-native';
 import { driverService } from '../../../services/driverService';
 import { DriverTripItem } from '../../../types';
+import { formatDisplayId } from '../../../utils/idGenerator';
 
 interface DriverAssignedTripsScreenProps {
   driverId?: string;
@@ -82,7 +83,9 @@ export const DriverAssignedTripsScreen: React.FC<DriverAssignedTripsScreenProps>
       const matchMat = t.material.toLowerCase().includes(q);
       const matchVehicle = t.vehicleNumber.toLowerCase().includes(q);
       const matchId = t.id.toLowerCase().includes(q);
-      return matchOrigin || matchDest || matchMat || matchVehicle || matchId;
+      const matchTripCode = (t.tripCode || '').toLowerCase().includes(q);
+      const matchBookingCode = (t.bookingCode || '').toLowerCase().includes(q);
+      return matchOrigin || matchDest || matchMat || matchVehicle || matchId || matchTripCode || matchBookingCode;
     }
     return true;
   });
@@ -192,7 +195,7 @@ export const DriverAssignedTripsScreen: React.FC<DriverAssignedTripsScreenProps>
                       </Text>
                     </View>
                     <Text style={styles.tripRef}>
-                      #{item.id.replace(/[^a-zA-Z0-9]/g, '').slice(-8).toUpperCase()}
+                      {item.tripCode || formatDisplayId('TR', item.startedAt, item.id)}
                     </Text>
                   </View>
 

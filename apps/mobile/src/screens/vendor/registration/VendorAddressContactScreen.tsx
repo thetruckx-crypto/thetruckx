@@ -138,7 +138,7 @@ export const VendorAddressContactScreen: React.FC<VendorAddressContactScreenProp
       }
     }
 
-    // Official email is OPTIONAL
+    // Official email is strictly OPTIONAL
     const cleanEmail = email.trim().toLowerCase();
     if (cleanEmail) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -148,13 +148,20 @@ export const VendorAddressContactScreen: React.FC<VendorAddressContactScreenProp
       }
     }
 
+    // Alternate phone is strictly OPTIONAL
+    const cleanAltPhone = altPhone.trim().replace(/\D/g, '');
+    if (cleanAltPhone && cleanAltPhone.length !== 10) {
+      Alert.alert('Invalid Phone Number', 'Alternate phone number must be 10 digits or left empty.');
+      return;
+    }
+
     await vendorService.saveDraftForm({
       registeredAddress: registeredAddress.trim(),
       city: city.trim(),
       state: detectedState,
       pincode: pincode.trim(),
       email: cleanEmail || undefined,
-      altPhone: altPhone.trim() || undefined,
+      altPhone: cleanAltPhone || undefined,
     });
 
     onNext({
@@ -163,7 +170,7 @@ export const VendorAddressContactScreen: React.FC<VendorAddressContactScreenProp
       state: detectedState,
       pincode: pincode.trim(),
       email: cleanEmail || undefined,
-      altPhone: altPhone.trim(),
+      altPhone: cleanAltPhone || '',
     });
   };
 
@@ -179,7 +186,7 @@ export const VendorAddressContactScreen: React.FC<VendorAddressContactScreenProp
             <TouchableOpacity style={styles.backBtn} onPress={onBack} accessibilityLabel="Back">
               <ChevronLeft size={22} color="#172B4D" />
             </TouchableOpacity>
-            
+
             <View style={styles.headerSpacer} />
           </View>
 
@@ -289,11 +296,11 @@ export const VendorAddressContactScreen: React.FC<VendorAddressContactScreenProp
               </View>
             </View>
 
-            {/* Communication Details */}
+            {/* Communication Details (Optional) */}
             <View style={styles.card}>
               <View style={styles.cardHeader}>
                 <Mail size={16} color="#F05A22" />
-                <Text style={styles.cardHeaderText}>OFFICIAL COMMUNICATION</Text>
+                <Text style={styles.cardHeaderText}>OFFICIAL COMMUNICATION (OPTIONAL)</Text>
               </View>
 
               <View style={styles.fieldGroup}>
@@ -313,12 +320,12 @@ export const VendorAddressContactScreen: React.FC<VendorAddressContactScreenProp
               </View>
 
               <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>Alternate / Yard Phone Number</Text>
+                <Text style={styles.fieldLabel}>Alternate / Yard Phone Number (Optional)</Text>
                 <View style={styles.inputWrap}>
                   <Phone size={16} color="#6B7280" style={styles.inputIcon} />
                   <TextInput
                     style={styles.input}
-                    placeholder="Alternate 10-digit number"
+                    placeholder="Alternate 10-digit number (Optional)"
                     placeholderTextColor="#94A3B8"
                     value={altPhone}
                     onChangeText={setAltPhone}

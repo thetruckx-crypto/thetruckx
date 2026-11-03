@@ -149,7 +149,7 @@ export const VendorTransportServicesScreen: React.FC<VendorTransportServicesScre
               Service <Text style={styles.goldText}>Offerings</Text>
             </Text>
             <Text style={styles.subText}>
-              Select the transport service lines you actively execute for national manufacturers and shippers.
+              Select the transport service lines you actively execute for national manufacturers and clients.
             </Text>
           </View>
 

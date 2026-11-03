@@ -94,7 +94,7 @@ import {
   TrendingUp,
   DollarSign,
 } from 'lucide-react';
-import { supabase } from './utils/supabase';
+import { supabase, ensureAdminSession } from './utils/supabase';
 
 // ─── Full-Screen Auth Spinner ─────────────────────────────────────────────────
 function AuthLoadingScreen() {
@@ -243,7 +243,7 @@ function RequireSuperAdmin({ children }: { children: React.ReactNode }) {
           onClick={() => navigate('/admin/dashboard')}
           style={{
             padding: '10px 20px',
-            backgroundColor: '#0F172A',
+            backgroundColor: '#F4510B',
             color: '#FFFFFF',
             border: 'none',
             borderRadius: '8px',
@@ -583,6 +583,7 @@ function AdminShell() {
   // Dynamic badge counts for sidebar + topbar notification bell backed strictly by live database records
   const refreshBadges = useCallback(async () => {
     try {
+      await ensureAdminSession();
       const [
         { count: reqCount },
         { count: quotCount },
@@ -1597,8 +1598,12 @@ function AdminShell() {
         onSelectNotification={(notif) => {
           setIsNotifOpen(false);
           const map: Record<string, string> = {
+            client: '/admin/clients',
+            vendor: '/admin/vendors',
             requirement: '/admin/requirements',
-            booking: '/admin/bookings', trip: '/admin/bookings',
+            quote: '/admin/quotations',
+            booking: '/admin/bookings',
+            trip: '/admin/tracking',
             payment: '/admin/payments',
             chat: '/admin/communications',
             driver: '/admin/drivers',

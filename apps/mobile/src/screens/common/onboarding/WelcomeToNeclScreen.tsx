@@ -65,12 +65,12 @@ export const WelcomeToNeclScreen: React.FC<WelcomeToNeclScreenProps> = ({
     return () => clearInterval(timer);
   }, [secondsRemaining, onContinueToDashboard]);
 
-  const displayName = companyName || userName || (role === 'CLIENT' ? 'Enterprise Shipper' : role === 'VENDOR' ? 'Fleet Transporter' : 'Commercial Driver');
+  const displayName = companyName || userName || (role === 'CLIENT' ? 'Enterprise Client' : role === 'VENDOR' ? 'Fleet Transporter' : 'Commercial Driver');
   const displayCode = accountCode || (role === 'CLIENT' ? 'CLI-APPROVED' : role === 'VENDOR' ? 'VND-APPROVED' : 'DRV-APPROVED');
 
   const roleLabel =
     role === 'CLIENT'
-      ? 'Verified Shipper & Client Partner'
+      ? 'Verified Enterprise Client Partner'
       : role === 'VENDOR'
       ? 'Authorized Fleet Transporter'
       : 'Registered Commercial Driver';

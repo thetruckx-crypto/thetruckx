@@ -143,7 +143,7 @@ export const VendorRegistrationScreen: React.FC<VendorRegistrationScreenProps> =
           <View style={styles.contentWrap}>
             <View style={styles.headingWrap}>
               <Text style={styles.titleText}>
-                Transport Partner <Text style={styles.goldText}>Enrollment</Text>
+                Vendor Enterprise <Text style={styles.goldText}>Enrollment</Text>
               </Text>
               <Text style={styles.subText}>
                 Register your fleet company to receive national freight load contracts across North Eastern corridors.
@@ -242,7 +242,7 @@ export const VendorRegistrationScreen: React.FC<VendorRegistrationScreenProps> =
             <View style={styles.securityBadge}>
               <ShieldCheck size={16} color="#10B981" />
               <Text style={styles.securityText}>
-                Transport Partner Program • 100% Verified Freight Settlement
+                THE TRUCKX Verified Freight Settlement Network
               </Text>
             </View>
 

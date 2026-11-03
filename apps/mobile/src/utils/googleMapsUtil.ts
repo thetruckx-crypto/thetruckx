@@ -110,6 +110,9 @@ export const buildGoogleMapsDirectionsUrl = (options: {
  * Generate Google Maps search / view URL for a location or address
  */
 export const buildGoogleMapsSearchUrl = (queryOrAddress: string): string => {
-  const query = queryOrAddress?.trim() || 'Guwahati, Assam';
+  const query = queryOrAddress?.trim();
+  if (!query) {
+    return 'https://www.google.com/maps';
+  }
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 };

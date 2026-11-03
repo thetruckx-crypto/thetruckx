@@ -4,6 +4,7 @@ import {
   Loader2, ChevronLeft, ChevronRight, Eye
 } from "lucide-react";
 import { supabase } from "../../utils/supabase";
+import { formatDisplayId } from "../../utils/idGenerator";
 
 export interface Trip {
   id: string;
@@ -30,11 +31,11 @@ interface TrackingModuleProps {
 
 const ITEMS_PER_PAGE = 10;
 
-function formatTripReference(id: string, createdAt: string, sequence?: number) {
-  if (!id) return "TRP-001";
-  if (id.startsWith("TRP-")) return id;
-  const seq = sequence || parseInt(id.replace(/\D/g, "")) || 1;
-  return `TRP-${String(seq).padStart(3, "0")}`;
+function formatTripReference(id: string, createdAt: string, tripCode?: string) {
+  if (tripCode && tripCode.startsWith("TRUCKX-TR-")) return tripCode;
+  if (!id) return formatDisplayId("TR", null, createdAt);
+  if (id.startsWith("TRUCKX-TR-")) return id;
+  return formatDisplayId("TR", id, createdAt);
 }
 
 function getStatusColor(status: string) {
@@ -157,8 +158,10 @@ export const TrackingModule: React.FC<TrackingModuleProps> = ({
         const vendor = vendorMap.get(t.vendor_id);
         return {
           ...t,
-          trip_reference: formatTripReference(t.id, t.created_at, idx + 1),
-          booking_reference: booking?.booking_code || (booking ? `BOK-${booking.id.substring(0, 8)}` : "N/A"),
+          trip_reference: formatTripReference(t.id, t.created_at, t.trip_code),
+          booking_reference: booking?.booking_code?.startsWith('TRUCKX-BK-')
+            ? booking.booking_code
+            : (booking?.id ? formatDisplayId('BK', booking.id, booking.created_at) : "N/A"),
           vehicle_registration: vehicle?.registration_number || (vehicle as any)?.vehicle_number || "Unassigned",
           driver_name: driver?.full_name || "Unassigned",
           vendor_name: vendor?.vendor_name || "Transporter",

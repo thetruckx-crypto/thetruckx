@@ -80,6 +80,7 @@ interface MyShipmentsScreenProps {
   onNavigateToBookingDetails?: (bookingId: string) => void;
   onOpenProfile?: () => void;
   onNavigateToNotifications?: () => void;
+  onNavigateToRequirements?: () => void;
 }
 
 export interface ClientShipmentItem {
@@ -116,6 +117,7 @@ export const MyShipmentsScreen: React.FC<MyShipmentsScreenProps> = ({
   onNavigateToBookingDetails,
   onOpenProfile,
   onNavigateToNotifications,
+  onNavigateToRequirements,
 }) => {
   // Primary 5 status filter chips from Screenshot 3
   const [selectedStatus, setSelectedStatus] = useState<ShipmentStatusFilter>('ALL');
@@ -423,7 +425,7 @@ Digitally generated and verified by TRUCKS Logistics Platform`;
               <ArrowLeft size={22} color="#0C1A34" strokeWidth={2.4} />
             </TouchableOpacity>
           )}
-          <Text style={[styles.headerTitle, !onBack && { marginLeft: 0 }]}>Shipments</Text>
+          <Text style={[styles.headerTitle, !onBack && { marginLeft: 0 }]}>My Transport</Text>
         </View>
 
         {onBookShipment && (
@@ -436,6 +438,34 @@ Digitally generated and verified by TRUCKS Logistics Platform`;
             <Plus size={20} color="#FFFFFF" strokeWidth={2.8} />
           </TouchableOpacity>
         )}
+      </View>
+
+      {/* ── Unified My Transport Tab Switcher (Task 6 & Task 7) ── */}
+      <View style={styles.myTransportHeaderWrap}>
+        <View style={styles.myTransportSegmentBar}>
+          <TouchableOpacity
+            style={[styles.transportSegmentBtn, styles.transportSegmentBtnActive]}
+            activeOpacity={0.8}
+            accessibilityLabel="Shipments & Consignments"
+          >
+            <Package size={15} color="#FFFFFF" strokeWidth={2.2} />
+            <Text style={[styles.transportSegmentText, styles.transportSegmentTextActive]}>
+              Shipments & Trips
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.transportSegmentBtn}
+            onPress={() => onNavigateToRequirements && onNavigateToRequirements()}
+            activeOpacity={0.8}
+            accessibilityLabel="Freight Requirements & RFQs"
+          >
+            <FileText size={15} color="#64748B" strokeWidth={2.2} />
+            <Text style={styles.transportSegmentText}>
+              Requirements & RFQs
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -1649,5 +1679,47 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#64748B',
+  },
+
+  /* Unified My Transport Navigation Styles */
+  myTransportHeaderWrap: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  myTransportSegmentBar: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 10,
+    padding: 3,
+    gap: 4,
+  },
+  transportSegmentBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 9,
+    borderRadius: 8,
+    gap: 6,
+  },
+  transportSegmentBtnActive: {
+    backgroundColor: '#F15A24',
+    shadowColor: '#F15A24',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  transportSegmentText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  transportSegmentTextActive: {
+    color: '#FFFFFF',
   },
 });

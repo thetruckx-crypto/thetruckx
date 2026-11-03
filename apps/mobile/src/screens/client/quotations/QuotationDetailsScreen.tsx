@@ -8,6 +8,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Platform,
 } from 'react-native';
 import {
   ArrowLeft,
@@ -23,6 +24,7 @@ import {
   Calendar,
 } from 'lucide-react-native';
 import { clientService } from '../../../services/clientService';
+import { formatDisplayId } from '../../../utils/idGenerator';
 
 interface QuotationDetailsScreenProps {
   quotation: any;
@@ -49,6 +51,22 @@ export const QuotationDetailsScreen: React.FC<QuotationDetailsScreenProps> = ({
     quotation?.validity_expires_at &&
     new Date(quotation.validity_expires_at).getTime() < Date.now()
   );
+
+  // Canonical TRUCKX Identifiers
+  const displayQuoteId =
+    quotation?.quote_code && quotation.quote_code.startsWith('TRUCKX-QT-')
+      ? quotation.quote_code
+      : formatDisplayId('QT', quotation?.quote_code || quotation?.id, quotation?.created_at);
+
+  const displayReqId =
+    requirementId && requirementId.startsWith('TRUCKX-REQ-')
+      ? requirementId
+      : formatDisplayId('REQ', requirementId, quotation?.created_at);
+
+  const displayVendorId =
+    quotation?.vendor_code && quotation.vendor_code.startsWith('TRUCKX-VE-')
+      ? quotation.vendor_code
+      : formatDisplayId('VE', quotation?.vendor_id || quotation?.vendorId, quotation?.created_at);
 
   const handleAcceptAndBook = async () => {
     if (!quotation?.id || !clientId) {
@@ -131,12 +149,30 @@ export const QuotationDetailsScreen: React.FC<QuotationDetailsScreenProps> = ({
                 <Text style={styles.vendorName}>{quotation?.vendorName || 'Verified Carrier'}</Text>
                 <ShieldCheck size={16} color="#10B981" />
               </View>
-              <Text style={styles.quoteId}>Quotation Ref: {quotation?.id || 'QT-LIVE-01'}</Text>
+              <Text style={styles.quoteId}>Quotation: {displayQuoteId}</Text>
             </View>
 
             <View style={styles.validBadge}>
               <Clock size={12} color="#B45309" />
               <Text style={styles.validBadgeText}>Valid for 24h</Text>
+            </View>
+          </View>
+
+          {/* Canonical ID Strip */}
+          <View style={styles.idStrip}>
+            <View style={styles.idStripCol}>
+              <Text style={styles.idStripLabel}>QUOTATION ID</Text>
+              <Text style={styles.idStripVal} selectable numberOfLines={1}>{displayQuoteId}</Text>
+            </View>
+            <View style={styles.idStripDivider} />
+            <View style={styles.idStripCol}>
+              <Text style={styles.idStripLabel}>REQUIREMENT ID</Text>
+              <Text style={styles.idStripVal} selectable numberOfLines={1}>{displayReqId}</Text>
+            </View>
+            <View style={styles.idStripDivider} />
+            <View style={styles.idStripCol}>
+              <Text style={styles.idStripLabel}>VENDOR ID</Text>
+              <Text style={styles.idStripVal} selectable numberOfLines={1}>{displayVendorId}</Text>
             </View>
           </View>
 
@@ -318,6 +354,37 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+  },
+  idStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  idStripCol: {
+    flex: 1,
+  },
+  idStripDivider: {
+    width: 1,
+    height: 22,
+    backgroundColor: '#E2E8F0',
+    marginHorizontal: 8,
+  },
+  idStripLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#94A3B8',
+    letterSpacing: 0.4,
+  },
+  idStripVal: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: 1,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   vendorTitleRow: {
     flexDirection: 'row',

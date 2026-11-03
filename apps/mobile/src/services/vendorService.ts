@@ -12,7 +12,7 @@ import {
   RecordDisbursalPayload,
 } from '../types';
 import { documentWorkflowService } from './documentWorkflowService';
-import { formatDisplayId } from '../utils/idGenerator';
+import { formatDisplayId, generateDbTruckxId } from '../utils/idGenerator';
 import { uploadDocumentToStorage, getSecureDocumentSignedUrl } from '../utils/mobileStorageHelper';
 
 const VENDOR_FORM_KEY = '@necl_vendor_registration_draft';
@@ -864,10 +864,11 @@ export const vendorService = {
   async submitVendorRegistration(
     formData: VendorRegistrationFormData,
     mobile: string
-  ): Promise<{ success: boolean; vendorId: string; applicationNumber: string }> {
+  ): Promise<{ success: boolean; vendorId: string; applicationNumber: string; accountId?: string; vendorCode?: string }> {
     const cleanPhone = mobile.replace(/[^0-9]/g, '').slice(-10);
     let vendorId = '';
     let canonicalAppNo = '';
+    let accountId = '';
 
     try {
       // 1. Try Backend API Registration for high reliability & admin privileges
@@ -886,7 +887,8 @@ export const vendorService = {
         const resData = await apiRes.json();
         if (apiRes.ok && resData.success) {
           vendorId = resData.vendorId;
-          canonicalAppNo = resData.applicationNumber || formatDisplayId('VD', vendorId);
+          canonicalAppNo = resData.vendorCode || resData.applicationNumber || formatDisplayId('VE', vendorId) || formatDisplayId('VD', vendorId);
+          accountId = resData.accountId || '';
         } else if (resData.roleConflict) {
           throw new Error(resData.message || 'Mobile number already registered under another role');
         }
@@ -905,13 +907,26 @@ export const vendorService = {
         // Check if user or company already exists for this phone (e.g. invited by admin)
         const { data: existingUser } = await supabase
           .from('vendor_users')
-          .select('vendor_id')
+          .select('id, vendor_id, account_id')
           .eq('mobile', cleanPhone)
           .maybeSingle();
 
+        if (existingUser?.account_id) {
+          accountId = existingUser.account_id;
+        }
+
         if (existingUser?.vendor_id) {
           vendorId = existingUser.vendor_id;
-          canonicalAppNo = formatDisplayId('VD', vendorId);
+          const { data: existingComp } = await supabase
+            .from('vendor_companies')
+            .select('vendor_code')
+            .eq('id', vendorId)
+            .maybeSingle();
+
+          canonicalAppNo = (existingComp?.vendor_code && existingComp.vendor_code.startsWith('TRUCKX-VE-'))
+            ? existingComp.vendor_code
+            : await generateDbTruckxId('VE');
+
           const { error: updErr } = await supabase
             .from('vendor_companies')
             .update({
@@ -932,8 +947,8 @@ export const vendorService = {
             throw new Error(`Database persistence failed: ${updErr.message}`);
           }
         } else {
-          // Pre-generate canonical code
-          const initialCode = formatDisplayId('VD', cleanPhone);
+          // Pre-generate canonical code via atomic sequence
+          canonicalAppNo = await generateDbTruckxId('VE');
           const { data: vRecord, error: vErr } = await supabase
             .from('vendor_companies')
             .insert([
@@ -942,7 +957,7 @@ export const vendorService = {
                 pan: formData.pan.trim().toUpperCase() || 'NOT_PROVIDED',
                 gstin: formData.gstin.trim().toUpperCase() || null,
                 address: fullAddress,
-                vendor_code: initialCode,
+                vendor_code: canonicalAppNo,
                 status: 'PENDING',
                 compliance_status: 'PENDING',
                 operating_routes: formData.operatingHubs || [],
@@ -958,23 +973,24 @@ export const vendorService = {
           }
 
           vendorId = vRecord.id;
-          canonicalAppNo = formatDisplayId('VD', vendorId);
-          await supabase
-            .from('vendor_companies')
-            .update({ vendor_code: canonicalAppNo })
-            .eq('id', vendorId);
         }
       } else if (!canonicalAppNo) {
-        canonicalAppNo = formatDisplayId('VD', vendorId);
+        canonicalAppNo = formatDisplayId('VE', vendorId) || formatDisplayId('VD', vendorId);
       }
 
       // Upsert into vendor_users so login via phone works seamlessly without duplicate key errors
       try {
         const { data: existingVendorUser } = await supabase
           .from('vendor_users')
-          .select('id')
+          .select('id, account_id')
           .eq('mobile', cleanPhone)
           .maybeSingle();
+
+        if (!accountId) {
+          accountId = (existingVendorUser?.account_id && existingVendorUser.account_id.startsWith('TRUCKX-AC-'))
+            ? existingVendorUser.account_id
+            : await generateDbTruckxId('AC');
+        }
 
         if (existingVendorUser?.id) {
           await supabase
@@ -983,6 +999,7 @@ export const vendorService = {
               vendor_id: vendorId,
               full_name: (formData.contactPerson || formData.transporterName).trim(),
               email: formData.email?.trim().toLowerCase() || null,
+              account_id: accountId,
               status: 'ACTIVE',
               updated_at: new Date().toISOString(),
             })
@@ -994,6 +1011,7 @@ export const vendorService = {
               full_name: (formData.contactPerson || formData.transporterName).trim(),
               mobile: cleanPhone,
               email: formData.email?.trim().toLowerCase() || null,
+              account_id: accountId,
               status: 'ACTIVE',
             },
           ]);
@@ -1244,7 +1262,8 @@ export const vendorService = {
       } catch { }
 
       await this.clearDraftForm();
-      return { success: true, vendorId, applicationNumber: canonicalAppNo };
+      // Canonical response signature: return { success: true, vendorId, applicationNumber: canonicalAppNo };
+      return { success: true, vendorId, applicationNumber: canonicalAppNo, accountId, vendorCode: canonicalAppNo };
     } catch (err: any) {
       console.error('submitVendorRegistration error:', err);
       // DO NOT fake success if database write failed!
@@ -1600,7 +1619,7 @@ export const vendorService = {
                 rfqStatus: isDeadlinePassed && vr.status === 'PENDING' ? 'EXPIRED' : vr.status,
                 deadlineAt: vr.deadline_at,
                 isExpired: isDeadlinePassed,
-                clientName: r.client_companies?.company_name || 'Verified Industrial Shipper',
+                clientName: r.client_companies?.company_name || 'Verified Industrial Client',
                 hasQuoted: vr.status === 'QUOTED',
                 createdAt: r.created_at,
               };
@@ -1629,7 +1648,7 @@ export const vendorService = {
           loadingDatetime: r.loading_datetime,
           specialInstructions: r.special_instructions,
           status: r.status,
-          clientName: r.client_companies?.company_name || 'Verified Industrial Shipper',
+          clientName: r.client_companies?.company_name || 'Verified Industrial Client',
           hasQuoted: false,
           createdAt: r.created_at,
         }));
@@ -1961,29 +1980,45 @@ export const vendorService = {
 
       const nextVersion = existingQuote ? (existingQuote.version || 1) + 1 : 1;
 
-      // 3. Insert new quotation revision
-      const { data: vqData, error: vqErr } = await supabase
+      // 3. Insert new quotation revision with canonical TRUCKX-QT-* identifier
+      const canonicalQuotationCode = await generateDbTruckxId('QT');
+      const vqPayload: Record<string, any> = {
+        vendor_request_id: vrId,
+        vehicle_id: input.vehicleId || null,
+        driver_id: input.driverId || null,
+        quoted_rate: input.quotedRate,
+        version: nextVersion,
+        is_locked: false,
+        submitted_at: new Date().toISOString(),
+        quotation_code: canonicalQuotationCode,
+      };
+
+      let vqData: any = null;
+      let { data: insertedData, error: vqErr }: { data: any; error: any } = await supabase
         .from('vendor_quotations')
-        .insert([
-          {
-            vendor_request_id: vrId,
-            vehicle_id: input.vehicleId || null,
-            driver_id: input.driverId || null,
-            quoted_rate: input.quotedRate,
-            version: nextVersion,
-            is_locked: false,
-            submitted_at: new Date().toISOString(),
-          },
-        ])
-        .select('id')
+        .insert([vqPayload])
+        .select('id, quotation_code')
         .single();
+
+      // Graceful fallback if schema cache has not yet refreshed quotation_code column
+      if (vqErr && vqErr.message?.includes('quotation_code')) {
+        delete vqPayload.quotation_code;
+        const retryResult = await supabase
+          .from('vendor_quotations')
+          .insert([vqPayload])
+          .select('id')
+          .single();
+        insertedData = retryResult.data;
+        vqErr = retryResult.error;
+      }
 
       if (vqErr) {
         console.error('vendor_quotations insert error:', vqErr.message);
         return { success: false, quotationId: '', error: vqErr.message || 'Failed to submit quotation' };
       }
 
-      const generatedId = vqData?.id || `VQ-${Date.now().toString().slice(-6)}`;
+      vqData = insertedData;
+      const generatedId = vqData?.quotation_code || canonicalQuotationCode || vqData?.id || `TRUCKX-QT-${Date.now().toString().slice(-6)}`;
       return { success: true, quotationId: generatedId };
     } catch (err: any) {
       console.error('submitQuotation exception:', err);
@@ -2007,9 +2042,22 @@ export const vendorService = {
           const vqItems = vr.vendor_quotations || [];
           if (vqItems.length > 0) {
             vqItems.forEach((vq: any) => {
+              const displayQuoteId =
+                vq.quotation_code && vq.quotation_code.startsWith('TRUCKX-QT-')
+                  ? vq.quotation_code
+                  : formatDisplayId('QT', vq.quotation_code || vq.id, vq.submitted_at || vr.created_at);
+
+              const displayReqId =
+                vr.requirements?.requirement_code && vr.requirements.requirement_code.startsWith('TRUCKX-REQ-')
+                  ? vr.requirements.requirement_code
+                  : formatDisplayId('REQ', vr.requirements?.requirement_code || vr.requirement_id, vr.requirements?.created_at || vr.created_at);
+
               quotes.push({
-                id: vq.id,
-                requirementId: vr.requirement_id,
+                id: displayQuoteId,
+                rawId: vq.id,
+                quotationCode: displayQuoteId,
+                requirementId: displayReqId,
+                rawRequirementId: vr.requirement_id,
                 route: `${vr.requirements?.pickup_address?.split(',')[0] || 'Origin'} → ${vr.requirements?.destination_address?.split(',')[0] || 'Destination'}`,
                 fullPickup: vr.requirements?.pickup_address,
                 fullDestination: vr.requirements?.destination_address,
@@ -2049,9 +2097,27 @@ export const vendorService = {
         return vendorTrips.map((t) => {
           const b = t.bookings;
           const req = b?.requirements;
+          const displayBookingId =
+            b?.booking_code && b.booking_code.startsWith('TRUCKX-BK-')
+              ? b.booking_code
+              : formatDisplayId('BK', b?.booking_code || b?.id || t.booking_id || t.id, b?.confirmed_at || b?.created_at);
+
+          const displayReqId =
+            req?.requirement_code && req.requirement_code.startsWith('TRUCKX-REQ-')
+              ? req.requirement_code
+              : formatDisplayId('REQ', req?.requirement_code || req?.id || b?.requirement_id, req?.created_at || b?.created_at);
+
+          const displayTripId =
+            t.trip_code && t.trip_code.startsWith('TRUCKX-TR-')
+              ? t.trip_code
+              : (t.id ? formatDisplayId('TR', t.trip_code || t.lr_number || t.id, t.started_at || t.created_at) : null);
+
           return {
-            id: b?.id || t.booking_id || t.id,
-            requirementId: b?.requirement_id || req?.id,
+            id: displayBookingId,
+            rawBookingId: b?.id || t.booking_id || t.id,
+            bookingId: displayBookingId,
+            requirementId: displayReqId,
+            rawRequirementId: b?.requirement_id || req?.id,
             origin: req?.pickup_address?.split(',')[0] || 'Origin',
             destination: req?.destination_address?.split(',')[0] || 'Destination',
             pickupAddress: req?.pickup_address,
@@ -2063,7 +2129,8 @@ export const vendorService = {
             paymentStatus: b?.payment_status || 'NOT_DUE',
             rate: Number(t.vendor_rate) || 0,
             hasAssignedFleet: !!(t.vehicle_id && t.driver_id),
-            tripId: t.id,
+            tripId: displayTripId || t.id,
+            rawTripId: t.id,
             tripStatus: t.trip_status || 'LORRY_ASSIGNED',
             confirmedAt: b?.confirmed_at || t.started_at,
           };
@@ -2084,9 +2151,27 @@ export const vendorService = {
           const b = Array.isArray(req?.bookings) ? req.bookings[0] : req?.bookings;
           if (b) {
             const trip = Array.isArray(b.trips) ? b.trips[0] : b.trips;
+            const displayBookingId =
+              b.booking_code && b.booking_code.startsWith('TRUCKX-BK-')
+                ? b.booking_code
+                : formatDisplayId('BK', b.booking_code || b.id, b.confirmed_at || b.created_at);
+
+            const displayReqId =
+              req?.requirement_code && req.requirement_code.startsWith('TRUCKX-REQ-')
+                ? req.requirement_code
+                : formatDisplayId('REQ', req?.requirement_code || req?.id, req?.created_at);
+
+            const displayTripId =
+              trip?.trip_code && trip.trip_code.startsWith('TRUCKX-TR-')
+                ? trip.trip_code
+                : (trip?.id ? formatDisplayId('TR', trip.trip_code || trip.lr_number || trip.id, trip.started_at || trip.created_at) : null);
+
             bookingsList.push({
-              id: b.id,
-              requirementId: req?.id,
+              id: displayBookingId,
+              rawBookingId: b.id,
+              bookingId: displayBookingId,
+              requirementId: displayReqId,
+              rawRequirementId: req?.id,
               origin: req?.pickup_address?.split(',')[0] || 'Origin',
               destination: req?.destination_address?.split(',')[0] || 'Destination',
               pickupAddress: req?.pickup_address,
@@ -2098,7 +2183,8 @@ export const vendorService = {
               paymentStatus: b.payment_status,
               rate: Number(trip?.vendor_rate) || 0,
               hasAssignedFleet: !!(trip && trip.vehicle_id && trip.driver_id),
-              tripId: trip?.id,
+              tripId: displayTripId || trip?.id,
+              rawTripId: trip?.id,
               tripStatus: trip?.trip_status || 'PENDING_ASSIGNMENT',
               confirmedAt: b.confirmed_at,
             });
@@ -2118,14 +2204,38 @@ export const vendorService = {
       const { data, error } = await supabase
         .from('bookings')
         .select('*, requirements(*, client_companies(*)), trips(*, vehicles(*), drivers(*))')
-        .eq('id', bookingId)
+        .or(`id.eq.${bookingId},booking_code.eq.${bookingId}`)
         .maybeSingle();
 
       if (!error && data) {
         const trip = data.trips && data.trips.length > 0 ? data.trips[0] : null;
+        const displayBookingId =
+          data.booking_code && data.booking_code.startsWith('TRUCKX-BK-')
+            ? data.booking_code
+            : formatDisplayId('BK', data.booking_code || data.id, data.confirmed_at || data.created_at);
+
+        const displayReqId =
+          data.requirements?.requirement_code && data.requirements.requirement_code.startsWith('TRUCKX-REQ-')
+            ? data.requirements.requirement_code
+            : formatDisplayId('REQ', data.requirements?.requirement_code || data.requirement_id, data.created_at);
+
+        const displayTripId =
+          trip?.trip_code && trip.trip_code.startsWith('TRUCKX-TR-')
+            ? trip.trip_code
+            : (trip?.id ? formatDisplayId('TR', trip.trip_code || trip.lr_number || trip.id, trip.started_at || trip.created_at) : null);
+
+        const displayClientId =
+          data.requirements?.client_companies?.client_code && data.requirements.client_companies.client_code.startsWith('TRUCKX-CL-')
+            ? data.requirements.client_companies.client_code
+            : (data.requirements?.client_company_id ? formatDisplayId('CL', data.requirements.client_company_id, data.created_at) : null);
+
         return {
-          id: data.id,
-          requirementId: data.requirement_id,
+          id: displayBookingId,
+          rawBookingId: data.id,
+          bookingId: displayBookingId,
+          requirementId: displayReqId,
+          rawRequirementId: data.requirement_id,
+          clientId: displayClientId,
           pickupAddress: data.requirements?.pickup_address,
           pickupPincode: data.requirements?.pickup_pincode,
           destinationAddress: data.requirements?.destination_address,
@@ -2137,11 +2247,12 @@ export const vendorService = {
           specialInstructions: data.requirements?.special_instructions,
           bookingStatus: data.booking_status,
           paymentStatus: data.payment_status,
-          clientName: data.requirements?.client_companies?.company_name || 'Commercial Shipper',
+          clientName: data.requirements?.client_companies?.company_name || 'Client Enterprise',
           confirmedAt: data.confirmed_at,
           trip: trip
             ? {
-              id: trip.id,
+              id: displayTripId || trip.id,
+              rawTripId: trip.id,
               vehicleNumber: trip.vehicles?.registration_number || null,
               vehicleType: trip.vehicles?.vehicle_type || null,
               driverName: trip.drivers?.full_name || null,
@@ -2170,23 +2281,32 @@ export const vendorService = {
           .eq('vendor_id', vendorId);
 
         if (!lErr && links && links.length > 0) {
-          return links.map((l) => ({
-            id: l.vehicles?.id || l.vehicle_id,
-            registrationNumber: l.vehicles?.registration_number || 'Unregistered',
-            vehicleType: l.vehicles?.vehicle_type || 'Commercial Vehicle',
-            category: l.vehicles?.vehicle_type || 'Lorry',
-            bodyType: l.vehicles?.body_type || 'Open Body',
-            ratedCapacityMt: Number(l.vehicles?.rated_capacity_mt) || 0,
-            minimumCapacityMt: Number(l.vehicles?.minimum_capacity_mt) || 0,
-            rcNumber: l.vehicles?.rc_number || '',
-            status: l.vehicles?.status || 'ACTIVE',
-            verificationStatus: l.vehicles?.verification_status || 'PENDING_DOCS',
-            rcVerificationStatus: l.vehicles?.rc_verification_status || 'PENDING',
-            insuranceVerificationStatus: l.vehicles?.insurance_verification_status || 'PENDING',
-            fitnessVerificationStatus: l.vehicles?.fitness_verification_status || 'PENDING',
-            permitVerificationStatus: l.vehicles?.permit_verification_status || 'PENDING',
-            isAvailable: true,
-          }));
+          return links.map((l) => {
+            const v = l.vehicles;
+            const displayVehicleCode =
+              v?.vehicle_code && v.vehicle_code.startsWith('TRUCKX-VH-')
+                ? v.vehicle_code
+                : formatDisplayId('VH', v?.vehicle_code || v?.id || l.vehicle_id, v?.created_at);
+
+            return {
+              id: v?.id || l.vehicle_id,
+              vehicleCode: displayVehicleCode,
+              registrationNumber: v?.registration_number || 'Unregistered',
+              vehicleType: v?.vehicle_type || 'Commercial Vehicle',
+              category: v?.vehicle_type || 'Lorry',
+              bodyType: v?.body_type || 'Open Body',
+              ratedCapacityMt: Number(v?.rated_capacity_mt) || 0,
+              minimumCapacityMt: Number(v?.minimum_capacity_mt) || 0,
+              rcNumber: v?.rc_number || '',
+              status: v?.status || 'ACTIVE',
+              verificationStatus: v?.verification_status || 'PENDING_DOCS',
+              rcVerificationStatus: v?.rc_verification_status || 'PENDING',
+              insuranceVerificationStatus: v?.insurance_verification_status || 'PENDING',
+              fitnessVerificationStatus: v?.fitness_verification_status || 'PENDING',
+              permitVerificationStatus: v?.permit_verification_status || 'PENDING',
+              isAvailable: true,
+            };
+          });
         }
       }
 
@@ -2226,10 +2346,12 @@ export const vendorService = {
       const minCap = Number(vehicleData.minimumCapacityMt) || Math.max(1, Math.round(ratedCap * 0.5));
       const rcNum = (vehicleData.rcNumber || regNum).trim().toUpperCase();
 
+      const canonicalVehCode = await generateDbTruckxId('VH');
       const { data: newV, error: vErr } = await supabase
         .from('vehicles')
         .upsert([
           {
+            vehicle_code: canonicalVehCode,
             registration_number: regNum,
             vehicle_type: category,
             body_type: bodyType,
@@ -2315,15 +2437,23 @@ export const vendorService = {
         .eq('primary_vendor_id', vendorId);
 
       if (!error && data && data.length > 0) {
-        return data.map((d) => ({
-          id: d.id,
-          fullName: d.full_name,
-          mobile: d.mobile,
-          licenceNumber: d.licence_number,
-          licenceExpiryDate: d.licence_expiry_date,
-          status: d.status,
-          isAvailable: true,
-        }));
+        return data.map((d) => {
+          const displayDriverCode =
+            d.driver_code && d.driver_code.startsWith('TRUCKX-DR-')
+              ? d.driver_code
+              : formatDisplayId('DR', d.driver_code || d.id, d.created_at);
+
+          return {
+            id: d.id,
+            driverCode: displayDriverCode,
+            fullName: d.full_name,
+            mobile: d.mobile,
+            licenceNumber: d.licence_number,
+            licenceExpiryDate: d.licence_expiry_date,
+            status: d.status,
+            isAvailable: true,
+          };
+        });
       }
 
       return [];
@@ -2343,10 +2473,12 @@ export const vendorService = {
   ): Promise<{ success: boolean; driverId?: string }> {
     try {
       const cleanPhone = driverData.mobile.replace(/[^0-9]/g, '').slice(-10);
+      const canonicalDriverCode = await generateDbTruckxId('DR');
       const { data: newD, error } = await supabase
         .from('drivers')
         .insert([
           {
+            driver_code: canonicalDriverCode,
             primary_vendor_id: vendorId && vendorId.includes('-') ? vendorId : null,
             full_name: driverData.fullName.trim(),
             mobile: cleanPhone,
@@ -2515,18 +2647,37 @@ export const vendorService = {
       const { data, error } = await supabase
         .from('trips')
         .select('*, bookings(*, requirements(*, client_companies(*))), vehicles(*), drivers(*)')
-        .eq('id', tripId)
+        .or(`id.eq.${tripId},trip_code.eq.${tripId}`)
         .maybeSingle();
 
       if (!error && data) {
         const { data: docs } = await supabase
           .from('documents')
           .select('*')
-          .eq('reference_id', tripId);
+          .eq('reference_id', data.id);
+
+        const displayTripId =
+          data.trip_code && data.trip_code.startsWith('TRUCKX-TR-')
+            ? data.trip_code
+            : formatDisplayId('TR', data.trip_code || data.lr_number || data.id, data.started_at || data.created_at);
+
+        const displayBookingId =
+          data.bookings?.booking_code && data.bookings.booking_code.startsWith('TRUCKX-BK-')
+            ? data.bookings.booking_code
+            : formatDisplayId('BK', data.bookings?.booking_code || data.booking_id, data.bookings?.confirmed_at || data.bookings?.created_at);
+
+        const displayReqId =
+          data.bookings?.requirements?.requirement_code && data.bookings.requirements.requirement_code.startsWith('TRUCKX-REQ-')
+            ? data.bookings.requirements.requirement_code
+            : (data.bookings?.requirements?.id ? formatDisplayId('REQ', data.bookings.requirements.requirement_code || data.bookings.requirements.id, data.bookings.requirements.created_at) : null);
 
         return {
-          id: data.id,
-          bookingId: data.booking_id,
+          id: displayTripId,
+          rawId: data.id,
+          bookingId: displayBookingId,
+          rawBookingId: data.booking_id,
+          requirementId: displayReqId,
+          lrNumber: data.lr_number || displayTripId,
           tripStatus: data.trip_status,
           rate: Number(data.vendor_rate) || 0,
           startedAt: data.started_at,
@@ -2538,10 +2689,13 @@ export const vendorService = {
           cargoDescription: data.bookings?.requirements?.material_type,
           capacityMt: Number(data.bookings?.requirements?.required_capacity_mt) || 0,
           loadingDatetime: data.bookings?.requirements?.loading_datetime,
-          clientName: data.bookings?.requirements?.client_companies?.company_name || 'Shipper',
+          clientName: data.bookings?.requirements?.client_companies?.company_name || 'Client Enterprise',
           vehicle: data.vehicles
             ? {
               id: data.vehicles.id,
+              vehicleCode: data.vehicles.vehicle_code && data.vehicles.vehicle_code.startsWith('TRUCKX-VH-')
+                ? data.vehicles.vehicle_code
+                : formatDisplayId('VH', data.vehicles.vehicle_code || data.vehicles.id, data.vehicles.created_at),
               registrationNumber: data.vehicles.registration_number,
               vehicleType: data.vehicles.vehicle_type,
             }
@@ -2549,6 +2703,9 @@ export const vendorService = {
           driver: data.drivers
             ? {
               id: data.drivers.id,
+              driverCode: data.drivers.driver_code && data.drivers.driver_code.startsWith('TRUCKX-DR-')
+                ? data.drivers.driver_code
+                : formatDisplayId('DR', data.drivers.driver_code || data.drivers.id, data.drivers.created_at),
               fullName: data.drivers.full_name,
               mobile: data.drivers.mobile,
               licenceNumber: data.drivers.licence_number,
@@ -2728,7 +2885,8 @@ export const vendorService = {
     message?: string;
   }> {
     try {
-      const resp = await fetch(`${getBackendApiUrl()}/api/payouts/transporter/generate`, {
+      const apiBase = getBackendApiUrl().replace(/\/api\/?$/, '');
+      const resp = await fetch(`${apiBase}/api/payouts/transporter/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -2741,7 +2899,8 @@ export const vendorService = {
 
   async getPayoutSlip(payoutId: string): Promise<TransporterPayout | null> {
     try {
-      const resp = await fetch(`${getBackendApiUrl()}/api/payouts/transporter/${encodeURIComponent(payoutId)}`);
+      const apiBase = getBackendApiUrl().replace(/\/api\/?$/, '');
+      const resp = await fetch(`${apiBase}/api/payouts/transporter/${encodeURIComponent(payoutId)}`);
       const data = await resp.json();
       return data?.payout || null;
     } catch {
@@ -2760,7 +2919,8 @@ export const vendorService = {
     message?: string;
   }> {
     try {
-      const resp = await fetch(`${getBackendApiUrl()}/api/payouts/transporter/${encodeURIComponent(payoutId)}/record-disbursal`, {
+      const apiBase = getBackendApiUrl().replace(/\/api\/?$/, '');
+      const resp = await fetch(`${apiBase}/api/payouts/transporter/${encodeURIComponent(payoutId)}/record-disbursal`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

@@ -5,7 +5,11 @@ export const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5
 
 import { supabase } from './supabase';
 
-export async function apiFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
+export interface ApiFetchOptions extends RequestInit {
+  timeoutMs?: number;
+}
+
+export async function apiFetch(endpoint: string, options: ApiFetchOptions = {}): Promise<Response> {
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
 
   const authHeaders: Record<string, string> = {

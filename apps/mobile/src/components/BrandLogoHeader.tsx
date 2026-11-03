@@ -27,8 +27,8 @@ export const BrandLogoHeader: React.FC<BrandLogoHeaderProps> = ({
 
 
   if (size === 'sm') {
-    width = 114;
-    height = 38;
+    width = 68;
+    height = 36;
   } else if (size === 'auth') {
     width = 165;
     height = 54;
@@ -68,7 +68,7 @@ export const BrandLogoHeader: React.FC<BrandLogoHeaderProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'center',
   },
 });

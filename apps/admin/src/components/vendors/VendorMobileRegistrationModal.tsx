@@ -206,7 +206,7 @@ export const VendorMobileRegistrationModal: React.FC<VendorMobileRegistrationMod
     const lastPart = addressParts[addressParts.length - 1];
     const pinMatch = lastPart.match(/\b\d{6}\b/);
     if (pinMatch) extractedPin = pinMatch[0];
-    extractedState = lastPart.replace(/\b\d{6}\b/, '').replace('-', '').trim() || 'Assam';
+    extractedState = lastPart.replace(/\b\d{6}\b/, '').replace('-', '').trim() || '';
   }
 
   // Check which documents exist
@@ -219,24 +219,24 @@ export const VendorMobileRegistrationModal: React.FC<VendorMobileRegistrationMod
   const auditChecks = {
     // Step 1
     step1Complete: !!(vendorData?.vendor_name && (contactData?.full_name || vendorData?.contact_name) && (contactData?.mobile || vendorData?.contact_phone) && vendorData?.pan),
-    transporterName: vendorData?.vendor_name,
-    contactPerson: contactData?.full_name || vendorData?.contact_name,
-    mobile: contactData?.mobile || vendorData?.contact_phone,
-    pan: vendorData?.pan,
-    gstin: vendorData?.gstin,
+    transporterName: vendorData?.vendor_name || '',
+    contactPerson: contactData?.full_name || vendorData?.contact_name || '',
+    mobile: contactData?.mobile || vendorData?.contact_phone || '',
+    pan: vendorData?.pan || '',
+    gstin: vendorData?.gstin || '',
 
     // Step 2
     step2Complete: !!(vendorData?.vendor_type || vendorData?.business_type),
-    businessType: vendorData?.vendor_type || 'Fleet Owner',
-    yearEstablished: vendorData?.year_established || '2019',
+    businessType: vendorData?.vendor_type || vendorData?.business_type || '',
+    yearEstablished: vendorData?.year_established ? String(vendorData.year_established) : '',
     msmeNumber: vendorData?.msme_number || null,
 
     // Step 3
     step3Complete: !!(fullAddress && (extractedCity || extractedState)),
-    address: fullAddress,
-    city: extractedCity || 'Guwahati',
-    state: extractedState || 'Assam',
-    pincode: extractedPin || '781014',
+    address: fullAddress || '',
+    city: extractedCity || '',
+    state: extractedState || '',
+    pincode: extractedPin || '',
     altPhone: contactData?.alt_phone || null,
 
     // Step 4
@@ -245,7 +245,7 @@ export const VendorMobileRegistrationModal: React.FC<VendorMobileRegistrationMod
       ? vendorOperatingHubs
       : (vendorData?.operating_routes && vendorData.operating_routes.length > 0
           ? vendorData.operating_routes
-          : ['No operating hubs specified']),
+          : []),
 
     // Step 5: Fleet Strength & Vehicle Configurations (exclusively from actual vendor submitted data)
     step5Complete: vendorFleetData.vehicleConfigs.length > 0 || vendorFleetData.totalFleetCount > 0,
@@ -254,8 +254,8 @@ export const VendorMobileRegistrationModal: React.FC<VendorMobileRegistrationMod
     vehicleConfigs: vendorFleetData.vehicleConfigs,
 
     // Step 6
-    step6Complete: true,
-    servicesOffered: vendorData?.services || ['Full Truck Load (FTL)', 'ODC (Over-Dimensional Cargo)', 'Heavy Project Cargo'],
+    step6Complete: Array.isArray(vendorData?.services) && vendorData.services.length > 0,
+    servicesOffered: Array.isArray(vendorData?.services) ? vendorData.services : [],
 
     // Step 7
     step7Complete: !!(panDoc || vendorData?.pan),
@@ -333,6 +333,16 @@ export const VendorMobileRegistrationModal: React.FC<VendorMobileRegistrationMod
     }
   };
 
+  // Keyboard accessibility: Close on Escape key
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   const handleConfirmReject = async () => {
     if (!rejectionReason.trim()) {
       toast.warning('⚠️ Please enter the correction required or reason for rejection.');
@@ -369,6 +379,9 @@ export const VendorMobileRegistrationModal: React.FC<VendorMobileRegistrationMod
     <div className="modal-backdrop" style={{ zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}>
       <div
         className="vendor-mobile-flow-modal-container"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="vendor-flow-modal-title"
         style={{
           width: '94%',
           maxWidth: '1180px',
@@ -390,9 +403,9 @@ export const VendorMobileRegistrationModal: React.FC<VendorMobileRegistrationMod
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '16px 24px',
-            borderBottom: '1px solid #E2E8F0',
-            backgroundColor: '#0A1931',
-            color: '#FFFFFF',
+            borderBottom: '1px solid #E5EAF1',
+            backgroundColor: '#FFFFFF',
+            color: '#111827',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -401,19 +414,19 @@ export const VendorMobileRegistrationModal: React.FC<VendorMobileRegistrationMod
                 width: '38px',
                 height: '38px',
                 borderRadius: '10px',
-                backgroundColor: 'rgba(240, 90, 34, 0.18)',
-                border: '1px solid #F05A22',
+                backgroundColor: '#FFF3EC',
+                border: '1px solid #FFE8DF',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#F05A22',
+                color: '#F4510B',
               }}
             >
               <Smartphone size={20} />
             </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <h2 style={{ fontSize: '17px', fontWeight: 700, margin: 0, color: '#FFFFFF' }}>
+                <h2 id="vendor-flow-modal-title" style={{ fontSize: '17px', fontWeight: 700, margin: 0, color: '#111827' }}>
                   Vendor Mobile Registration Flow Inspector
                 </h2>
                 <span
@@ -429,8 +442,8 @@ export const VendorMobileRegistrationModal: React.FC<VendorMobileRegistrationMod
                   {vendorData?.status || 'PENDING'}
                 </span>
               </div>
-              <p style={{ fontSize: '12px', color: '#94A3B8', margin: '2px 0 0 0' }}>
-                Screen-by-screen audit of mobile onboarding flow, completed fields, and KYC validations for <strong style={{ color: '#F1F5F9' }}>{vendorData?.vendor_name || 'Vendor'}</strong> ({formattedId})
+              <p style={{ fontSize: '12px', color: '#64748B', margin: '2px 0 0 0' }}>
+                Screen-by-screen audit of mobile onboarding flow, completed fields, and KYC validations for <strong style={{ color: '#111827' }}>{vendorData?.vendor_name || 'Vendor'}</strong> ({formattedId})
               </p>
             </div>
           </div>
@@ -438,19 +451,19 @@ export const VendorMobileRegistrationModal: React.FC<VendorMobileRegistrationMod
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <button
               onClick={onClose}
+              title="Close modal"
+              aria-label="Close flow inspector modal"
               style={{
                 background: 'none',
                 border: 'none',
-                color: '#94A3B8',
+                color: '#64748B',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 padding: '6px',
                 borderRadius: '8px',
-                transition: 'background 0.2s',
               }}
-              title="Close Inspector"
             >
               <X size={20} />
             </button>
@@ -520,13 +533,13 @@ export const VendorMobileRegistrationModal: React.FC<VendorMobileRegistrationMod
             style={{
               width: '420px',
               minWidth: '420px',
-              backgroundColor: '#0F172A',
+              backgroundColor: '#F8FAFC',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
               padding: '20px',
-              borderRight: '1px solid #E2E8F0',
+              borderRight: '1px solid #E5EAF1',
             }}
           >
             {/* Mobile Phone Mockup Frame */}
@@ -591,7 +604,7 @@ export const VendorMobileRegistrationModal: React.FC<VendorMobileRegistrationMod
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <div style={{ width: '20px', height: '20px', borderRadius: '4px', backgroundColor: '#F05A22', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFF', fontSize: '10px', fontWeight: 800 }}>T</div>
-                  <span style={{ fontSize: '12px', fontWeight: 800, color: '#0A1931' }}>TRUCKS PARTNER</span>
+                  <span style={{ fontSize: '12px', fontWeight: 800, color: '#0A1931' }}>THE TRUCKX</span>
                 </div>
                 <span style={{ fontSize: '10px', fontWeight: 700, color: '#F05A22', backgroundColor: '#FFF7ED', padding: '2px 6px', borderRadius: '4px' }}>
                   STEP {activeStep} OF 7
@@ -617,7 +630,7 @@ export const VendorMobileRegistrationModal: React.FC<VendorMobileRegistrationMod
 
                     <div style={{ backgroundColor: '#FFFFFF', padding: '10px', borderRadius: '8px', border: '1px solid #E2E8F0', marginBottom: '8px' }}>
                       <span style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>MOBILE NUMBER *</span>
-                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#0F172A', marginTop: '2px' }}>+91 {contactData?.mobile || vendorData?.contact_phone || 'Not filled'}</div>
+                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#0F172A', marginTop: '2px' }}>{auditChecks.mobile ? `+91 ${auditChecks.mobile}` : 'Not filled'}</div>
                     </div>
 
                     <div style={{ backgroundColor: '#FFFFFF', padding: '10px', borderRadius: '8px', border: '1px solid #E2E8F0', marginBottom: '8px' }}>
@@ -627,7 +640,7 @@ export const VendorMobileRegistrationModal: React.FC<VendorMobileRegistrationMod
 
                     <div style={{ backgroundColor: '#FFFFFF', padding: '10px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
                       <span style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>GSTIN (OPTIONAL)</span>
-                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#0F172A', marginTop: '2px' }}>{vendorData?.gstin || 'None (Exempted / Unregistered)'}</div>
+                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#0F172A', marginTop: '2px' }}>{vendorData?.gstin || 'Not provided (Optional)'}</div>
                     </div>
                   </div>
                 )}
@@ -639,17 +652,17 @@ export const VendorMobileRegistrationModal: React.FC<VendorMobileRegistrationMod
 
                     <div style={{ backgroundColor: '#FFFFFF', padding: '10px', borderRadius: '8px', border: '1px solid #E2E8F0', marginBottom: '8px' }}>
                       <span style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>ENTITY CONSTITUTION *</span>
-                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#0F172A', marginTop: '2px' }}>{auditChecks.businessType}</div>
+                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#0F172A', marginTop: '2px' }}>{auditChecks.businessType || 'Not specified'}</div>
                     </div>
 
                     <div style={{ backgroundColor: '#FFFFFF', padding: '10px', borderRadius: '8px', border: '1px solid #E2E8F0', marginBottom: '8px' }}>
                       <span style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>YEAR OF ESTABLISHMENT *</span>
-                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#0F172A', marginTop: '2px' }}>{auditChecks.yearEstablished}</div>
+                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#0F172A', marginTop: '2px' }}>{auditChecks.yearEstablished || 'Not specified'}</div>
                     </div>
 
                     <div style={{ backgroundColor: '#FFFFFF', padding: '10px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
                       <span style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>MSME / UDYAM NUMBER</span>
-                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#0F172A', marginTop: '2px' }}>{auditChecks.msmeNumber || 'UDYAM-AS-03-0019284 (Auto)'}</div>
+                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#0F172A', marginTop: '2px' }}>{auditChecks.msmeNumber || 'Not provided'}</div>
                     </div>
                   </div>
                 )}
@@ -661,29 +674,31 @@ export const VendorMobileRegistrationModal: React.FC<VendorMobileRegistrationMod
 
                     <div style={{ backgroundColor: '#FFFFFF', padding: '10px', borderRadius: '8px', border: '1px solid #E2E8F0', marginBottom: '8px' }}>
                       <span style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>REGISTERED ADDRESS *</span>
-                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#0F172A', marginTop: '2px' }}>{auditChecks.address || 'Direct Vendor Highway'}</div>
+                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#0F172A', marginTop: '2px' }}>{auditChecks.address || 'Not filled'}</div>
                     </div>
 
                     <div style={{ backgroundColor: '#FFFFFF', padding: '10px', borderRadius: '8px', border: '1px solid #E2E8F0', marginBottom: '8px' }}>
                       <span style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>PIN CODE *</span>
-                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#F05A22', marginTop: '2px' }}>{auditChecks.pincode}</div>
-                      <div style={{ fontSize: '9.5px', color: '#16A34A', marginTop: '2px' }}>✓ State auto-detected from postal directory</div>
+                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#F05A22', marginTop: '2px' }}>{auditChecks.pincode || 'Not filled'}</div>
+                      {auditChecks.pincode && auditChecks.state ? (
+                        <div style={{ fontSize: '9.5px', color: '#16A34A', marginTop: '2px' }}>✓ State auto-detected from postal directory</div>
+                      ) : null}
                     </div>
 
                     <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
                       <div style={{ flex: 1, backgroundColor: '#FFFFFF', padding: '8px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
                         <span style={{ fontSize: '9px', color: '#64748B', fontWeight: 600 }}>CITY</span>
-                        <div style={{ fontSize: '11px', fontWeight: 700, color: '#0F172A' }}>{auditChecks.city}</div>
+                        <div style={{ fontSize: '11px', fontWeight: 700, color: '#0F172A' }}>{auditChecks.city || '—'}</div>
                       </div>
                       <div style={{ flex: 1, backgroundColor: '#FFFFFF', padding: '8px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
                         <span style={{ fontSize: '9px', color: '#64748B', fontWeight: 600 }}>STATE</span>
-                        <div style={{ fontSize: '11px', fontWeight: 700, color: '#0F172A' }}>{auditChecks.state}</div>
+                        <div style={{ fontSize: '11px', fontWeight: 700, color: '#0F172A' }}>{auditChecks.state || '—'}</div>
                       </div>
                     </div>
 
                     <div style={{ backgroundColor: '#FFFFFF', padding: '10px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
                       <span style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>OFFICIAL EMAIL (OPTIONAL)</span>
-                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#0F172A', marginTop: '2px' }}>{contactData?.email || 'vendor@trucks.in'}</div>
+                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#0F172A', marginTop: '2px' }}>{contactData?.email || 'Not provided'}</div>
                     </div>
                   </div>
                 )}
@@ -694,12 +709,18 @@ export const VendorMobileRegistrationModal: React.FC<VendorMobileRegistrationMod
                     <p style={{ fontSize: '11px', color: '#64748B', margin: '0 0 12px 0' }}>Active regional corridors & lanes</p>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      {auditChecks.operatingHubs.map((hub, idx) => (
-                        <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#FFFFFF', padding: '8px 10px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
-                          <MapPin size={12} color="#F05A22" />
-                          <span style={{ fontSize: '11px', fontWeight: 600, color: '#1E293B' }}>{hub}</span>
+                      {auditChecks.operatingHubs.length === 0 ? (
+                        <div style={{ backgroundColor: '#FFFFFF', padding: '12px', borderRadius: '6px', border: '1px dashed #CBD5E1', textAlign: 'center' }}>
+                          <span style={{ fontSize: '11px', color: '#64748B' }}>No operating hubs specified yet.</span>
                         </div>
-                      ))}
+                      ) : (
+                        auditChecks.operatingHubs.map((hub, idx) => (
+                          <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#FFFFFF', padding: '8px 10px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
+                            <MapPin size={12} color="#F05A22" />
+                            <span style={{ fontSize: '11px', fontWeight: 600, color: '#1E293B' }}>{hub}</span>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
                 )}
@@ -751,12 +772,18 @@ export const VendorMobileRegistrationModal: React.FC<VendorMobileRegistrationMod
                     <p style={{ fontSize: '11px', color: '#64748B', margin: '0 0 12px 0' }}>Service offerings & cargo handling</p>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      {auditChecks.servicesOffered.map((srv, i) => (
-                        <div key={i} style={{ backgroundColor: '#FFFFFF', padding: '10px', borderRadius: '8px', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <CheckCircle2 size={14} color="#16A34A" />
-                          <span style={{ fontSize: '11.5px', fontWeight: 600, color: '#1E293B' }}>{srv}</span>
+                      {auditChecks.servicesOffered.length === 0 ? (
+                        <div style={{ backgroundColor: '#FFFFFF', padding: '12px', borderRadius: '6px', border: '1px dashed #CBD5E1', textAlign: 'center' }}>
+                          <span style={{ fontSize: '11px', color: '#64748B' }}>No transport capabilities specified yet.</span>
                         </div>
-                      ))}
+                      ) : (
+                        auditChecks.servicesOffered.map((srv, i) => (
+                          <div key={i} style={{ backgroundColor: '#FFFFFF', padding: '10px', borderRadius: '8px', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <CheckCircle2 size={14} color="#16A34A" />
+                            <span style={{ fontSize: '11.5px', fontWeight: 600, color: '#1E293B' }}>{srv}</span>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
                 )}
@@ -1019,7 +1046,7 @@ export const VendorMobileRegistrationModal: React.FC<VendorMobileRegistrationMod
 
                   <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr 140px', padding: '12px 16px', alignItems: 'center' }}>
                     <div style={{ fontSize: '13px', fontWeight: 600, color: '#1E293B' }}>MSME / Udyam Number</div>
-                    <div style={{ fontSize: '13px', fontFamily: 'monospace', color: '#0F172A' }}>{auditChecks.msmeNumber || 'Auto-registered for Transporter Priority'}</div>
+                    <div style={{ fontSize: '13px', fontFamily: 'monospace', color: '#0F172A' }}>{auditChecks.msmeNumber || 'Not provided'}</div>
                     <div style={{ textAlign: 'right' }}>
                       <span style={{ fontSize: '11px', fontWeight: 600, color: '#475569', backgroundColor: '#F1F5F9', padding: '3px 8px', borderRadius: '999px' }}>Optional</span>
                     </div>
@@ -1031,31 +1058,45 @@ export const VendorMobileRegistrationModal: React.FC<VendorMobileRegistrationMod
                 <>
                   <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr 140px', padding: '12px 16px', borderBottom: '1px solid #F1F5F9', alignItems: 'center' }}>
                     <div style={{ fontSize: '13px', fontWeight: 600, color: '#1E293B' }}>Registered Address</div>
-                    <div style={{ fontSize: '13px', color: '#0F172A' }}>{auditChecks.address}</div>
+                    <div style={{ fontSize: '13px', color: '#0F172A' }}>{auditChecks.address || 'Missing'}</div>
                     <div style={{ textAlign: 'right' }}>
-                      <span style={{ fontSize: '11px', fontWeight: 700, color: '#16A34A', backgroundColor: '#DCFCE7', padding: '3px 8px', borderRadius: '999px' }}>✓ Completed</span>
+                      {auditChecks.address ? (
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#16A34A', backgroundColor: '#DCFCE7', padding: '3px 8px', borderRadius: '999px' }}>✓ Completed</span>
+                      ) : (
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#DC2626', backgroundColor: '#FEE2E2', padding: '3px 8px', borderRadius: '999px' }}>⚠ Missing</span>
+                      )}
                     </div>
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr 140px', padding: '12px 16px', borderBottom: '1px solid #F1F5F9', alignItems: 'center' }}>
                     <div style={{ fontSize: '13px', fontWeight: 600, color: '#1E293B' }}>PIN Code (Auto-detection)</div>
-                    <div style={{ fontSize: '13px', fontFamily: 'monospace', color: '#F05A22', fontWeight: 700 }}>{auditChecks.pincode}</div>
+                    <div style={{ fontSize: '13px', fontFamily: 'monospace', color: '#F05A22', fontWeight: 700 }}>{auditChecks.pincode || 'Missing'}</div>
                     <div style={{ textAlign: 'right' }}>
-                      <span style={{ fontSize: '11px', fontWeight: 700, color: '#16A34A', backgroundColor: '#DCFCE7', padding: '3px 8px', borderRadius: '999px' }}>✓ Resolved</span>
+                      {auditChecks.pincode ? (
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#16A34A', backgroundColor: '#DCFCE7', padding: '3px 8px', borderRadius: '999px' }}>✓ Resolved</span>
+                      ) : (
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#DC2626', backgroundColor: '#FEE2E2', padding: '3px 8px', borderRadius: '999px' }}>⚠ Missing</span>
+                      )}
                     </div>
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr 140px', padding: '12px 16px', borderBottom: '1px solid #F1F5F9', alignItems: 'center' }}>
                     <div style={{ fontSize: '13px', fontWeight: 600, color: '#1E293B' }}>Auto-Detected City & State</div>
-                    <div style={{ fontSize: '13px', color: '#0F172A' }}>{auditChecks.city}, {auditChecks.state}</div>
+                    <div style={{ fontSize: '13px', color: '#0F172A' }}>
+                      {auditChecks.city && auditChecks.state ? `${auditChecks.city}, ${auditChecks.state}` : (auditChecks.city || auditChecks.state || 'Missing')}
+                    </div>
                     <div style={{ textAlign: 'right' }}>
-                      <span style={{ fontSize: '11px', fontWeight: 700, color: '#16A34A', backgroundColor: '#DCFCE7', padding: '3px 8px', borderRadius: '999px' }}>✓ Geo-Matched</span>
+                      {auditChecks.city || auditChecks.state ? (
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#16A34A', backgroundColor: '#DCFCE7', padding: '3px 8px', borderRadius: '999px' }}>✓ Geo-Matched</span>
+                      ) : (
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#DC2626', backgroundColor: '#FEE2E2', padding: '3px 8px', borderRadius: '999px' }}>⚠ Missing</span>
+                      )}
                     </div>
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr 140px', padding: '12px 16px', alignItems: 'center' }}>
                     <div style={{ fontSize: '13px', fontWeight: 600, color: '#1E293B' }}>Official Email Address</div>
-                    <div style={{ fontSize: '13px', color: '#0F172A' }}>{contactData?.email || 'vendor@trucks.in'}</div>
+                    <div style={{ fontSize: '13px', color: '#0F172A' }}>{contactData?.email || 'Not provided'}</div>
                     <div style={{ textAlign: 'right' }}>
                       <span style={{ fontSize: '11px', fontWeight: 600, color: '#475569', backgroundColor: '#F1F5F9', padding: '3px 8px', borderRadius: '999px' }}>Optional</span>
                     </div>
@@ -1068,12 +1109,18 @@ export const VendorMobileRegistrationModal: React.FC<VendorMobileRegistrationMod
                   <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr 140px', padding: '12px 16px', borderBottom: '1px solid #F1F5F9', alignItems: 'center' }}>
                     <div style={{ fontSize: '13px', fontWeight: 600, color: '#1E293B' }}>Declared Regional Hubs</div>
                     <div style={{ fontSize: '13px', color: '#0F172A', fontWeight: 600 }}>
-                      {auditChecks.operatingHubs.join(', ')}
+                      {auditChecks.operatingHubs.length > 0 ? auditChecks.operatingHubs.join(', ') : 'No operating hubs declared'}
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <span style={{ fontSize: '11px', fontWeight: 700, color: '#16A34A', backgroundColor: '#DCFCE7', padding: '3px 8px', borderRadius: '999px' }}>
-                        ✓ {auditChecks.operatingHubs.length} {auditChecks.operatingHubs.length === 1 ? 'Hub' : 'Hubs'} Active
-                      </span>
+                      {auditChecks.operatingHubs.length > 0 ? (
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#16A34A', backgroundColor: '#DCFCE7', padding: '3px 8px', borderRadius: '999px' }}>
+                          ✓ {auditChecks.operatingHubs.length} {auditChecks.operatingHubs.length === 1 ? 'Hub' : 'Hubs'} Active
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#DC2626', backgroundColor: '#FEE2E2', padding: '3px 8px', borderRadius: '999px' }}>
+                          ⚠ None
+                        </span>
+                      )}
                     </div>
                   </div>
                 </>
@@ -1123,29 +1170,21 @@ export const VendorMobileRegistrationModal: React.FC<VendorMobileRegistrationMod
 
               {activeStep === 6 && (
                 <>
-                  <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr 140px', padding: '12px 16px', borderBottom: '1px solid #F1F5F9', alignItems: 'center' }}>
-                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#1E293B' }}>Full Truck Load (FTL)</div>
-                    <div style={{ fontSize: '13px', color: '#0F172A' }}>Dedicated point-to-point trunk movement</div>
-                    <div style={{ textAlign: 'right' }}>
-                      <span style={{ fontSize: '11px', fontWeight: 700, color: '#16A34A', backgroundColor: '#DCFCE7', padding: '3px 8px', borderRadius: '999px' }}>✓ Active</span>
+                  {auditChecks.servicesOffered.length === 0 ? (
+                    <div style={{ padding: '20px', textAlign: 'center', color: '#64748B', fontSize: '13px' }}>
+                      No transport capabilities specified yet.
                     </div>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr 140px', padding: '12px 16px', borderBottom: '1px solid #F1F5F9', alignItems: 'center' }}>
-                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#1E293B' }}>ODC (Over-Dimensional)</div>
-                    <div style={{ fontSize: '13px', color: '#0F172A' }}>Specialized custom trailer consignments</div>
-                    <div style={{ textAlign: 'right' }}>
-                      <span style={{ fontSize: '11px', fontWeight: 700, color: '#16A34A', backgroundColor: '#DCFCE7', padding: '3px 8px', borderRadius: '999px' }}>✓ Active</span>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr 140px', padding: '12px 16px', alignItems: 'center' }}>
-                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#1E293B' }}>Heavy Project Cargo</div>
-                    <div style={{ fontSize: '13px', color: '#0F172A' }}>Multi-axle transit for heavy machinery</div>
-                    <div style={{ textAlign: 'right' }}>
-                      <span style={{ fontSize: '11px', fontWeight: 700, color: '#16A34A', backgroundColor: '#DCFCE7', padding: '3px 8px', borderRadius: '999px' }}>✓ Active</span>
-                    </div>
-                  </div>
+                  ) : (
+                    auditChecks.servicesOffered.map((srv, idx) => (
+                      <div key={idx} style={{ display: 'grid', gridTemplateColumns: '220px 1fr 140px', padding: '12px 16px', borderBottom: idx < auditChecks.servicesOffered.length - 1 ? '1px solid #F1F5F9' : 'none', alignItems: 'center' }}>
+                        <div style={{ fontSize: '13px', fontWeight: 600, color: '#1E293B' }}>{srv}</div>
+                        <div style={{ fontSize: '13px', color: '#0F172A' }}>Registered active capability</div>
+                        <div style={{ textAlign: 'right' }}>
+                          <span style={{ fontSize: '11px', fontWeight: 700, color: '#16A34A', backgroundColor: '#DCFCE7', padding: '3px 8px', borderRadius: '999px' }}>✓ Active</span>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </>
               )}
 
@@ -1159,11 +1198,15 @@ export const VendorMobileRegistrationModal: React.FC<VendorMobileRegistrationMod
                           {panDoc.file_name || 'pan_card.pdf'}
                         </a>
                       ) : (
-                        `PAN Attached: ${vendorData?.pan || 'None'}`
+                        vendorData?.pan ? `PAN Recorded: ${vendorData.pan}` : 'Missing'
                       )}
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <span style={{ fontSize: '11px', fontWeight: 700, color: '#16A34A', backgroundColor: '#DCFCE7', padding: '3px 8px', borderRadius: '999px' }}>✓ KYC Verified</span>
+                      {auditChecks.panUploaded ? (
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#16A34A', backgroundColor: '#DCFCE7', padding: '3px 8px', borderRadius: '999px' }}>✓ KYC Verified</span>
+                      ) : (
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#DC2626', backgroundColor: '#FEE2E2', padding: '3px 8px', borderRadius: '999px' }}>⚠ Missing</span>
+                      )}
                     </div>
                   </div>
 
@@ -1179,15 +1222,19 @@ export const VendorMobileRegistrationModal: React.FC<VendorMobileRegistrationMod
 
                   <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr 140px', padding: '12px 16px', borderBottom: '1px solid #F1F5F9', alignItems: 'center' }}>
                     <div style={{ fontSize: '13px', fontWeight: 600, color: '#1E293B' }}>Bank Cancelled Cheque (Mandatory)</div>
-                    <div style={{ fontSize: '13px', color: '#0F172A' }}>{chequeDoc ? chequeDoc.file_name : 'Verified Bank Cheque on-file'}</div>
+                    <div style={{ fontSize: '13px', color: '#0F172A' }}>{chequeDoc ? chequeDoc.file_name : 'Missing'}</div>
                     <div style={{ textAlign: 'right' }}>
-                      <span style={{ fontSize: '11px', fontWeight: 700, color: '#16A34A', backgroundColor: '#DCFCE7', padding: '3px 8px', borderRadius: '999px' }}>✓ Bank Verified</span>
+                      {chequeDoc ? (
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#16A34A', backgroundColor: '#DCFCE7', padding: '3px 8px', borderRadius: '999px' }}>✓ Bank Verified</span>
+                      ) : (
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#DC2626', backgroundColor: '#FEE2E2', padding: '3px 8px', borderRadius: '999px' }}>⚠ Missing</span>
+                      )}
                     </div>
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr 140px', padding: '12px 16px', alignItems: 'center' }}>
                     <div style={{ fontSize: '13px', fontWeight: 600, color: '#1E293B' }}>Transport Undertaking</div>
-                    <div style={{ fontSize: '13px', color: '#0F172A' }}>{declDoc ? declDoc.file_name : 'Standard Carrier Declaration Accepted'}</div>
+                    <div style={{ fontSize: '13px', color: '#0F172A' }}>{declDoc ? declDoc.file_name : 'Not provided (Optional)'}</div>
                     <div style={{ textAlign: 'right' }}>
                       <span style={{ fontSize: '11px', fontWeight: 600, color: '#475569', backgroundColor: '#F1F5F9', padding: '3px 8px', borderRadius: '999px' }}>Optional</span>
                     </div>

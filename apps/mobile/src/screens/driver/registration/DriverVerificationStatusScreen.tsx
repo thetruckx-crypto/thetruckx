@@ -23,7 +23,6 @@ import {
   ArrowRight,
   Headphones,
 } from 'lucide-react-native';
-import { ScenicHeroBanner } from '../../../components/ScenicHeroBanner';
 import { BottomGoldWings } from '../../../components/BottomGoldWings';
 import { driverService } from '../../../services/driverService';
 import { supabase } from '../../../supabase';
@@ -98,6 +97,15 @@ export const DriverVerificationStatusScreen: React.FC<DriverVerificationStatusSc
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      {/* Header Bar */}
+      <View style={styles.headerBar}>
+        <TouchableOpacity style={styles.headerBackBtn} onPress={onBack} accessibilityLabel="Back">
+          <ChevronLeft size={22} color="#0F172A" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Verification Status</Text>
+        <View style={styles.headerRightPlaceholder} />
+      </View>
+
       <ScrollView
         contentContainerStyle={styles.scrollContainer}
         bounces={false}
@@ -105,15 +113,6 @@ export const DriverVerificationStatusScreen: React.FC<DriverVerificationStatusSc
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#F05A22" />
         }
       >
-        {/* Top Banner */}
-        <View style={styles.topWrap}>
-          <ScenicHeroBanner height={170} />
-          <TouchableOpacity style={styles.backBtn} onPress={onBack} accessibilityLabel="Back">
-            <ChevronLeft size={22} color="#172B4D" />
-          </TouchableOpacity>
-          
-        </View>
-
         <View style={styles.contentWrap}>
           {loading ? (
             <View style={{ padding: 40, alignItems: 'center' }}>
@@ -142,7 +141,7 @@ export const DriverVerificationStatusScreen: React.FC<DriverVerificationStatusSc
                 <Text style={styles.statusTitle}>
                   {isApproved && 'Pilot Account Approved'}
                   {isRejected && 'Application Requires Correction'}
-                  {isPending && 'Under Sarathi & Desk Verification'}
+                  {isPending && 'Under Compliance Review'}
                 </Text>
 
                 <Text style={styles.statusDescription}>
@@ -152,7 +151,7 @@ export const DriverVerificationStatusScreen: React.FC<DriverVerificationStatusSc
                     (driverProfile?.rejectionReason ||
                       'Document blurriness or DL mismatch observed. Please correct and re-upload.')}
                   {isPending &&
-                    'Our compliance desk is verifying your Sarathi Vahan records and transporter association. Average turnaround: 2-4 hours.'}
+                    'Our compliance team is reviewing your driving licence and identity credentials. This typically takes 2–4 business hours.'}
                 </Text>
 
                 <TouchableOpacity style={styles.refreshBtn} onPress={handleRefresh}>
@@ -203,7 +202,7 @@ export const DriverVerificationStatusScreen: React.FC<DriverVerificationStatusSc
                     <ShieldCheck size={16} color={isApproved ? '#10B981' : '#F05A22'} />
                     <View style={{ flex: 1 }}>
                       <Text style={styles.docItemName}>Commercial Driving Licence (DL)</Text>
-                      <Text style={styles.docItemSub}>Verified against Sarathi portal</Text>
+                      <Text style={styles.docItemSub}>Verified against National Transport database</Text>
                     </View>
                     <Text style={[styles.docItemStatus, { color: isApproved ? '#10B981' : '#F05A22' }]}>
                       {isApproved ? 'VERIFIED' : 'IN AUDIT'}
@@ -297,27 +296,31 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingBottom: 40,
   },
-  topWrap: {
-    position: 'relative',
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
   },
-  backBtn: {
-    position: 'absolute',
-    top: 16,
-    left: 16,
+  headerBackBtn: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 10,
   },
-  logoWrap: {
-    position: 'absolute',
-    bottom: 8,
-    alignSelf: 'center',
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  headerRightPlaceholder: {
+    width: 38,
   },
   contentWrap: {
     paddingHorizontal: 20,

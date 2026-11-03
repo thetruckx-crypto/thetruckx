@@ -372,6 +372,27 @@ export const documentWorkflowService = {
         ]);
       } catch { }
 
+      // Dispatch push notification to relevant role (Driver or Vendor)
+      try {
+        const targetRole = prevDoc?.category === 'DRIVER' ? 'DRIVER' : 'VENDOR';
+        await fetch('/api/notifications/send-push', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: prevDoc?.reference_id,
+            role: targetRole,
+            title: `Document Rejected: ${prevDoc?.document_type || 'Document'}`,
+            body: `Rejection reason: ${reason}. Please upload corrected document.`,
+            data: {
+              entityType: 'DOCUMENT_REJECTED',
+              entityId: docId,
+              category: 'document_correction',
+              rejectionReason: reason,
+            },
+          }),
+        });
+      } catch { }
+
       return { success: true, message: `Document rejected: ${reason}. Notification queued for re-upload.` };
     } catch (e: any) {
       return { success: false, message: e.message || 'Rejection update failed.' };

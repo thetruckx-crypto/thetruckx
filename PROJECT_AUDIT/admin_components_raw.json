@@ -1,0 +1,206 @@
+[
+  {
+    "relativePath": "bookings/BookingsModule.tsx",
+    "name": "BookingsModule"
+  },
+  {
+    "relativePath": "bookings/CreateBooking.tsx",
+    "name": "CreateBooking"
+  },
+  {
+    "relativePath": "BrandLogo.tsx",
+    "name": "BrandLogo"
+  },
+  {
+    "relativePath": "clients/ClientDirectory.tsx",
+    "name": "ClientDirectory"
+  },
+  {
+    "relativePath": "clients/ClientProfile.tsx",
+    "name": "ClientProfile"
+  },
+  {
+    "relativePath": "clients/CreateClient.tsx",
+    "name": "CreateClient"
+  },
+  {
+    "relativePath": "clients/EditClientModal.tsx",
+    "name": "EditClientModal"
+  },
+  {
+    "relativePath": "common/DocumentPreviewModal.tsx",
+    "name": "DocumentPreviewModal"
+  },
+  {
+    "relativePath": "common/HubNavigationHeader.tsx",
+    "name": "HubNavigationHeader"
+  },
+  {
+    "relativePath": "common/Skeleton.tsx",
+    "name": "Skeleton"
+  },
+  {
+    "relativePath": "common/ToastContainer.tsx",
+    "name": "ToastContainer"
+  },
+  {
+    "relativePath": "communications/CommunicationsModule.tsx",
+    "name": "CommunicationsModule"
+  },
+  {
+    "relativePath": "DashboardScreen.tsx",
+    "name": "DashboardScreen"
+  },
+  {
+    "relativePath": "DateRangePicker.tsx",
+    "name": "DateRangePicker"
+  },
+  {
+    "relativePath": "documents/DocumentClearanceModule.tsx",
+    "name": "DocumentClearanceModule"
+  },
+  {
+    "relativePath": "drivers/DriverDetailsDrawer.tsx",
+    "name": "DriverDetailsDrawer"
+  },
+  {
+    "relativePath": "drivers/DriverLicenceAudit.tsx",
+    "name": "DriverLicenceAudit"
+  },
+  {
+    "relativePath": "drivers/DriverVerificationQueue.tsx",
+    "name": "DriverVerificationQueue"
+  },
+  {
+    "relativePath": "exceptions/ExceptionDetailView.tsx",
+    "name": "ExceptionDetailView"
+  },
+  {
+    "relativePath": "exceptions/ExceptionsModule.tsx",
+    "name": "ExceptionsModule"
+  },
+  {
+    "relativePath": "fleet/CreateSharedVehicle.tsx",
+    "name": "CreateSharedVehicle"
+  },
+  {
+    "relativePath": "fleet/SharedVehicleMasterDirectory.tsx",
+    "name": "SharedVehicleMasterDirectory"
+  },
+  {
+    "relativePath": "fleet/VehicleComplianceWorkspace.tsx",
+    "name": "VehicleComplianceWorkspace"
+  },
+  {
+    "relativePath": "fleet/VehicleVerificationScreen.tsx",
+    "name": "VehicleVerificationScreen"
+  },
+  {
+    "relativePath": "fleet/VendorVehicleTieupApproval.tsx",
+    "name": "VendorVehicleTieupApproval"
+  },
+  {
+    "relativePath": "GlobalSearchModal.tsx",
+    "name": "GlobalSearchModal"
+  },
+  {
+    "relativePath": "LoginScreen.tsx",
+    "name": "LoginScreen"
+  },
+  {
+    "relativePath": "NotificationsDrawer.tsx",
+    "name": "NotificationsDrawer"
+  },
+  {
+    "relativePath": "payments/PaymentHistoryView.tsx",
+    "name": "PaymentHistoryView"
+  },
+  {
+    "relativePath": "payments/PaymentsModule.tsx",
+    "name": "PaymentsModule"
+  },
+  {
+    "relativePath": "pod/PODModule.tsx",
+    "name": "PODModule"
+  },
+  {
+    "relativePath": "pricing/PricingModule.tsx",
+    "name": "PricingModule"
+  },
+  {
+    "relativePath": "quotations/QuotationsModule.tsx",
+    "name": "QuotationsModule"
+  },
+  {
+    "relativePath": "quotations/VendorQuotationsModule.tsx",
+    "name": "VendorQuotationsModule"
+  },
+  {
+    "relativePath": "reports/ReportsModule.tsx",
+    "name": "ReportsModule"
+  },
+  {
+    "relativePath": "requirements/CreateRequirement.tsx",
+    "name": "CreateRequirement"
+  },
+  {
+    "relativePath": "requirements/RequirementsModule.tsx",
+    "name": "RequirementsModule"
+  },
+  {
+    "relativePath": "settings/SettingsModule.tsx",
+    "name": "SettingsModule"
+  },
+  {
+    "relativePath": "superadmin/SuperAdminModules.tsx",
+    "name": "SuperAdminModules"
+  },
+  {
+    "relativePath": "tracking/TrackingModule.tsx",
+    "name": "TrackingModule"
+  },
+  {
+    "relativePath": "tracking/TripDetailView.tsx",
+    "name": "TripDetailView"
+  },
+  {
+    "relativePath": "TwoFactorScreen.tsx",
+    "name": "TwoFactorScreen"
+  },
+  {
+    "relativePath": "vendors/DocumentRejectionModal.tsx",
+    "name": "DocumentRejectionModal"
+  },
+  {
+    "relativePath": "vendors/EditVendorModal.tsx",
+    "name": "EditVendorModal"
+  },
+  {
+    "relativePath": "vendors/InviteVendor.tsx",
+    "name": "InviteVendor"
+  },
+  {
+    "relativePath": "vendors/VendorDirectory.tsx",
+    "name": "VendorDirectory"
+  },
+  {
+    "relativePath": "vendors/VendorDocumentApprovals.tsx",
+    "name": "VendorDocumentApprovals"
+  },
+  {
+    "relativePath": "vendors/VendorMobileRegistrationModal.tsx",
+    "name": "VendorMobileRegistrationModal"
+  },
+  {
+    "relativePath": "vendors/VendorProfile.tsx",
+    "name": "VendorProfile"
+  },
+  {
+    "relativePath": "vendors/VendorVerificationRequests.tsx",
+    "name": "VendorVerificationRequests"
+  },
+  {
+    "relativePath": "weighbridge/WeighbridgeModule.tsx",
+    "name": "WeighbridgeModule"
+  }
+]

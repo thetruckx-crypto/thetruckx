@@ -27,6 +27,7 @@ import {
   AlertCircle,
 } from 'lucide-react-native';
 import { vendorService } from '../../../services/vendorService';
+import { formatDisplayId } from '../../../utils/idGenerator';
 import { VendorBottomNavBar, VendorNavTab } from '../../../components/VendorBottomNavBar';
 
 interface VendorRequirementsScreenProps {
@@ -46,7 +47,7 @@ export const VendorRequirementsScreen: React.FC<VendorRequirementsScreenProps> =
 }) => {
   const [requirements, setRequirements] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState<'ALL' | 'GHY' | 'CCU' | 'HEAVY'>('ALL');
+  const [activeFilter, setActiveFilter] = useState<'ALL' | 'FTL' | 'HEAVY' | 'URGENT'>('ALL');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -83,13 +84,15 @@ export const VendorRequirementsScreen: React.FC<VendorRequirementsScreenProps> =
     loadRequirements();
   };
 
-  // Helper to format friendly RFQ ID
-  const getRfqDisplayNumber = (req: any, index: number) => {
-    if (req.id && typeof req.id === 'string' && req.id.length < 15) {
-      return req.id.toUpperCase();
+  // Helper to format canonical Requirement ID (TRUCKX-REQ-DDMMYYYY-XXXXX)
+  const getRfqDisplayNumber = (req: any, _index?: number) => {
+    if (req.requirement_code && req.requirement_code.startsWith('TRUCKX-REQ-')) {
+      return req.requirement_code;
     }
-    const shortCode = (req.id || '').replace(/[^0-9]/g, '').slice(-5) || String(10025 + index);
-    return `RFQ-2025-${shortCode.padStart(5, '0')}`;
+    if (req.requirementCode && req.requirementCode.startsWith('TRUCKX-REQ-')) {
+      return req.requirementCode;
+    }
+    return formatDisplayId('REQ', req.requirement_code || req.requirementCode || req.id, req.created_at || req.createdAt);
   };
 
   // Helper to format bid deadline
@@ -136,23 +139,15 @@ export const VendorRequirementsScreen: React.FC<VendorRequirementsScreenProps> =
   // Filter counts
   const counts = useMemo(() => {
     const total = requirements.length;
-    const ghy = requirements.filter(
-      (r) =>
-        r.pickupAddress?.toLowerCase().includes('guwahati') ||
-        r.destinationAddress?.toLowerCase().includes('guwahati') ||
-        r.pickupAddress?.toLowerCase().includes('assam') ||
-        r.destinationAddress?.toLowerCase().includes('assam')
-    ).length;
-    const ccu = requirements.filter(
-      (r) =>
-        r.pickupAddress?.toLowerCase().includes('kolkata') ||
-        r.destinationAddress?.toLowerCase().includes('kolkata') ||
-        r.pickupAddress?.toLowerCase().includes('bengal') ||
-        r.destinationAddress?.toLowerCase().includes('bengal')
-    ).length;
-    const heavy = requirements.filter((r) => (Number(r.requiredCapacityMt) || 0) >= 20).length;
+    const ftl = requirements.filter((r) => (Number(r.requiredCapacityMt) || 0) >= 15).length;
+    const heavy = requirements.filter((r) => (Number(r.requiredCapacityMt) || 0) >= 25).length;
+    const urgent = requirements.filter((r) => {
+      if (!r.loadingDatetime) return false;
+      const t = new Date(r.loadingDatetime).getTime();
+      return !isNaN(t) && t - Date.now() < 48 * 3600 * 1000;
+    }).length;
 
-    return { total, ghy, ccu, heavy };
+    return { total, ftl, heavy, urgent };
   }, [requirements]);
 
   // Filtered Requirements
@@ -168,24 +163,16 @@ export const VendorRequirementsScreen: React.FC<VendorRequirementsScreenProps> =
 
       if (!matchesSearch) return false;
 
-      if (activeFilter === 'GHY') {
-        return (
-          r.pickupAddress?.toLowerCase().includes('guwahati') ||
-          r.destinationAddress?.toLowerCase().includes('guwahati') ||
-          r.pickupAddress?.toLowerCase().includes('assam') ||
-          r.destinationAddress?.toLowerCase().includes('assam')
-        );
-      }
-      if (activeFilter === 'CCU') {
-        return (
-          r.pickupAddress?.toLowerCase().includes('kolkata') ||
-          r.destinationAddress?.toLowerCase().includes('kolkata') ||
-          r.pickupAddress?.toLowerCase().includes('bengal') ||
-          r.destinationAddress?.toLowerCase().includes('bengal')
-        );
+      if (activeFilter === 'FTL') {
+        return (Number(r.requiredCapacityMt) || 0) >= 15;
       }
       if (activeFilter === 'HEAVY') {
-        return (Number(r.requiredCapacityMt) || 0) >= 20;
+        return (Number(r.requiredCapacityMt) || 0) >= 25;
+      }
+      if (activeFilter === 'URGENT') {
+        if (!r.loadingDatetime) return false;
+        const t = new Date(r.loadingDatetime).getTime();
+        return !isNaN(t) && t - Date.now() < 48 * 3600 * 1000;
       }
 
       return true;
@@ -279,7 +266,7 @@ export const VendorRequirementsScreen: React.FC<VendorRequirementsScreenProps> =
 
         {/* ── 3. Screen Subtitle (Screenshot 2 Match) ── */}
         <Text style={styles.screenSubtitle}>
-          Live requirements from verified corporate shippers awaiting competitive freight bids.
+          Live requirements from verified corporate clients awaiting competitive freight bids.
         </Text>
 
         {/* ── 4. Search Bar (Screenshot 2 Match) ── */}
@@ -300,12 +287,8 @@ export const VendorRequirementsScreen: React.FC<VendorRequirementsScreenProps> =
           )}
         </View>
 
-        {/* ── 5. Horizontal Filter Chips (Screenshot 2 Match) ── */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterChipsScroll}
-        >
+        {/* ── 5. Responsive Filter Chips (No Horizontal Scroll Conflicts) ── */}
+        <View style={styles.filterChipsRow}>
           {/* All */}
           <TouchableOpacity
             style={[styles.filterChip, activeFilter === 'ALL' && styles.filterChipActive]}
@@ -317,25 +300,14 @@ export const VendorRequirementsScreen: React.FC<VendorRequirementsScreenProps> =
             </Text>
           </TouchableOpacity>
 
-          {/* Guwahati Corridor */}
+          {/* FTL */}
           <TouchableOpacity
-            style={[styles.filterChip, activeFilter === 'GHY' && styles.filterChipActive]}
-            onPress={() => setActiveFilter('GHY')}
+            style={[styles.filterChip, activeFilter === 'FTL' && styles.filterChipActive]}
+            onPress={() => setActiveFilter('FTL')}
             activeOpacity={0.8}
           >
-            <Text style={[styles.filterChipText, activeFilter === 'GHY' && styles.filterChipTextActive]}>
-              Guwahati Corridor ({counts.ghy})
-            </Text>
-          </TouchableOpacity>
-
-          {/* Kolkata Trunk */}
-          <TouchableOpacity
-            style={[styles.filterChip, activeFilter === 'CCU' && styles.filterChipActive]}
-            onPress={() => setActiveFilter('CCU')}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.filterChipText, activeFilter === 'CCU' && styles.filterChipTextActive]}>
-              Kolkata Trunk ({counts.ccu})
+            <Text style={[styles.filterChipText, activeFilter === 'FTL' && styles.filterChipTextActive]}>
+              FTL ({counts.ftl})
             </Text>
           </TouchableOpacity>
 
@@ -349,7 +321,18 @@ export const VendorRequirementsScreen: React.FC<VendorRequirementsScreenProps> =
               Heavy Cargo ({counts.heavy})
             </Text>
           </TouchableOpacity>
-        </ScrollView>
+
+          {/* Urgent */}
+          <TouchableOpacity
+            style={[styles.filterChip, activeFilter === 'URGENT' && styles.filterChipActive]}
+            onPress={() => setActiveFilter('URGENT')}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.filterChipText, activeFilter === 'URGENT' && styles.filterChipTextActive]}>
+              Urgent ({counts.urgent})
+            </Text>
+          </TouchableOpacity>
+        </View>
 
         {/* Network Error Notification */}
         {errorMessage && (
@@ -401,8 +384,8 @@ export const VendorRequirementsScreen: React.FC<VendorRequirementsScreenProps> =
               const deadline = formatBidDeadline(req.loadingDatetime);
               const pickupDateStr = formatPickupDate(req.loadingDatetime);
 
-              const originCity = req.pickupAddress?.split(',')[0]?.trim() || 'Guwahati, AS';
-              const destCity = req.destinationAddress?.split(',')[0]?.trim() || 'Kolkata, WB';
+              const originCity = req.pickupAddress?.split(',')[0]?.trim() || req.origin || 'Pickup Location';
+              const destCity = req.destinationAddress?.split(',')[0]?.trim() || req.destination || 'Delivery Terminal';
               const material = req.materialType || 'Industrial Cargo';
               const vehicleType = req.vehicleType || 'Truck (32 ft)';
               const capacity = req.requiredCapacityMt || 20;
@@ -493,12 +476,6 @@ export const VendorRequirementsScreen: React.FC<VendorRequirementsScreenProps> =
           </View>
         )}
       </ScrollView>
-
-      {/* ── 7. Persistent Bottom Navigation Bar ── */}
-      <VendorBottomNavBar
-        activeTab="LOADS"
-        onSelectTab={handleTabSelection}
-      />
     </SafeAreaView>
   );
 };
@@ -606,6 +583,13 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   /* Filter chips */
+  filterChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 14,
+    paddingVertical: 2,
+  },
   filterChipsScroll: {
     flexDirection: 'row',
     gap: 8,

@@ -309,7 +309,14 @@ export const VendorFleetManagementScreen: React.FC<VendorFleetManagementScreenPr
                     <View style={styles.vehicleTop}>
                       <View style={styles.regBadge}>
                         <Truck size={14} color="#F05A22" />
-                        <Text style={styles.regNumber}>{v.registrationNumber}</Text>
+                        <View>
+                          <Text style={styles.regNumber}>{v.registrationNumber}</Text>
+                          {v.vehicleCode && (
+                            <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748B', marginTop: 1 }}>
+                              {v.vehicleCode}
+                            </Text>
+                          )}
+                        </View>
                       </View>
 
                       <View

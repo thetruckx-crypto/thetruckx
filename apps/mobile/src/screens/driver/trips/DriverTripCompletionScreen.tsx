@@ -20,7 +20,6 @@ import {
   CreditCard,
   ArrowRight,
 } from 'lucide-react-native';
-import { ScenicHeroBanner } from '../../../components/ScenicHeroBanner';
 import { BottomGoldWings } from '../../../components/BottomGoldWings';
 import { driverService } from '../../../services/driverService';
 import { DriverTripItem } from '../../../types';
@@ -48,13 +47,12 @@ export const DriverTripCompletionScreen: React.FC<DriverTripCompletionScreenProp
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.scrollContainer} bounces={false}>
-        {/* Top Banner */}
-        <View style={styles.topWrap}>
-          <ScenicHeroBanner height={190} />
-          
-        </View>
+      {/* Top Header Bar */}
+      <View style={styles.headerBar}>
+        <Text style={styles.headerTitle}>Trip Completed</Text>
+      </View>
 
+      <ScrollView contentContainerStyle={styles.scrollContainer} bounces={false}>
         <View style={styles.contentWrap}>
           {/* Big Checkmark */}
           <View style={styles.iconCircle}>
@@ -147,13 +145,19 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingBottom: 40,
   },
-  topWrap: {
-    position: 'relative',
+  headerBar: {
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  logoWrap: {
-    position: 'absolute',
-    bottom: 8,
-    alignSelf: 'center',
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
   },
   contentWrap: {
     paddingHorizontal: 20,

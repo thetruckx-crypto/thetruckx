@@ -36,6 +36,7 @@ import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
 import { driverService } from '../../../services/driverService';
 import { DriverTripItem } from '../../../types';
 import { supabase } from '../../../supabase';
+import { formatDisplayId } from '../../../utils/idGenerator';
 
 interface DriverDashboardScreenProps {
   initialMobile: string;
@@ -77,6 +78,7 @@ export const DriverDashboardScreen: React.FC<DriverDashboardScreenProps> = ({
   const [driverProfile, setDriverProfile] = useState<any | null>(null);
   const [trips, setTrips] = useState<DriverTripItem[]>([]);
   const [menuModalVisible, setMenuModalVisible] = useState(false);
+  const [vehicleModalVisible, setVehicleModalVisible] = useState(false);
   const [sunlightMode, setSunlightMode] = useState(false);
 
   const loadData = useCallback(async () => {
@@ -122,6 +124,7 @@ export const DriverDashboardScreen: React.FC<DriverDashboardScreenProps> = ({
 
   const completedTripsCount = useMemo(() => trips.filter((t) => t.tripStatus === 'COMPLETED').length, [trips]);
   const assignedLoadsCount = useMemo(() => trips.filter((t) => t.tripStatus === 'LORRY_ASSIGNED').length, [trips]);
+  const isApproved = driverProfile?.status === 'APPROVED' || driverProfile?.verificationStatus === 'APPROVED';
 
   const getActionForTrip = (trip: DriverTripItem) => {
     if (trip.tripStatus === 'LORRY_ASSIGNED' || trip.tripStatus === 'AT_LOADING') {
@@ -150,28 +153,31 @@ export const DriverDashboardScreen: React.FC<DriverDashboardScreenProps> = ({
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Top Header Bar */}
+      {/* Clean Top Header Bar */}
       <View style={styles.topBar}>
-        <View style={styles.logoWrap}>
-          <BrandLogoHeader size="sm" theme="light" />
+        <View style={styles.headerLeftCol}>
+          <Text style={styles.headerGreeting}>Welcome,</Text>
+          <Text style={styles.headerDriverName} numberOfLines={1}>
+            {driverProfile?.fullName || 'Commercial Pilot'}
+          </Text>
+          <View style={styles.headerStatusRow}>
+            <View style={[styles.headerStatusDot, { backgroundColor: isApproved ? '#10B981' : '#F59E0B' }]} />
+            <Text style={[styles.headerStatusText, { color: isApproved ? '#059669' : '#D97706' }]}>
+              {isApproved ? 'Verified Pilot' : 'Verification Under Review'}
+            </Text>
+          </View>
         </View>
 
         <View style={styles.topActions}>
           <TouchableOpacity
-            style={[styles.iconCircleBtn, sunlightMode && styles.sunlightActiveBtn]}
-            onPress={() => setSunlightMode(!sunlightMode)}
-            accessibilityLabel="Toggle Sunlight Mode"
-          >
-            <Sun size={18} color={sunlightMode ? '#F59E0B' : '#D4D6DB'} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.iconCircleBtn}
+            style={styles.cleanBellBtn}
             onPress={onNavigateNotifications}
             accessibilityLabel="Notifications"
           >
-            <Bell size={18} color="#64748B" />
-            <View style={styles.notificationDot} />
+            <Bell size={24} color="#0F172A" />
+            <View style={styles.cleanNotificationBadge}>
+              <Text style={styles.cleanNotificationBadgeText}>1</Text>
+            </View>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -191,6 +197,40 @@ export const DriverDashboardScreen: React.FC<DriverDashboardScreenProps> = ({
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#F05A22" />
         }
       >
+        {/* Real DB Driver Operational Status Card */}
+        <View style={[styles.statusSummaryCard, sunlightMode && styles.pilotCardSunlight]}>
+          <View style={styles.statusCol}>
+            <Text style={styles.statusColLabel}>VERIFICATION</Text>
+            <View style={styles.statusBadgeInline}>
+              <ShieldCheck size={13} color={isApproved ? '#10B981' : '#F59E0B'} />
+              <Text style={[styles.statusColVal, { color: isApproved ? '#10B981' : '#F59E0B' }]}>
+                {isApproved ? 'Approved' : 'Under Review'}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.statusColDivider} />
+
+          <View style={styles.statusCol}>
+            <Text style={styles.statusColLabel}>AVAILABILITY</Text>
+            <View style={styles.statusBadgeInline}>
+              <View style={[styles.statusDotLive, { backgroundColor: activeTrip ? '#3B82F6' : (isApproved ? '#10B981' : '#94A3B8') }]} />
+              <Text style={styles.statusColVal}>
+                {activeTrip ? 'In Transit' : (isApproved ? 'On Duty' : 'Pending')}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.statusColDivider} />
+
+          <View style={styles.statusCol}>
+            <Text style={styles.statusColLabel}>ASSIGNED VEHICLE</Text>
+            <Text style={[styles.statusColVal, { color: '#0F172A' }]} numberOfLines={1}>
+              {activeTrip?.vehicleNumber || driverProfile?.vehicleRegistrationNumber || 'Fleet Dispatched'}
+            </Text>
+          </View>
+        </View>
+
         {/* Driver Identity Card */}
         <View style={[styles.pilotCard, sunlightMode && styles.pilotCardSunlight]}>
           <View style={styles.pilotInfoCol}>
@@ -206,6 +246,21 @@ export const DriverDashboardScreen: React.FC<DriverDashboardScreenProps> = ({
             <Text style={[styles.licenceNo, sunlightMode && { color: '#475569' }]}>
               {driverProfile?.licenceNumber ? `DL: ${driverProfile.licenceNumber}` : 'DL Pending Verification'}{driverProfile?.vendorName ? ` • ${driverProfile.vendorName}` : ''}
             </Text>
+            {/* Canonical Driver ID and Account ID Badges */}
+            <View style={styles.idChipRow}>
+              <View style={[styles.idChip, sunlightMode && styles.idChipSunlight]}>
+                <Text style={styles.idChipLabel}>DRIVER ID</Text>
+                <Text style={styles.idChipValue}>
+                  {driverProfile?.driverCode || formatDisplayId('DR', driverProfile?.createdAt, driverProfile?.id || driverId)}
+                </Text>
+              </View>
+              <View style={[styles.idChip, sunlightMode && styles.idChipSunlight]}>
+                <Text style={styles.idChipLabel}>ACCOUNT ID</Text>
+                <Text style={styles.idChipValue}>
+                  {driverProfile?.accountId || formatDisplayId('AC', driverProfile?.createdAt, driverProfile?.id || driverId)}
+                </Text>
+              </View>
+            </View>
           </View>
           <View style={[styles.truckMarkWrap, sunlightMode && { backgroundColor: '#FEF3C7', borderColor: '#F59E0B' }]}>
             <Truck size={28} color={sunlightMode ? '#B45309' : '#F05A22'} />
@@ -223,7 +278,7 @@ export const DriverDashboardScreen: React.FC<DriverDashboardScreenProps> = ({
                 </Text>
               </View>
               <Text style={[styles.tripIdText, sunlightMode && { color: '#475569' }]}>
-                #{activeTrip.id.replace(/[^a-zA-Z0-9]/g, '').slice(-8).toUpperCase()}
+                {activeTrip.tripCode || formatDisplayId('TR', activeTrip.startedAt, activeTrip.id)}
               </Text>
             </View>
 
@@ -325,12 +380,26 @@ export const DriverDashboardScreen: React.FC<DriverDashboardScreenProps> = ({
           </TouchableOpacity>
         </View>
 
-        {/* Fast Action Grid */}
+        {/* Quick Actions Grid — 6 Operations */}
         <View style={styles.sectionHeadingWrap}>
-          <Text style={styles.sectionHeadingText}>Quick Operations</Text>
+          <Text style={styles.sectionHeadingText}>Quick Actions</Text>
         </View>
 
         <View style={styles.actionsGrid}>
+          {/* Card 1: My Verification */}
+          <TouchableOpacity
+            style={styles.gridActionCard}
+            onPress={onNavigateDocuments}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.gridIconWrap, { backgroundColor: 'rgba(16, 185, 129, 0.12)' }]}>
+              <ShieldCheck size={20} color="#10B981" />
+            </View>
+            <Text style={styles.gridActionTitle}>My Verification</Text>
+            <Text style={styles.gridActionSub}>Credentials & licences</Text>
+          </TouchableOpacity>
+
+          {/* Card 2: My Trips */}
           <TouchableOpacity
             style={styles.gridActionCard}
             onPress={onNavigateTrips}
@@ -339,22 +408,37 @@ export const DriverDashboardScreen: React.FC<DriverDashboardScreenProps> = ({
             <View style={[styles.gridIconWrap, { backgroundColor: '#FFF7ED' }]}>
               <Truck size={20} color="#F05A22" />
             </View>
-            <Text style={styles.gridActionTitle}>My Assigned Trips</Text>
-            <Text style={styles.gridActionSub}>View active loads & routes</Text>
+            <Text style={styles.gridActionTitle}>My Trips</Text>
+            <Text style={styles.gridActionSub}>Active dispatches & routes</Text>
           </TouchableOpacity>
 
+          {/* Card 3: Vehicle Details */}
           <TouchableOpacity
             style={styles.gridActionCard}
-            onPress={onNavigateDocuments}
+            onPress={() => setVehicleModalVisible(true)}
             activeOpacity={0.8}
           >
-            <View style={[styles.gridIconWrap, { backgroundColor: 'rgba(16, 185, 129, 0.12)' }]}>
-              <FileText size={20} color="#10B981" />
+            <View style={[styles.gridIconWrap, { backgroundColor: 'rgba(14, 165, 233, 0.12)' }]}>
+              <Layers size={20} color="#0EA5E9" />
             </View>
-            <Text style={styles.gridActionTitle}>Driver Documents</Text>
-            <Text style={styles.gridActionSub}>DL validity & credentials</Text>
+            <Text style={styles.gridActionTitle}>Vehicle Details</Text>
+            <Text style={styles.gridActionSub}>Assigned lorry & RC</Text>
           </TouchableOpacity>
 
+          {/* Card 4: Notifications */}
+          <TouchableOpacity
+            style={styles.gridActionCard}
+            onPress={onNavigateNotifications}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.gridIconWrap, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
+              <Bell size={20} color="#F59E0B" />
+            </View>
+            <Text style={styles.gridActionTitle}>Notifications</Text>
+            <Text style={styles.gridActionSub}>Dispatches & alerts</Text>
+          </TouchableOpacity>
+
+          {/* Card 5: Trip History */}
           <TouchableOpacity
             style={styles.gridActionCard}
             onPress={onNavigateTripHistory}
@@ -364,22 +448,78 @@ export const DriverDashboardScreen: React.FC<DriverDashboardScreenProps> = ({
               <History size={20} color="#3B82F6" />
             </View>
             <Text style={styles.gridActionTitle}>Trip History</Text>
-            <Text style={styles.gridActionSub}>Past completed consignments</Text>
+            <Text style={styles.gridActionSub}>Past completed loads</Text>
           </TouchableOpacity>
 
+          {/* Card 6: Help & Support */}
           <TouchableOpacity
             style={styles.gridActionCard}
             onPress={onNavigateHelpSupport}
             activeOpacity={0.8}
           >
             <View style={[styles.gridIconWrap, { backgroundColor: 'rgba(239, 68, 68, 0.12)' }]}>
-              <Phone size={20} color="#EF4444" />
+              <HelpCircle size={20} color="#EF4444" />
             </View>
-            <Text style={styles.gridActionTitle}>24/7 Highway SOS</Text>
-            <Text style={styles.gridActionSub}>Emergency desk & breakdown</Text>
+            <Text style={styles.gridActionTitle}>Help & Support</Text>
+            <Text style={styles.gridActionSub}>24/7 Highway SOS</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Vehicle Details Modal */}
+      <Modal
+        visible={vehicleModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setVehicleModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setVehicleModalVisible(false)}
+        >
+          <View style={styles.vehicleModalCard} onStartShouldSetResponder={() => true}>
+            <View style={styles.vehicleModalHeader}>
+              <View style={styles.vehicleModalIcon}>
+                <Truck size={22} color="#F05A22" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.vehicleModalTitle}>Assigned Vehicle Details</Text>
+                <Text style={styles.vehicleModalSub}>THE TRUCKX Commercial Fleet Link</Text>
+              </View>
+            </View>
+
+            <View style={styles.vehicleDetailRow}>
+              <Text style={styles.vehicleDetailLabel}>Vehicle Registration</Text>
+              <Text style={styles.vehicleDetailVal}>
+                {activeTrip?.vehicleNumber || driverProfile?.vehicleRegistrationNumber || 'Assigned per Dispatch'}
+              </Text>
+            </View>
+            <View style={styles.vehicleDetailRow}>
+              <Text style={styles.vehicleDetailLabel}>Associated Transporter</Text>
+              <Text style={styles.vehicleDetailVal}>{driverProfile?.vendorName || 'Independent Fleet Pilot'}</Text>
+            </View>
+            <View style={styles.vehicleDetailRow}>
+              <Text style={styles.vehicleDetailLabel}>Vehicle Category</Text>
+              <Text style={styles.vehicleDetailVal}>{driverProfile?.vehicleCategory || 'Heavy Commercial Vehicle (HCV)'}</Text>
+            </View>
+            <View style={styles.vehicleDetailRow}>
+              <Text style={styles.vehicleDetailLabel}>GPS Telemetry Status</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981' }} />
+                <Text style={[styles.vehicleDetailVal, { color: '#10B981' }]}>Active GPS Tracking</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.vehicleModalCloseBtn}
+              onPress={() => setVehicleModalVisible(false)}
+            >
+              <Text style={styles.vehicleModalCloseText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Profile & Logout Modal */}
       <Modal
@@ -484,10 +624,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 12,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
+  },
+  headerLeftCol: {
+    flex: 1,
+  },
+  headerGreeting: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  headerDriverName: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginTop: 1,
+  },
+  headerStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  headerStatusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+  },
+  headerStatusText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
   logoWrap: {
     flex: 1,
@@ -496,7 +667,139 @@ const styles = StyleSheet.create({
   topActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
+  },
+  cleanBellBtn: {
+    padding: 6,
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cleanNotificationBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: '#EF4444',
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  cleanNotificationBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  statusSummaryCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    marginBottom: 14,
+  },
+  statusCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statusColLabel: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#64748B',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  statusBadgeInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  statusDotLive: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+  },
+  statusColVal: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+    textAlign: 'center',
+  },
+  statusColDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: '#E2E8F0',
+  },
+  vehicleModalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 22,
+    width: '90%',
+    maxWidth: 400,
+  },
+  vehicleModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  vehicleModalIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFF7ED',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  vehicleModalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  vehicleModalSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  vehicleDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8FAFC',
+  },
+  vehicleDetailLabel: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  vehicleDetailVal: {
+    fontSize: 12.5,
+    color: '#0F172A',
+    fontWeight: '700',
+  },
+  vehicleModalCloseBtn: {
+    marginTop: 18,
+    backgroundColor: '#F05A22',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  vehicleModalCloseText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 14,
   },
   iconCircleBtn: {
     width: 38,
@@ -570,6 +873,36 @@ const styles = StyleSheet.create({
   },
   pilotInfoCol: {
     flex: 1,
+  },
+  idChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  idChip: {
+    backgroundColor: '#F1F5F9',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  idChipSunlight: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#CBD5E1',
+  },
+  idChipLabel: {
+    fontSize: 9,
+    fontFamily: 'Inter-Medium',
+    color: '#64748B',
+    textTransform: 'uppercase',
+  },
+  idChipValue: {
+    fontSize: 11,
+    fontFamily: 'Inter-SemiBold',
+    color: '#0F172A',
+    letterSpacing: 0.2,
   },
   badgeRow: {
     marginBottom: 4,

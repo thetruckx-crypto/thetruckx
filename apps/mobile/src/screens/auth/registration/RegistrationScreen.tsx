@@ -73,7 +73,7 @@ export const RegistrationScreen: React.FC<RegistrationScreenProps> = ({
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
   const roleLabels: Record<MobileRole, string> = {
-    CLIENT: 'Client / Shipper',
+    CLIENT: 'Client Enterprise',
     VENDOR: 'Vendor / Transporter',
     DRIVER: 'Driver',
   };
@@ -212,10 +212,10 @@ export const RegistrationScreen: React.FC<RegistrationScreenProps> = ({
             </Text>
           </View>
 
-          {/* Client / Enterprise Shipper Badge */}
+          {/* Client Enterprise Badge */}
           <View style={styles.clientAccountBadge}>
             <Building2 size={16} color="#2563EB" strokeWidth={2.2} />
-            <Text style={styles.clientAccountBadgeText}>Client / Enterprise Shipper Registration</Text>
+            <Text style={styles.clientAccountBadgeText}>Client Enterprise Registration</Text>
           </View>
 
           {/* Form Fields: Dedicated Client Account Creation */}

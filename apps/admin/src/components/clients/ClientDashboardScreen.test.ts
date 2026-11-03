@@ -39,23 +39,20 @@ describe('NECL Client Mobile App Home Screen (ClientDashboardScreen) Redesign Re
       expect(screenCode).toContain('<BrandLogoHeader size="sm" theme="light" />');
     });
 
-    it('should show a personalized time-based greeting for the authenticated customer', () => {
-      expect(screenCode).toContain('const greeting = useMemo(');
-      expect(screenCode).toContain('Good Morning');
-      expect(screenCode).toContain('Good Afternoon');
-      expect(screenCode).toContain('Good Evening');
-      expect(screenCode).toContain('{greeting},');
+    it('should remove the greeting and client name from the home screen', () => {
+      expect(screenCode).not.toContain('{greeting},');
+      expect(screenCode).not.toContain('{customerName}');
     });
 
-    it('should render a notification bell with an unread badge when count > 0', () => {
-      expect(screenCode).toContain('<Bell size={20} color="#1D2D46" strokeWidth={2} />');
-      expect(screenCode).toContain('unreadNotificationsCount > 0');
-      expect(screenCode).toContain('notificationBadge');
+    it('should render a notification bell displaying only the bell icon, orange when unread notifications are available', () => {
+      expect(screenCode).toContain('unreadNotificationsCount > 0 ?');
+      expect(screenCode).toContain('#F15A24');
+      expect(screenCode).toContain('#1D2D46');
+      expect(screenCode).toContain('headerBellOnlyBtn');
     });
 
-    it('should provide a profile shortcut avatar', () => {
-      expect(screenCode).toContain('onOpenProfile ? onOpenProfile() : setShowProfileModal(true)');
-      expect(screenCode).toContain('profileAvatarBtn');
+    it('should completely remove the profile shortcut avatar from the header', () => {
+      expect(screenCode).not.toContain('style={styles.profileAvatarBtn}');
     });
   });
 
@@ -87,6 +84,11 @@ describe('NECL Client Mobile App Home Screen (ClientDashboardScreen) Redesign Re
       expect(screenCode).toContain('isSearchingTracking ? (');
       expect(screenCode).toContain('trackingError && (');
       expect(screenCode).toContain('handleTrackShipment()'); // retry
+    });
+
+    it('should have transparent background styling on the Track Shipment section for clean appearance', () => {
+      expect(screenCode).toContain('trackingCard: {');
+      expect(screenCode).toContain("backgroundColor: 'transparent'");
     });
   });
 

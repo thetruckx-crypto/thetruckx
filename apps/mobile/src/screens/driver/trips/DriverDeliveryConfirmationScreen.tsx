@@ -24,6 +24,7 @@ import {
 } from 'lucide-react-native';
 import { driverService } from '../../../services/driverService';
 import { DriverTripItem } from '../../../types';
+import { formatDisplayId } from '../../../utils/idGenerator';
 
 interface DriverDeliveryConfirmationScreenProps {
   tripId: string;
@@ -113,6 +114,11 @@ export const DriverDeliveryConfirmationScreen: React.FC<DriverDeliveryConfirmati
               <View style={styles.badgeRow}>
                 <View style={styles.stagePill}>
                   <Text style={styles.stagePillText}>DESTINATION UNLOADING GATE</Text>
+                </View>
+                <View style={[styles.stagePill, { backgroundColor: '#F1F5F9' }]}>
+                  <Text style={[styles.stagePillText, { color: '#0F172A' }]}>
+                    {trip.tripCode || formatDisplayId('TR', trip.startedAt, trip.id)}
+                  </Text>
                 </View>
               </View>
               <Text style={styles.titleText}>

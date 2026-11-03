@@ -15,6 +15,11 @@ import {
   Calendar,
   ExternalLink,
   Share2,
+  FileText,
+  CreditCard,
+  Sparkles,
+  Bell,
+  AlertTriangle,
 } from 'lucide-react-native';
 import { AppNotificationItem } from '../../../types';
 
@@ -29,31 +34,85 @@ export const NotificationDetailsScreen: React.FC<NotificationDetailsScreenProps>
   onBack,
   onViewRelatedRecord,
 }) => {
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case 'shipment':
-        return <Truck size={22} color="#F05A22" />;
-      case 'booking':
-        return <Package size={22} color="#2563EB" />;
-      case 'system':
-      default:
-        return <ShieldCheck size={22} color="#16A34A" />;
+  const getCategoryDetails = () => {
+    const cat = (notification.category || '').toLowerCase();
+    const ent = (notification.entityType || '').toUpperCase();
+    const title = (notification.title || '').toLowerCase();
+
+    if (
+      cat === 'shipment' ||
+      ent === 'TRIP' ||
+      title.includes('trip') ||
+      title.includes('shipment') ||
+      title.includes('dispatch') ||
+      title.includes('transit') ||
+      title.includes('delivery') ||
+      title.includes('loading')
+    ) {
+      return {
+        label: 'Shipment Tracking',
+        bg: '#FFF5ED',
+        text: '#F15A24',
+        icon: <Truck size={20} color="#F15A24" />,
+      };
     }
+    if (cat === 'booking' || ent === 'BOOKING' || title.includes('booking')) {
+      return {
+        label: 'Confirmed Booking',
+        bg: '#EFF6FF',
+        text: '#2563EB',
+        icon: <Package size={20} color="#2563EB" />,
+      };
+    }
+    if (cat === 'quotation' || ent === 'QUOTATION' || title.includes('quotation') || title.includes('quote') || title.includes('bid')) {
+      return {
+        label: 'Transporter Quotation',
+        bg: '#FEF3C7',
+        text: '#D97706',
+        icon: <Sparkles size={20} color="#D97706" />,
+      };
+    }
+    if (cat === 'requirement' || ent === 'REQUIREMENT' || title.includes('requirement')) {
+      return {
+        label: 'Transport Requirement',
+        bg: '#EEF2FF',
+        text: '#4F46E5',
+        icon: <Package size={20} color="#4F46E5" />,
+      };
+    }
+    if (cat === 'payment' || ent === 'INVOICE' || title.includes('invoice') || title.includes('payment')) {
+      return {
+        label: 'Commercial Invoice',
+        bg: '#ECFDF5',
+        text: '#059669',
+        icon: <CreditCard size={20} color="#059669" />,
+      };
+    }
+    if (title.includes('reject') || title.includes('correction') || ent === 'DOCUMENT_REJECTED') {
+      return {
+        label: 'Document Verification',
+        bg: '#FEE2E2',
+        text: '#DC2626',
+        icon: <AlertTriangle size={20} color="#DC2626" />,
+      };
+    }
+    if (cat === 'document' || ent === 'POD' || title.includes('pod') || title.includes('proof of delivery')) {
+      return {
+        label: 'Proof of Delivery',
+        bg: '#F5F3FF',
+        text: '#7C3AED',
+        icon: <FileText size={20} color="#7C3AED" />,
+      };
+    }
+    return {
+      label: 'Notification Notice',
+      bg: '#FFF7ED',
+      text: '#C2410C',
+      icon: <Bell size={20} color="#F15A24" />,
+    };
   };
 
-  const getCategoryBadge = (category: string) => {
-    switch (category) {
-      case 'shipment':
-        return { label: 'Shipment Movement', bg: '#FFF5ED', text: '#F05A22' };
-      case 'booking':
-        return { label: 'Commercial Booking', bg: '#EFF6FF', text: '#2563EB' };
-      case 'system':
-      default:
-        return { label: 'Operations Notice', bg: '#F0FDF4', text: '#16A34A' };
-    }
-  };
-
-  const badge = getCategoryBadge(notification.category);
+  const badge = getCategoryDetails();
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -64,7 +123,7 @@ export const NotificationDetailsScreen: React.FC<NotificationDetailsScreenProps>
           onPress={onBack}
           accessibilityLabel="Back"
         >
-          <ArrowLeft size={22} color="#172B4D" />
+          <ArrowLeft size={22} color="#0F172A" />
         </TouchableOpacity>
         <Text style={styles.topBarTitle}>Notification Details</Text>
         <View style={{ width: 40 }} />
@@ -76,7 +135,7 @@ export const NotificationDetailsScreen: React.FC<NotificationDetailsScreenProps>
           {/* Badge & Icon Row */}
           <View style={styles.headerRow}>
             <View style={[styles.categoryBadge, { backgroundColor: badge.bg }]}>
-              {getCategoryIcon(notification.category)}
+              {badge.icon}
               <Text style={[styles.categoryBadgeText, { color: badge.text }]}>
                 {badge.label}
               </Text>
@@ -92,6 +151,21 @@ export const NotificationDetailsScreen: React.FC<NotificationDetailsScreenProps>
           <Text style={styles.titleText}>{notification.title}</Text>
           <Text style={styles.subtitleText}>{notification.subtitle}</Text>
 
+          {/* If Rejection: Prominent Alert Notice with Actual Reason */}
+          {(notification.title?.toLowerCase().includes('reject') ||
+            notification.subtitle?.toLowerCase().includes('reject') ||
+            notification.entityType === 'DOCUMENT_REJECTED') && (
+              <View style={styles.rejectionAlertBox}>
+                <View style={styles.rejectionHeaderRow}>
+                  <AlertTriangle size={16} color="#DC2626" />
+                  <Text style={styles.rejectionAlertTitle}>Correction Required</Text>
+                </View>
+                <Text style={styles.rejectionAlertReason}>
+                  {notification.content || notification.subtitle}
+                </Text>
+              </View>
+            )}
+
           {/* Reference ID Pill */}
           {notification.refId && (
             <View style={styles.refBox}>
@@ -106,7 +180,7 @@ export const NotificationDetailsScreen: React.FC<NotificationDetailsScreenProps>
           <Text style={styles.contentHeader}>Details & Status Update</Text>
           <Text style={styles.contentText}>
             {notification.content ||
-              `${notification.subtitle}. For real-time updates and support, refer to the TRUCKS dispatch operations desk.`}
+              `${notification.subtitle}. For real-time updates and support, refer to THE TRUCKX customer support desk.`}
           </Text>
         </View>
 
@@ -120,16 +194,27 @@ export const NotificationDetailsScreen: React.FC<NotificationDetailsScreenProps>
           >
             <ExternalLink size={18} color="#FFFFFF" />
             <Text style={styles.actionBtnText}>
-              {notification.refId.startsWith('BOK')
-                ? 'View Related Booking'
-                : notification.refId.startsWith('REQ')
-                ? 'View Related Requirement'
-                : notification.refId.startsWith('TRP') ||
-                  notification.refId.startsWith('NEC') ||
-                  notification.refId.startsWith('SHP') ||
-                  notification.category === 'shipment'
-                ? 'View Live Tracking & Shipment'
-                : 'View Related Record'}
+              {notification.title?.toLowerCase().includes('reject') ||
+                notification.subtitle?.toLowerCase().includes('reject') ||
+                notification.entityType === 'DOCUMENT_REJECTED'
+                ? 'Correct & Re-upload Document'
+                : notification.entityType === 'REQUIREMENT' || notification.refId.startsWith('REQ') || notification.refId.startsWith('TR-')
+                  ? 'View Requirement Details'
+                  : notification.entityType === 'QUOTATION' || notification.category === 'quotation'
+                    ? 'View Quotations'
+                    : notification.entityType === 'BOOKING' || notification.refId.startsWith('BOK') || notification.refId.startsWith('BK')
+                      ? 'View Booking Details'
+                      : notification.entityType === 'TRIP' ||
+                        notification.refId.startsWith('TRP') ||
+                        notification.refId.startsWith('NEC') ||
+                        notification.refId.startsWith('SHP') ||
+                        notification.category === 'shipment'
+                        ? 'Track Live Shipment'
+                        : notification.entityType === 'POD' || notification.category === 'document'
+                          ? 'View Proof of Delivery'
+                          : notification.entityType === 'INVOICE' || notification.category === 'payment'
+                            ? 'View Invoice & Payment'
+                            : 'View Related Record'}
             </Text>
           </TouchableOpacity>
         )}
@@ -296,5 +381,29 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontSize: 14,
     fontWeight: '600',
+  },
+  rejectionAlertBox: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 12,
+  },
+  rejectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  rejectionAlertTitle: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#DC2626',
+  },
+  rejectionAlertReason: {
+    fontSize: 12,
+    color: '#991B1B',
+    lineHeight: 18,
   },
 });

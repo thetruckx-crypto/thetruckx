@@ -449,7 +449,7 @@ export const ShipmentDocumentsScreen: React.FC<ShipmentDocumentsScreenProps> = (
                   <Clock size={13} color="#D97706" />
                 )}
                 <Text style={styles.weightConfirmText}>
-                  {dualSummary?.clientConfirmed ? 'Confirmed by Shipper' : 'Pending Upload'}
+                  {dualSummary?.clientConfirmed ? 'Confirmed by Client' : 'Pending Upload'}
                 </Text>
               </View>
             </View>

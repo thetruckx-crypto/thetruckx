@@ -1,16 +1,20 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
-import { Home, Package, FileText, User } from 'lucide-react-native';
+import { Home, Layers, ClipboardList, User } from 'lucide-react-native';
 
-// Tab type definition supporting the unified 4-tab mobile layout:
-// 'HOME' | 'SHIPMENT' | 'REQUIREMENTS' | 'BOOKINGS' | 'PROFILE'
+// Tab type definition supporting the required 4-tab mobile layout:
+// 1. Home
+// 2. My Requirements (Unified Transport Lifecycle)
+// 3. Received Quotations
+// 4. Profile
 export type ClientNavTab =
   | 'HOME'
+  | 'REQUIREMENTS'
+  | 'QUOTATIONS'
+  | 'PROFILE'
   | 'SHIPMENT'
   | 'SHIPMENTS'
-  | 'REQUIREMENTS'
-  | 'BOOKINGS'
-  | 'PROFILE';
+  | 'BOOKINGS';
 
 interface ClientBottomNavBarProps {
   activeTab: ClientNavTab | string;
@@ -18,18 +22,24 @@ interface ClientBottomNavBarProps {
 }
 
 /**
- * ClientBottomNavBar — Unified 4-Tab Navigation:
- * Tab 1: Home — Main Client Dashboard
- * Tab 2: Shipment — Unified Shipments (Book, Track, Manage)
- * Tab 3: My Requirements — Freight RFQs & Quotations
- * Tab 4: Bookings (Migrated into Shipments tab)
- * Tab 5: Profile — Account & Settings
+ * ClientBottomNavBar — Standard THE TRUCKX 4-Tab Navigation:
+ * Tab 1: Home — Main Client Dashboard & Quick Actions
+ * Tab 2: My Requirements — Unified Transport Lifecycle (Draft, RFQ, Bookings, Shipments, Milestone Tracking)
+ * Tab 3: Received Quotations — Vendor Quotations Review & Comparison
+ * Tab 4: Profile — Account Details & Company Settings
  */
 export const ClientBottomNavBar: React.FC<ClientBottomNavBarProps> = ({
   activeTab,
   onSelectTab,
 }) => {
-  const isShipmentsActive = activeTab === 'SHIPMENT' || activeTab === 'SHIPMENTS' || activeTab === 'BOOKINGS';
+  const isHomeActive = activeTab === 'HOME';
+  const isRequirementsActive =
+    activeTab === 'REQUIREMENTS' ||
+    activeTab === 'SHIPMENT' ||
+    activeTab === 'SHIPMENTS' ||
+    activeTab === 'BOOKINGS';
+  const isQuotationsActive = activeTab === 'QUOTATIONS';
+  const isProfileActive = activeTab === 'PROFILE';
 
   return (
     <View style={styles.bottomTabBar} accessibilityRole="tablist">
@@ -39,86 +49,89 @@ export const ClientBottomNavBar: React.FC<ClientBottomNavBarProps> = ({
         onPress={() => onSelectTab('HOME')}
         activeOpacity={0.8}
         accessibilityRole="tab"
-        accessibilityState={{ selected: activeTab === 'HOME' }}
+        accessibilityState={{ selected: isHomeActive }}
         accessibilityLabel="Home Tab"
       >
-        <View style={[styles.tabIconWrap, activeTab === 'HOME' && styles.tabIconWrapActive]}>
+        <View style={[styles.tabIconWrap, isHomeActive && styles.tabIconWrapActive]}>
           <Home
             size={21}
-            color={activeTab === 'HOME' ? '#F15A24' : '#64748B'}
-            strokeWidth={activeTab === 'HOME' ? 2.4 : 1.8}
+            color={isHomeActive ? '#F15A24' : '#64748B'}
+            strokeWidth={isHomeActive ? 2.4 : 1.8}
           />
         </View>
-        <Text style={[styles.tabLabel, activeTab === 'HOME' && styles.tabLabelActive]}>
+        <Text style={[styles.tabLabel, isHomeActive && styles.tabLabelActive]}>
           Home
         </Text>
-        {activeTab === 'HOME' && <View style={styles.activeTabIndicator} />}
+        {isHomeActive && <View style={styles.activeTabIndicator} />}
       </TouchableOpacity>
 
-      {/* Tab 2: Shipment / Shipments */}
-      <TouchableOpacity
-        style={styles.tabItem}
-        onPress={() => onSelectTab('SHIPMENTS')}
-        activeOpacity={0.8}
-        accessibilityRole="tab"
-        accessibilityState={{ selected: isShipmentsActive }}
-        accessibilityLabel="Shipments Tab"
-      >
-        <View style={[styles.tabIconWrap, isShipmentsActive && styles.tabIconWrapActive]}>
-          <Package
-            size={21}
-            color={isShipmentsActive ? '#F15A24' : '#64748B'}
-            strokeWidth={isShipmentsActive ? 2.4 : 1.8}
-          />
-        </View>
-        <Text style={[styles.tabLabel, isShipmentsActive && styles.tabLabelActive]}>
-          Shipments
-        </Text>
-        {isShipmentsActive && <View style={styles.activeTabIndicator} />}
-      </TouchableOpacity>
-
-      {/* Tab 3: My Requirements */}
+      {/* Tab 2: My Requirements (Unified Requirements, Bookings & Tracking) */}
       <TouchableOpacity
         style={styles.tabItem}
         onPress={() => onSelectTab('REQUIREMENTS')}
         activeOpacity={0.8}
         accessibilityRole="tab"
-        accessibilityState={{ selected: activeTab === 'REQUIREMENTS' }}
+        accessibilityState={{ selected: isRequirementsActive }}
         accessibilityLabel="My Requirements Tab"
       >
-        <View style={[styles.tabIconWrap, activeTab === 'REQUIREMENTS' && styles.tabIconWrapActive]}>
-          <FileText
+        <View style={[styles.tabIconWrap, isRequirementsActive && styles.tabIconWrapActive]}>
+          <Layers
             size={21}
-            color={activeTab === 'REQUIREMENTS' ? '#F15A24' : '#64748B'}
-            strokeWidth={activeTab === 'REQUIREMENTS' ? 2.4 : 1.8}
+            color={isRequirementsActive ? '#F15A24' : '#64748B'}
+            strokeWidth={isRequirementsActive ? 2.4 : 1.8}
           />
         </View>
-        <Text style={[styles.tabLabel, activeTab === 'REQUIREMENTS' && styles.tabLabelActive]}>
+        <Text style={[styles.tabLabel, isRequirementsActive && styles.tabLabelActive]}>
           My Requirements
         </Text>
-        {activeTab === 'REQUIREMENTS' && <View style={styles.activeTabIndicator} />}
+        {isRequirementsActive && <View style={styles.activeTabIndicator} />}
       </TouchableOpacity>
 
-      {/* Tab 4: Profile (Bookings migrated into Shipments) */}
+      {/* Tab 3: Received Quotations */}
+      <TouchableOpacity
+        style={styles.tabItem}
+        onPress={() => onSelectTab('QUOTATIONS')}
+        activeOpacity={0.8}
+        accessibilityRole="tab"
+        accessibilityState={{ selected: isQuotationsActive }}
+        accessibilityLabel="Received Quotations Tab"
+      >
+        <View style={[styles.tabIconWrap, isQuotationsActive && styles.tabIconWrapActive]}>
+          <ClipboardList
+            size={21}
+            color={isQuotationsActive ? '#F15A24' : '#64748B'}
+            strokeWidth={isQuotationsActive ? 2.4 : 1.8}
+          />
+        </View>
+        <Text
+          style={[styles.tabLabel, isQuotationsActive && styles.tabLabelActive]}
+          numberOfLines={1}
+        >
+          Received Quotations
+        </Text>
+        {isQuotationsActive && <View style={styles.activeTabIndicator} />}
+      </TouchableOpacity>
+
+      {/* Tab 4: Profile */}
       <TouchableOpacity
         style={styles.tabItem}
         onPress={() => onSelectTab('PROFILE')}
         activeOpacity={0.8}
         accessibilityRole="tab"
-        accessibilityState={{ selected: activeTab === 'PROFILE' }}
+        accessibilityState={{ selected: isProfileActive }}
         accessibilityLabel="Profile Tab"
       >
-        <View style={[styles.tabIconWrap, activeTab === 'PROFILE' && styles.tabIconWrapActive]}>
+        <View style={[styles.tabIconWrap, isProfileActive && styles.tabIconWrapActive]}>
           <User
             size={21}
-            color={activeTab === 'PROFILE' ? '#F15A24' : '#64748B'}
-            strokeWidth={activeTab === 'PROFILE' ? 2.4 : 1.8}
+            color={isProfileActive ? '#F15A24' : '#64748B'}
+            strokeWidth={isProfileActive ? 2.4 : 1.8}
           />
         </View>
-        <Text style={[styles.tabLabel, activeTab === 'PROFILE' && styles.tabLabelActive]}>
+        <Text style={[styles.tabLabel, isProfileActive && styles.tabLabelActive]}>
           Profile
         </Text>
-        {activeTab === 'PROFILE' && <View style={styles.activeTabIndicator} />}
+        {isProfileActive && <View style={styles.activeTabIndicator} />}
       </TouchableOpacity>
     </View>
   );
@@ -144,6 +157,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
+    paddingHorizontal: 2,
   },
   tabIconWrap: {
     paddingHorizontal: 10,
@@ -156,11 +170,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF7ED',
   },
   tabLabel: {
-    fontSize: 11,
+    fontSize: 10.5,
     color: '#64748B',
     marginTop: 2,
     fontWeight: '600',
     letterSpacing: -0.2,
+    textAlign: 'center',
   },
   tabLabelActive: {
     color: '#F15A24',

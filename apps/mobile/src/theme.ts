@@ -5,54 +5,55 @@
 
 export const colors = {
   // Brand
-  primaryOrange: '#F05A22',
-  primaryOrangeHover: '#E04E17',
-  brandNavy: '#172B4D',
-  deepNavy: '#0A1931',
+  primaryOrange: '#F4510B',
+  primaryOrangeHover: '#D94308',
+  brandTextAccessible: '#C2410C',
+  brandNavy: '#111827',
+  deepNavy: '#111827',
 
-  // Gold / Accent -> Replaced with Brand Orange
-  accentGold: '#F05A22',
-  accentGoldSoft: 'rgba(240, 90, 34, 0.12)',
-  accentGoldBorder: 'rgba(240, 90, 34, 0.3)',
-  accentGoldLight: '#FFEDD5',
+  // Gold / Accent -> Unified with Brand Orange
+  accentGold: '#F4510B',
+  accentGoldSoft: 'rgba(244, 81, 11, 0.08)',
+  accentGoldBorder: 'rgba(244, 81, 11, 0.22)',
+  accentGoldLight: '#FFF3EC',
 
   // Surfaces & Backgrounds
-  canvasDark: '#F8FAFC',
+  canvasDark: '#F7F8FA',
   surfaceCard: '#FFFFFF',
   surfaceCardElevated: '#FFFFFF',
   surfaceCardInput: '#FFFFFF',
   surfaceLight: '#FFFFFF',
-  canvasLight: '#F8FAFC',
+  canvasLight: '#F7F8FA',
 
   // Borders
-  borderDarkSubtle: '#E2E8F0',
-  borderDarkStrong: '#CBD5E1',
-  borderLight: '#E2E8F0',
+  borderDarkSubtle: '#E5EAF1',
+  borderDarkStrong: '#D9E1EC',
+  borderLight: '#E5EAF1',
 
   // Typography
-  textPrimary: '#172B4D',
+  textPrimary: '#111827',
   textSecondary: '#475569',
   textMuted: '#64748B',
   textSubtle: '#94A3B8',
-  textDarkPrimary: '#172B4D',
-  textDarkSecondary: '#64748B',
+  textDarkPrimary: '#111827',
+  textDarkSecondary: '#475569',
 
-  // Semantic States
+  // Semantic States (WCAG 2.1 AA Compliant on Light Surfaces)
   success: '#10B981',
-  successBg: 'rgba(16, 185, 129, 0.12)',
-  successText: '#34D399',
+  successBg: '#ECFDF5',
+  successText: '#065F46',
 
   warning: '#F59E0B',
-  warningBg: 'rgba(245, 158, 11, 0.12)',
-  warningText: '#FBBF24',
+  warningBg: '#FFFBEB',
+  warningText: '#92400E',
 
   danger: '#EF4444',
-  dangerBg: 'rgba(239, 68, 68, 0.12)',
-  dangerText: '#F87171',
+  dangerBg: '#FEF2F2',
+  dangerText: '#991B1B',
 
   info: '#3B82F6',
-  infoBg: 'rgba(59, 130, 246, 0.12)',
-  infoText: '#60A5FA',
+  infoBg: '#EFF6FF',
+  infoText: '#1E40AF',
 };
 
 export const spacing = {

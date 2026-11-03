@@ -64,7 +64,7 @@ interface ClientRegistrationConfirmationScreenProps {
   mobileNumber?: string;
   businessDetails?: ClientBusinessDetails;
   onTrackStatus: () => void;
-  onGoToDashboard?: () => void;
+  onGoToDashboard?: (approvedData?: any) => void;
   onFixCorrections?: () => void;
   onContactSupport?: () => void;
   onBackToLogin?: () => void;
@@ -95,6 +95,7 @@ export const ClientRegistrationConfirmationScreen: React.FC<
 
   const hasNavigatedRef = useRef(false);
   const isRefreshingRef = useRef(false);
+  const pendingRefreshRef = useRef(false);
 
   // Fallback defaults for standalone preview or unassigned id
   const displayClientId = clientId || 'CLI-213392';
@@ -124,7 +125,11 @@ export const ClientRegistrationConfirmationScreen: React.FC<
 
   // Live registration status refresh from database (bypassing stale cache)
   const handleRefreshStatus = async (bypassCache: boolean = true) => {
-    if (isRefreshingRef.current || hasNavigatedRef.current) return;
+    if (hasNavigatedRef.current) return;
+    if (isRefreshingRef.current) {
+      pendingRefreshRef.current = true;
+      return;
+    }
     isRefreshingRef.current = true;
     setIsRefreshing(true);
 
@@ -139,7 +144,7 @@ export const ClientRegistrationConfirmationScreen: React.FC<
           setLiveStatus('APPROVED');
           if (!hasNavigatedRef.current && onGoToDashboard) {
             hasNavigatedRef.current = true;
-            onGoToDashboard();
+            onGoToDashboard(res);
           }
         } else if (res.status === 'CORRECTIONS_REQUESTED') {
           setLiveStatus('CORRECTIONS_REQUESTED');
@@ -160,6 +165,10 @@ export const ClientRegistrationConfirmationScreen: React.FC<
     } finally {
       setIsRefreshing(false);
       isRefreshingRef.current = false;
+      if (pendingRefreshRef.current && !hasNavigatedRef.current) {
+        pendingRefreshRef.current = false;
+        handleRefreshStatus(true);
+      }
     }
   };
 
@@ -167,7 +176,7 @@ export const ClientRegistrationConfirmationScreen: React.FC<
     // 1. Initial check on mount
     handleRefreshStatus(true);
 
-    // 2. Realtime subscription to database changes for client_companies and client_users
+    // 2. Realtime subscription to database changes and instant broadcast channel
     const cleanId = (displayClientId || '').replace(/[^a-zA-Z0-9]/g, '').slice(-16);
     const channelName = `realtime-client-confirm-${cleanId || 'sync'}`;
     const channel = supabase
@@ -188,10 +197,22 @@ export const ClientRegistrationConfirmationScreen: React.FC<
       )
       .subscribe();
 
-    // 3. Fallback polling every 2.5 seconds ensuring sub-second sync even if WS drops
+    const broadcastChannel = supabase
+      .channel('client-approvals-realtime')
+      .on('broadcast', { event: 'CLIENT_APPROVED' }, (payload: any) => {
+        const pMobile = payload?.payload?.mobile;
+        const pCompId = payload?.payload?.companyId;
+        const myCleanPhone = (mobileNumber || '').replace(/[^0-9]/g, '').slice(-10);
+        if (!pMobile || !myCleanPhone || pMobile === myCleanPhone || pCompId === displayClientId) {
+          handleRefreshStatus(true);
+        }
+      })
+      .subscribe();
+
+    // 3. Ultra-responsive active polling every 1.0 second ensuring instant reflect
     const interval = setInterval(() => {
       handleRefreshStatus(true);
-    }, 2500);
+    }, 1000);
 
     // 4. AppState lifecycle listener: recheck immediately when app returns to foreground
     const appStateSub = AppState.addEventListener(
@@ -206,6 +227,7 @@ export const ClientRegistrationConfirmationScreen: React.FC<
     return () => {
       clearInterval(interval);
       supabase.removeChannel(channel);
+      supabase.removeChannel(broadcastChannel);
       appStateSub.remove();
     };
   }, [displayClientId, mobileNumber]);

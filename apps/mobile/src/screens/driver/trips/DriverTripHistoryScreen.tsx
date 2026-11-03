@@ -20,6 +20,7 @@ import {
 } from 'lucide-react-native';
 import { driverService } from '../../../services/driverService';
 import { DriverTripItem } from '../../../types';
+import { formatDisplayId } from '../../../utils/idGenerator';
 
 interface DriverTripHistoryScreenProps {
   driverId?: string;
@@ -111,7 +112,7 @@ export const DriverTripHistoryScreen: React.FC<DriverTripHistoryScreenProps> = (
                     <Text style={styles.podBadgeText}>e-POD VERIFIED</Text>
                   </View>
                   <Text style={styles.tripRef}>
-                    #{item.id.replace(/[^a-zA-Z0-9]/g, '').slice(-8).toUpperCase()}
+                    {item.tripCode || formatDisplayId('TR', item.startedAt, item.id)}
                   </Text>
                 </View>
 

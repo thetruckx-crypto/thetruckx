@@ -1,0 +1,1353 @@
+[
+  {
+    "modelName": "ClientCompany",
+    "tableName": "client_companies",
+    "fields": [
+      {
+        "fieldName": "id",
+        "colName": "id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "companyName",
+        "colName": "company_name",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "gstin",
+        "colName": "gstin",
+        "fieldType": "String?"
+      },
+      {
+        "fieldName": "pan",
+        "colName": "pan",
+        "fieldType": "String?"
+      },
+      {
+        "fieldName": "registeredAddress",
+        "colName": "registered_address",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "city",
+        "colName": "city",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "pincode",
+        "colName": "pincode",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "status",
+        "colName": "status",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "createdAt",
+        "colName": "created_at",
+        "fieldType": "DateTime"
+      },
+      {
+        "fieldName": "updatedAt",
+        "colName": "updated_at",
+        "fieldType": "DateTime"
+      },
+      {
+        "fieldName": "users",
+        "colName": "users",
+        "fieldType": "ClientUser[]"
+      },
+      {
+        "fieldName": "requirements",
+        "colName": "requirements",
+        "fieldType": "Requirement[]"
+      },
+      {
+        "fieldName": "bookings",
+        "colName": "bookings",
+        "fieldType": "Booking[]"
+      },
+      {
+        "fieldName": "chatThreads",
+        "colName": "chatThreads",
+        "fieldType": "ChatThread[]"
+      }
+    ]
+  },
+  {
+    "modelName": "ClientUser",
+    "tableName": "client_users",
+    "fields": [
+      {
+        "fieldName": "id",
+        "colName": "id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "clientId",
+        "colName": "client_id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "mobile",
+        "colName": "mobile",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "fullName",
+        "colName": "full_name",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "email",
+        "colName": "email",
+        "fieldType": "String?"
+      },
+      {
+        "fieldName": "status",
+        "colName": "status",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "createdAt",
+        "colName": "created_at",
+        "fieldType": "DateTime"
+      },
+      {
+        "fieldName": "client",
+        "colName": "client",
+        "fieldType": "ClientCompany"
+      }
+    ]
+  },
+  {
+    "modelName": "VendorCompany",
+    "tableName": "vendor_companies",
+    "fields": [
+      {
+        "fieldName": "id",
+        "colName": "id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "vendorName",
+        "colName": "vendor_name",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "pan",
+        "colName": "pan",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "gstin",
+        "colName": "gstin",
+        "fieldType": "String?"
+      },
+      {
+        "fieldName": "address",
+        "colName": "address",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "status",
+        "colName": "status",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "onboardingSource",
+        "colName": "onboarding_source",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "approvedBy",
+        "colName": "approved_by",
+        "fieldType": "String?"
+      },
+      {
+        "fieldName": "approvedAt",
+        "colName": "approved_at",
+        "fieldType": "DateTime?"
+      },
+      {
+        "fieldName": "createdAt",
+        "colName": "created_at",
+        "fieldType": "DateTime"
+      },
+      {
+        "fieldName": "updatedAt",
+        "colName": "updated_at",
+        "fieldType": "DateTime"
+      },
+      {
+        "fieldName": "users",
+        "colName": "users",
+        "fieldType": "VendorUser[]"
+      },
+      {
+        "fieldName": "vehicleLinks",
+        "colName": "vehicleLinks",
+        "fieldType": "VendorVehicleLink[]"
+      },
+      {
+        "fieldName": "drivers",
+        "colName": "drivers",
+        "fieldType": "Driver[]"
+      },
+      {
+        "fieldName": "vendorRequests",
+        "colName": "vendorRequests",
+        "fieldType": "VendorRequest[]"
+      },
+      {
+        "fieldName": "trips",
+        "colName": "trips",
+        "fieldType": "Trip[]"
+      },
+      {
+        "fieldName": "chatThreads",
+        "colName": "chatThreads",
+        "fieldType": "ChatThread[]"
+      }
+    ]
+  },
+  {
+    "modelName": "VendorUser",
+    "tableName": "vendor_users",
+    "fields": [
+      {
+        "fieldName": "id",
+        "colName": "id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "vendorId",
+        "colName": "vendor_id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "mobile",
+        "colName": "mobile",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "fullName",
+        "colName": "full_name",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "email",
+        "colName": "email",
+        "fieldType": "String?"
+      },
+      {
+        "fieldName": "status",
+        "colName": "status",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "createdAt",
+        "colName": "created_at",
+        "fieldType": "DateTime"
+      },
+      {
+        "fieldName": "vendor",
+        "colName": "vendor",
+        "fieldType": "VendorCompany"
+      }
+    ]
+  },
+  {
+    "modelName": "Vehicle",
+    "tableName": "vehicles",
+    "fields": [
+      {
+        "fieldName": "id",
+        "colName": "id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "registrationNumber",
+        "colName": "registration_number",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "vehicleType",
+        "colName": "vehicle_type",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "ratedCapacityMt",
+        "colName": "rated_capacity_mt",
+        "fieldType": "Decimal"
+      },
+      {
+        "fieldName": "minimumCapacityMt",
+        "colName": "minimum_capacity_mt",
+        "fieldType": "Decimal"
+      },
+      {
+        "fieldName": "rcNumber",
+        "colName": "rc_number",
+        "fieldType": "String?"
+      },
+      {
+        "fieldName": "status",
+        "colName": "status",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "createdAt",
+        "colName": "created_at",
+        "fieldType": "DateTime"
+      },
+      {
+        "fieldName": "vendorLinks",
+        "colName": "vendorLinks",
+        "fieldType": "VendorVehicleLink[]"
+      },
+      {
+        "fieldName": "quotations",
+        "colName": "quotations",
+        "fieldType": "VendorQuotation[]"
+      },
+      {
+        "fieldName": "trips",
+        "colName": "trips",
+        "fieldType": "Trip[]"
+      }
+    ]
+  },
+  {
+    "modelName": "VendorVehicleLink",
+    "tableName": "vendor_vehicle_links",
+    "fields": [
+      {
+        "fieldName": "id",
+        "colName": "id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "vendorId",
+        "colName": "vendor_id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "vehicleId",
+        "colName": "vehicle_id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "status",
+        "colName": "status",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "tieUpProofUrl",
+        "colName": "tie_up_proof_url",
+        "fieldType": "String?"
+      },
+      {
+        "fieldName": "approvedBy",
+        "colName": "approved_by",
+        "fieldType": "String?"
+      },
+      {
+        "fieldName": "createdAt",
+        "colName": "created_at",
+        "fieldType": "DateTime"
+      },
+      {
+        "fieldName": "vendor",
+        "colName": "vendor",
+        "fieldType": "VendorCompany"
+      },
+      {
+        "fieldName": "vehicle",
+        "colName": "vehicle",
+        "fieldType": "Vehicle"
+      }
+    ]
+  },
+  {
+    "modelName": "Driver",
+    "tableName": "drivers",
+    "fields": [
+      {
+        "fieldName": "id",
+        "colName": "id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "primaryVendorId",
+        "colName": "primary_vendor_id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "fullName",
+        "colName": "full_name",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "mobile",
+        "colName": "mobile",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "licenceNumber",
+        "colName": "licence_number",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "licenceExpiryDate",
+        "colName": "licence_expiry_date",
+        "fieldType": "DateTime"
+      },
+      {
+        "fieldName": "status",
+        "colName": "status",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "createdAt",
+        "colName": "created_at",
+        "fieldType": "DateTime"
+      },
+      {
+        "fieldName": "vendor",
+        "colName": "vendor",
+        "fieldType": "VendorCompany"
+      },
+      {
+        "fieldName": "quotations",
+        "colName": "quotations",
+        "fieldType": "VendorQuotation[]"
+      },
+      {
+        "fieldName": "trips",
+        "colName": "trips",
+        "fieldType": "Trip[]"
+      },
+      {
+        "fieldName": "chatThreads",
+        "colName": "chatThreads",
+        "fieldType": "ChatThread[]"
+      }
+    ]
+  },
+  {
+    "modelName": "Requirement",
+    "tableName": "requirements",
+    "fields": [
+      {
+        "fieldName": "id",
+        "colName": "id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "clientId",
+        "colName": "client_id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "assignedAdminId",
+        "colName": "assigned_admin_id",
+        "fieldType": "String?"
+      },
+      {
+        "fieldName": "pickupPincode",
+        "colName": "pickup_pincode",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "pickupAddress",
+        "colName": "pickup_address",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "destinationPincode",
+        "colName": "destination_pincode",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "destinationAddress",
+        "colName": "destination_address",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "requiredCapacityMt",
+        "colName": "required_capacity_mt",
+        "fieldType": "Decimal"
+      },
+      {
+        "fieldName": "vehicleType",
+        "colName": "vehicle_type",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "materialType",
+        "colName": "material_type",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "loadingDatetime",
+        "colName": "loading_datetime",
+        "fieldType": "DateTime"
+      },
+      {
+        "fieldName": "specialInstructions",
+        "colName": "special_instructions",
+        "fieldType": "String?"
+      },
+      {
+        "fieldName": "status",
+        "colName": "status",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "createdAt",
+        "colName": "created_at",
+        "fieldType": "DateTime"
+      },
+      {
+        "fieldName": "updatedAt",
+        "colName": "updated_at",
+        "fieldType": "DateTime"
+      },
+      {
+        "fieldName": "client",
+        "colName": "client",
+        "fieldType": "ClientCompany"
+      },
+      {
+        "fieldName": "vendorRequests",
+        "colName": "vendorRequests",
+        "fieldType": "VendorRequest[]"
+      },
+      {
+        "fieldName": "clientQuotes",
+        "colName": "clientQuotes",
+        "fieldType": "ClientQuote[]"
+      },
+      {
+        "fieldName": "bookings",
+        "colName": "bookings",
+        "fieldType": "Booking[]"
+      },
+      {
+        "fieldName": "chatThreads",
+        "colName": "chatThreads",
+        "fieldType": "ChatThread[]"
+      }
+    ]
+  },
+  {
+    "modelName": "VendorRequest",
+    "tableName": "vendor_requests",
+    "fields": [
+      {
+        "fieldName": "id",
+        "colName": "id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "requirementId",
+        "colName": "requirement_id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "vendorId",
+        "colName": "vendor_id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "deadlineAt",
+        "colName": "deadline_at",
+        "fieldType": "DateTime"
+      },
+      {
+        "fieldName": "status",
+        "colName": "status",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "createdAt",
+        "colName": "created_at",
+        "fieldType": "DateTime"
+      },
+      {
+        "fieldName": "requirement",
+        "colName": "requirement",
+        "fieldType": "Requirement"
+      },
+      {
+        "fieldName": "vendor",
+        "colName": "vendor",
+        "fieldType": "VendorCompany"
+      },
+      {
+        "fieldName": "quotations",
+        "colName": "quotations",
+        "fieldType": "VendorQuotation[]"
+      }
+    ]
+  },
+  {
+    "modelName": "VendorQuotation",
+    "tableName": "vendor_quotations",
+    "fields": [
+      {
+        "fieldName": "id",
+        "colName": "id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "vendorRequestId",
+        "colName": "vendor_request_id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "vehicleId",
+        "colName": "vehicle_id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "driverId",
+        "colName": "driver_id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "quotedRate",
+        "colName": "quoted_rate",
+        "fieldType": "Decimal"
+      },
+      {
+        "fieldName": "version",
+        "colName": "version",
+        "fieldType": "Int"
+      },
+      {
+        "fieldName": "isLocked",
+        "colName": "is_locked",
+        "fieldType": "Boolean"
+      },
+      {
+        "fieldName": "submittedAt",
+        "colName": "submitted_at",
+        "fieldType": "DateTime"
+      },
+      {
+        "fieldName": "vendorRequest",
+        "colName": "vendorRequest",
+        "fieldType": "VendorRequest"
+      },
+      {
+        "fieldName": "vehicle",
+        "colName": "vehicle",
+        "fieldType": "Vehicle"
+      },
+      {
+        "fieldName": "driver",
+        "colName": "driver",
+        "fieldType": "Driver"
+      }
+    ]
+  },
+  {
+    "modelName": "ClientQuote",
+    "tableName": "client_quotes",
+    "fields": [
+      {
+        "fieldName": "id",
+        "colName": "id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "requirementId",
+        "colName": "requirement_id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "version",
+        "colName": "version",
+        "fieldType": "Int"
+      },
+      {
+        "fieldName": "vendorBaseCost",
+        "colName": "vendor_base_cost",
+        "fieldType": "Decimal"
+      },
+      {
+        "fieldName": "adminMargin",
+        "colName": "admin_margin",
+        "fieldType": "Decimal"
+      },
+      {
+        "fieldName": "gstRatePercent",
+        "colName": "gst_rate_percent",
+        "fieldType": "Decimal"
+      },
+      {
+        "fieldName": "gstAmount",
+        "colName": "gst_amount",
+        "fieldType": "Decimal"
+      },
+      {
+        "fieldName": "totalClientAmount",
+        "colName": "total_client_amount",
+        "fieldType": "Decimal"
+      },
+      {
+        "fieldName": "validityExpiresAt",
+        "colName": "validity_expires_at",
+        "fieldType": "DateTime"
+      },
+      {
+        "fieldName": "status",
+        "colName": "status",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "createdAt",
+        "colName": "created_at",
+        "fieldType": "DateTime"
+      },
+      {
+        "fieldName": "requirement",
+        "colName": "requirement",
+        "fieldType": "Requirement"
+      },
+      {
+        "fieldName": "bookings",
+        "colName": "bookings",
+        "fieldType": "Booking[]"
+      }
+    ]
+  },
+  {
+    "modelName": "Booking",
+    "tableName": "bookings",
+    "fields": [
+      {
+        "fieldName": "id",
+        "colName": "id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "requirementId",
+        "colName": "requirement_id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "clientId",
+        "colName": "client_id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "acceptedQuoteId",
+        "colName": "accepted_quote_id",
+        "fieldType": "String?"
+      },
+      {
+        "fieldName": "bookingStatus",
+        "colName": "booking_status",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "paymentStatus",
+        "colName": "payment_status",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "confirmedAt",
+        "colName": "confirmed_at",
+        "fieldType": "DateTime"
+      },
+      {
+        "fieldName": "requirement",
+        "colName": "requirement",
+        "fieldType": "Requirement"
+      },
+      {
+        "fieldName": "client",
+        "colName": "client",
+        "fieldType": "ClientCompany"
+      },
+      {
+        "fieldName": "acceptedQuote",
+        "colName": "acceptedQuote",
+        "fieldType": "ClientQuote?"
+      },
+      {
+        "fieldName": "trips",
+        "colName": "trips",
+        "fieldType": "Trip[]"
+      },
+      {
+        "fieldName": "chargeLines",
+        "colName": "chargeLines",
+        "fieldType": "ChargeLine[]"
+      },
+      {
+        "fieldName": "paymentRecords",
+        "colName": "paymentRecords",
+        "fieldType": "PaymentRecord[]"
+      },
+      {
+        "fieldName": "chatThreads",
+        "colName": "chatThreads",
+        "fieldType": "ChatThread[]"
+      }
+    ]
+  },
+  {
+    "modelName": "Trip",
+    "tableName": "trips",
+    "fields": [
+      {
+        "fieldName": "id",
+        "colName": "id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "bookingId",
+        "colName": "booking_id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "vehicleId",
+        "colName": "vehicle_id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "driverId",
+        "colName": "driver_id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "vendorId",
+        "colName": "vendor_id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "vendorRate",
+        "colName": "vendor_rate",
+        "fieldType": "Decimal"
+      },
+      {
+        "fieldName": "tripStatus",
+        "colName": "trip_status",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "startedAt",
+        "colName": "started_at",
+        "fieldType": "DateTime?"
+      },
+      {
+        "fieldName": "completedAt",
+        "colName": "completed_at",
+        "fieldType": "DateTime?"
+      },
+      {
+        "fieldName": "createdAt",
+        "colName": "created_at",
+        "fieldType": "DateTime"
+      },
+      {
+        "fieldName": "booking",
+        "colName": "booking",
+        "fieldType": "Booking"
+      },
+      {
+        "fieldName": "vehicle",
+        "colName": "vehicle",
+        "fieldType": "Vehicle"
+      },
+      {
+        "fieldName": "driver",
+        "colName": "driver",
+        "fieldType": "Driver"
+      },
+      {
+        "fieldName": "vendor",
+        "colName": "vendor",
+        "fieldType": "VendorCompany"
+      },
+      {
+        "fieldName": "weighments",
+        "colName": "weighments",
+        "fieldType": "Weighment[]"
+      },
+      {
+        "fieldName": "chargeLines",
+        "colName": "chargeLines",
+        "fieldType": "ChargeLine[]"
+      }
+    ]
+  },
+  {
+    "modelName": "Weighment",
+    "tableName": "weighments",
+    "fields": [
+      {
+        "fieldName": "id",
+        "colName": "id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "tripId",
+        "colName": "trip_id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "stage",
+        "colName": "stage",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "grossWeightMt",
+        "colName": "gross_weight_mt",
+        "fieldType": "Decimal"
+      },
+      {
+        "fieldName": "tareWeightMt",
+        "colName": "tare_weight_mt",
+        "fieldType": "Decimal"
+      },
+      {
+        "fieldName": "netWeightMt",
+        "colName": "net_weight_mt",
+        "fieldType": "Decimal"
+      },
+      {
+        "fieldName": "slipDocumentUrl",
+        "colName": "slip_document_url",
+        "fieldType": "String?"
+      },
+      {
+        "fieldName": "verifiedBy",
+        "colName": "verified_by",
+        "fieldType": "String?"
+      },
+      {
+        "fieldName": "status",
+        "colName": "status",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "recordedAt",
+        "colName": "recorded_at",
+        "fieldType": "DateTime"
+      },
+      {
+        "fieldName": "trip",
+        "colName": "trip",
+        "fieldType": "Trip"
+      }
+    ]
+  },
+  {
+    "modelName": "ChargeLine",
+    "tableName": "charge_lines",
+    "fields": [
+      {
+        "fieldName": "id",
+        "colName": "id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "bookingId",
+        "colName": "booking_id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "tripId",
+        "colName": "trip_id",
+        "fieldType": "String?"
+      },
+      {
+        "fieldName": "chargeType",
+        "colName": "charge_type",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "amount",
+        "colName": "amount",
+        "fieldType": "Decimal"
+      },
+      {
+        "fieldName": "isBillableToClient",
+        "colName": "is_billable_to_client",
+        "fieldType": "Boolean"
+      },
+      {
+        "fieldName": "notes",
+        "colName": "notes",
+        "fieldType": "String?"
+      },
+      {
+        "fieldName": "enteredBy",
+        "colName": "entered_by",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "createdAt",
+        "colName": "created_at",
+        "fieldType": "DateTime"
+      },
+      {
+        "fieldName": "booking",
+        "colName": "booking",
+        "fieldType": "Booking"
+      },
+      {
+        "fieldName": "trip",
+        "colName": "trip",
+        "fieldType": "Trip?"
+      }
+    ]
+  },
+  {
+    "modelName": "Document",
+    "tableName": "documents",
+    "fields": [
+      {
+        "fieldName": "id",
+        "colName": "id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "category",
+        "colName": "category",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "documentType",
+        "colName": "document_type",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "referenceId",
+        "colName": "reference_id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "fileUrl",
+        "colName": "file_url",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "validityExpiryDate",
+        "colName": "validity_expiry_date",
+        "fieldType": "DateTime?"
+      },
+      {
+        "fieldName": "verificationStatus",
+        "colName": "verification_status",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "rejectionReason",
+        "colName": "rejection_reason",
+        "fieldType": "String?"
+      },
+      {
+        "fieldName": "consigneeStampVerified",
+        "colName": "consignee_stamp_verified",
+        "fieldType": "Boolean"
+      },
+      {
+        "fieldName": "uploadedBy",
+        "colName": "uploaded_by",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "verifiedBy",
+        "colName": "verified_by",
+        "fieldType": "String?"
+      },
+      {
+        "fieldName": "createdAt",
+        "colName": "created_at",
+        "fieldType": "DateTime"
+      }
+    ]
+  },
+  {
+    "modelName": "PaymentRecord",
+    "tableName": "payment_records",
+    "fields": [
+      {
+        "fieldName": "id",
+        "colName": "id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "bookingId",
+        "colName": "booking_id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "amountCollected",
+        "colName": "amount_collected",
+        "fieldType": "Decimal"
+      },
+      {
+        "fieldName": "paymentDate",
+        "colName": "payment_date",
+        "fieldType": "DateTime"
+      },
+      {
+        "fieldName": "paymentMode",
+        "colName": "payment_mode",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "transactionReference",
+        "colName": "transaction_reference",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "receiptDocUrl",
+        "colName": "receipt_doc_url",
+        "fieldType": "String?"
+      },
+      {
+        "fieldName": "recordedBy",
+        "colName": "recorded_by",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "createdAt",
+        "colName": "created_at",
+        "fieldType": "DateTime"
+      },
+      {
+        "fieldName": "booking",
+        "colName": "booking",
+        "fieldType": "Booking"
+      }
+    ]
+  },
+  {
+    "modelName": "ChatThread",
+    "tableName": "chat_threads",
+    "fields": [
+      {
+        "fieldName": "id",
+        "colName": "id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "threadType",
+        "colName": "thread_type",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "bookingId",
+        "colName": "booking_id",
+        "fieldType": "String?"
+      },
+      {
+        "fieldName": "requirementId",
+        "colName": "requirement_id",
+        "fieldType": "String?"
+      },
+      {
+        "fieldName": "clientId",
+        "colName": "client_id",
+        "fieldType": "String?"
+      },
+      {
+        "fieldName": "vendorId",
+        "colName": "vendor_id",
+        "fieldType": "String?"
+      },
+      {
+        "fieldName": "driverId",
+        "colName": "driver_id",
+        "fieldType": "String?"
+      },
+      {
+        "fieldName": "createdAt",
+        "colName": "created_at",
+        "fieldType": "DateTime"
+      },
+      {
+        "fieldName": "booking",
+        "colName": "booking",
+        "fieldType": "Booking?"
+      },
+      {
+        "fieldName": "requirement",
+        "colName": "requirement",
+        "fieldType": "Requirement?"
+      },
+      {
+        "fieldName": "client",
+        "colName": "client",
+        "fieldType": "ClientCompany?"
+      },
+      {
+        "fieldName": "vendor",
+        "colName": "vendor",
+        "fieldType": "VendorCompany?"
+      },
+      {
+        "fieldName": "driver",
+        "colName": "driver",
+        "fieldType": "Driver?"
+      },
+      {
+        "fieldName": "messages",
+        "colName": "messages",
+        "fieldType": "ChatMessage[]"
+      }
+    ]
+  },
+  {
+    "modelName": "ChatMessage",
+    "tableName": "chat_messages",
+    "fields": [
+      {
+        "fieldName": "id",
+        "colName": "id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "threadId",
+        "colName": "thread_id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "senderUserId",
+        "colName": "sender_user_id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "senderRole",
+        "colName": "sender_role",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "messageText",
+        "colName": "message_text",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "createdAt",
+        "colName": "created_at",
+        "fieldType": "DateTime"
+      },
+      {
+        "fieldName": "thread",
+        "colName": "thread",
+        "fieldType": "ChatThread"
+      },
+      {
+        "fieldName": "attachments",
+        "colName": "attachments",
+        "fieldType": "ChatAttachment[]"
+      }
+    ]
+  },
+  {
+    "modelName": "ChatAttachment",
+    "tableName": "chat_attachments",
+    "fields": [
+      {
+        "fieldName": "id",
+        "colName": "id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "messageId",
+        "colName": "message_id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "fileUrl",
+        "colName": "file_url",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "fileType",
+        "colName": "file_type",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "convertedToDocumentId",
+        "colName": "converted_to_document_id",
+        "fieldType": "String?"
+      },
+      {
+        "fieldName": "createdAt",
+        "colName": "created_at",
+        "fieldType": "DateTime"
+      },
+      {
+        "fieldName": "message",
+        "colName": "message",
+        "fieldType": "ChatMessage"
+      }
+    ]
+  },
+  {
+    "modelName": "AuditLog",
+    "tableName": "audit_logs",
+    "fields": [
+      {
+        "fieldName": "id",
+        "colName": "id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "userId",
+        "colName": "user_id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "userRole",
+        "colName": "user_role",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "action",
+        "colName": "action",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "entityType",
+        "colName": "entity_type",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "entityId",
+        "colName": "entity_id",
+        "fieldType": "String"
+      },
+      {
+        "fieldName": "payloadBefore",
+        "colName": "payload_before",
+        "fieldType": "Json?"
+      },
+      {
+        "fieldName": "payloadAfter",
+        "colName": "payload_after",
+        "fieldType": "Json?"
+      },
+      {
+        "fieldName": "ipAddress",
+        "colName": "ip_address",
+        "fieldType": "String?"
+      },
+      {
+        "fieldName": "timestamp",
+        "colName": "timestamp",
+        "fieldType": "DateTime"
+      }
+    ]
+  }
+]

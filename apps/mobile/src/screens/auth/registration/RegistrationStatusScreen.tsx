@@ -41,7 +41,7 @@ interface RegistrationStatusScreenProps {
   userRole?: 'CLIENT' | 'VENDOR' | 'DRIVER';
   userId?: string;
   onRefreshStatus?: () => void;
-  onApprovedContinue?: () => void;
+  onApprovedContinue?: (approvedData?: any) => void;
   onFixCorrections?: () => void;
   onBack?: () => void;
   onOpenSupport?: () => void;
@@ -147,7 +147,7 @@ export const RegistrationStatusScreen: React.FC<RegistrationStatusScreenProps> =
     // 1. Initial check (silent background check, bypass cache)
     checkLiveStatus(false);
 
-    // 2. Supabase Realtime channel subscription
+    // 2. Supabase Realtime channel subscription + Broadcast Channel
     const cleanId = (userId || '').replace(/[^a-zA-Z0-9]/g, '').slice(-16);
     const channelName = `realtime-status-${userRole.toLowerCase()}-${cleanId}`;
     const channel = supabase
@@ -169,10 +169,17 @@ export const RegistrationStatusScreen: React.FC<RegistrationStatusScreenProps> =
       })
       .subscribe();
 
-    // 3. Fallback active polling every 2.5 seconds to ensure instant UI reactivity
+    const broadcastChannel = supabase
+      .channel('client-approvals-realtime')
+      .on('broadcast', { event: 'CLIENT_APPROVED' }, () => {
+        checkLiveStatus(false);
+      })
+      .subscribe();
+
+    // 3. Fast active polling every 1.0 second to ensure instant UI reactivity
     const interval = setInterval(() => {
       checkLiveStatus(false);
-    }, 2500);
+    }, 1000);
 
     // 4. AppState listener: recheck immediately when app returns to foreground
     const appStateSub = AppState.addEventListener('change', (nextState: AppStateStatus) => {
@@ -184,6 +191,7 @@ export const RegistrationStatusScreen: React.FC<RegistrationStatusScreenProps> =
     return () => {
       clearInterval(interval);
       supabase.removeChannel(channel);
+      supabase.removeChannel(broadcastChannel);
       appStateSub.remove();
     };
   }, [userRole, userId]);
@@ -196,7 +204,16 @@ export const RegistrationStatusScreen: React.FC<RegistrationStatusScreenProps> =
         const res = await clientService.getClientAccountStatus(userId || '', true);
         setClientStatus(res);
 
-        // Fetch attached verification documents
+        const isApproved = res.status === 'APPROVED' || (res as any).status === 'ACTIVE';
+
+        if (isApproved && onApprovedContinue && !hasNavigatedRef.current) {
+          // Instant automated transition to dashboard on Admin approval
+          hasNavigatedRef.current = true;
+          onApprovedContinue(res);
+          return;
+        }
+
+        // Fetch attached verification documents only when still pending
         const targetId = res.companyId || userId;
         let docs: ClientDocumentItem[] = [];
         if (targetId) {
@@ -223,15 +240,6 @@ export const RegistrationStatusScreen: React.FC<RegistrationStatusScreenProps> =
         if (hasPendingUploads && !hasPromptedUpload) {
           setHasPromptedUpload(true);
           setShowPendingUploadModal(true);
-        }
-
-        const isApproved = res.status === 'APPROVED' || (res as any).status === 'ACTIVE';
-
-        if (isApproved && onApprovedContinue && !hasNavigatedRef.current) {
-          // Instant automated transition to dashboard on Admin approval
-          hasNavigatedRef.current = true;
-          onApprovedContinue();
-          return;
         } else if (res.status === 'REJECTED') {
           if (isManual) {
             Alert.alert(

@@ -8,6 +8,7 @@ import {
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase, ensureAdminSession } from "../../utils/supabase";
 import { useToast } from "../../context/ToastContext";
+import { formatDisplayId } from "../../utils/idGenerator";
 
 interface Booking {
   id: string;
@@ -164,7 +165,9 @@ export const PaymentsModule: React.FC = () => {
           const total = Number(b.grand_total || b.total_amount || quoteAmt || 0);
           const received = Number(b.amount_received || 0);
           const compName = (b.client_companies as any)?.company_name || b.client_company_name || "Enterprise Client";
-          const ref = b.booking_code || b.booking_reference || (b.id ? `BOK-${b.id.substring(0, 8)}` : "BOK-0000");
+          const ref = b.booking_code?.startsWith('TRUCKX-BK-')
+            ? b.booking_code
+            : formatDisplayId('BK', b.id, b.confirmed_at || b.created_at);
 
           return {
             ...b,
@@ -491,7 +494,7 @@ export const PaymentsModule: React.FC = () => {
           </h1>
           <p className="page-subtitle">
             {currentTab === "client"
-              ? "Inbound collections from shippers, invoice balances & account reconciliations"
+              ? "Inbound collections from clients, invoice balances & account reconciliations"
               : "Outbound payouts to fleet owners, fuel advances, and POD final settlements"}
           </p>
         </div>
@@ -861,7 +864,7 @@ export const PaymentsModule: React.FC = () => {
                               {settlement.booking_code}
                             </span>
                             <div style={{ fontSize: "11px", color: "#64748B", fontFamily: "monospace", marginTop: "2px" }}>
-                              TRP-{settlement.trip_id.substring(0, 8)}
+                              {formatDisplayId('TR', settlement.trip_id)}
                             </div>
                           </div>
                         </td>
@@ -1095,34 +1098,34 @@ export const PaymentsModule: React.FC = () => {
               <div className="modal-body" style={{ padding: "20px 24px", maxHeight: "calc(88vh - 140px)", overflowY: "auto" }}>
                 {/* Structured Financial Summary Card */}
                 <div style={{
-                  background: "linear-gradient(135deg, #0F172A 0%, #1E293B 100%)",
+                  background: "#FFFFFF",
                   borderRadius: "12px",
                   padding: "16px 18px",
-                  color: "#FFFFFF",
-                  boxShadow: "0 6px 18px rgba(15, 23, 42, 0.15)",
+                  color: "#111827",
+                  boxShadow: "0 2px 8px rgba(17, 24, 39, 0.05)",
                   marginBottom: "18px",
-                  border: "1px solid rgba(255, 255, 255, 0.08)"
+                  border: "1px solid #E5EAF1"
                 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "14px", borderBottom: "1px solid rgba(255, 255, 255, 0.1)", paddingBottom: "10px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "14px", borderBottom: "1px solid #E8EDF3", paddingBottom: "10px" }}>
                     <div>
-                      <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.08em", color: "#94A3B8", fontWeight: 600 }}>Transporter / Vendor</div>
-                      <div style={{ fontSize: "15px", fontWeight: 700, color: "#FFFFFF", marginTop: "2px" }}>
+                      <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748B", fontWeight: 600 }}>Transporter / Vendor</div>
+                      <div style={{ fontSize: "15px", fontWeight: 700, color: "#111827", marginTop: "2px" }}>
                         {selectedSettlement.vendor_name}
                       </div>
                     </div>
                     <div style={{ textAlign: "right" }}>
-                      <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.08em", color: "#94A3B8", fontWeight: 600 }}>Trip Reference</div>
+                      <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.08em", color: "#64748B", fontWeight: 600 }}>Trip Reference</div>
                       <span style={{
                         display: "inline-block",
                         marginTop: "4px",
-                        background: "rgba(255, 255, 255, 0.1)",
+                        background: "#F8FAFC",
                         padding: "3px 8px",
                         borderRadius: "6px",
                         fontSize: "12px",
                         fontWeight: 600,
                         fontFamily: "monospace",
-                        color: "#F8FAFC",
-                        border: "1px solid rgba(255, 255, 255, 0.15)"
+                        color: "#111827",
+                        border: "1px solid #D9E1EC"
                       }}>
                         {selectedSettlement.booking_code}
                       </span>
@@ -1130,21 +1133,21 @@ export const PaymentsModule: React.FC = () => {
                   </div>
 
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px" }}>
-                    <div style={{ background: "rgba(255, 255, 255, 0.04)", padding: "10px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.06)" }}>
-                      <div style={{ fontSize: "11px", color: "#94A3B8", marginBottom: "4px" }}>Agreed Freight</div>
-                      <div style={{ fontSize: "14px", fontWeight: 700, color: "#FFFFFF" }}>{fmt(selectedSettlement.agreed_rate)}</div>
+                    <div style={{ background: "#F8FAFC", padding: "10px", borderRadius: "8px", border: "1px solid #E5EAF1" }}>
+                      <div style={{ fontSize: "11px", color: "#64748B", marginBottom: "4px" }}>Agreed Freight</div>
+                      <div style={{ fontSize: "14px", fontWeight: 700, color: "#111827" }}>{fmt(selectedSettlement.agreed_rate)}</div>
                     </div>
-                    <div style={{ background: "rgba(255, 255, 255, 0.04)", padding: "10px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.06)" }}>
-                      <div style={{ fontSize: "11px", color: "#94A3B8", marginBottom: "4px" }}>TDS ({selectedSettlement.tds_rate_percent}%)</div>
-                      <div style={{ fontSize: "14px", fontWeight: 700, color: "#F87171" }}>-{fmt(selectedSettlement.tds_amount)}</div>
+                    <div style={{ background: "#F8FAFC", padding: "10px", borderRadius: "8px", border: "1px solid #E5EAF1" }}>
+                      <div style={{ fontSize: "11px", color: "#64748B", marginBottom: "4px" }}>TDS ({selectedSettlement.tds_rate_percent}%)</div>
+                      <div style={{ fontSize: "14px", fontWeight: 700, color: "#DC2626" }}>-{fmt(selectedSettlement.tds_amount)}</div>
                     </div>
-                    <div style={{ background: "rgba(255, 255, 255, 0.04)", padding: "10px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.06)" }}>
-                      <div style={{ fontSize: "11px", color: "#94A3B8", marginBottom: "4px" }}>Disbursed</div>
-                      <div style={{ fontSize: "14px", fontWeight: 700, color: "#38BDF8" }}>{fmt(selectedSettlement.disbursed_amount || 0)}</div>
+                    <div style={{ background: "#F8FAFC", padding: "10px", borderRadius: "8px", border: "1px solid #E5EAF1" }}>
+                      <div style={{ fontSize: "11px", color: "#64748B", marginBottom: "4px" }}>Disbursed</div>
+                      <div style={{ fontSize: "14px", fontWeight: 700, color: "#0284C7" }}>{fmt(selectedSettlement.disbursed_amount || 0)}</div>
                     </div>
-                    <div style={{ background: "rgba(16, 185, 129, 0.1)", padding: "10px", borderRadius: "8px", border: "1px solid rgba(16, 185, 129, 0.25)" }}>
-                      <div style={{ fontSize: "11px", color: "#6EE7B7", marginBottom: "4px" }}>Outstanding</div>
-                      <div style={{ fontSize: "15px", fontWeight: 800, color: "#34D399" }}>{fmt(balancePending)}</div>
+                    <div style={{ background: "#ECFDF5", padding: "10px", borderRadius: "8px", border: "1px solid #A7F3D0" }}>
+                      <div style={{ fontSize: "11px", color: "#047857", marginBottom: "4px" }}>Outstanding</div>
+                      <div style={{ fontSize: "15px", fontWeight: 800, color: "#059669" }}>{fmt(balancePending)}</div>
                     </div>
                   </div>
                 </div>

@@ -897,10 +897,10 @@ export const QuotationsModule: React.FC<QuotationsModuleProps> = ({ onNavigateTo
         </button>
       </div>
 
-      {/* ── Hero Banner (Deep Navy + Truck Visual) Matching Screenshot 2 ── */}
+      {/* ── Hero Banner (Clean White Enterprise SaaS Header) ── */}
       <div
         style={{
-          background: 'linear-gradient(135deg, #0B192C 0%, #0F172A 60%, #1A2844 100%)',
+          background: '#FFFFFF',
           borderRadius: '16px',
           padding: '24px 32px',
           marginBottom: '20px',
@@ -909,27 +909,10 @@ export const QuotationsModule: React.FC<QuotationsModuleProps> = ({ onNavigateTo
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          boxShadow: '0 4px 20px rgba(11, 25, 44, 0.22)',
+          boxShadow: '0 1px 3px rgba(17, 24, 39, 0.05)',
+          border: '1px solid #E5EAF1',
         }}
       >
-        {/* Ambient Truck Visual on Right */}
-        <div
-          style={{
-            position: 'absolute',
-            right: 0,
-            top: 0,
-            bottom: 0,
-            width: '50%',
-            backgroundImage: 'url("/dashboard-hero-truck.jpg")',
-            backgroundSize: 'cover',
-            backgroundPosition: 'center right',
-            maskImage: 'linear-gradient(to right, transparent, black 30%)',
-            WebkitMaskImage: 'linear-gradient(to right, transparent, black 30%)',
-            opacity: 0.85,
-            pointerEvents: 'none',
-          }}
-        />
-
         {/* Hero Left Content */}
         <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: '16px', maxWidth: '65%' }}>
           <div
@@ -937,22 +920,22 @@ export const QuotationsModule: React.FC<QuotationsModuleProps> = ({ onNavigateTo
               width: '46px',
               height: '46px',
               borderRadius: '12px',
-              background: 'rgba(240, 90, 34, 0.16)',
-              border: '1px solid rgba(240, 90, 34, 0.35)',
+              background: '#FFF3EC',
+              border: '1px solid #FFE8DF',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               flexShrink: 0,
-              color: '#F05A22',
+              color: '#F4510B',
             }}
           >
             <Layers size={24} />
           </div>
           <div>
-            <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#FFFFFF', margin: '0 0 4px 0', letterSpacing: '-0.01em' }}>
+            <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#111827', margin: '0 0 4px 0', letterSpacing: '-0.01em' }}>
               Sourcing & Quotations
             </h1>
-            <p style={{ fontSize: '13px', color: '#94A3B8', margin: 0 }}>
+            <p style={{ fontSize: '13px', color: '#64748B', margin: 0 }}>
               Send RFQs to vendors, track quotation deadlines, and compare received quotations.
             </p>
           </div>

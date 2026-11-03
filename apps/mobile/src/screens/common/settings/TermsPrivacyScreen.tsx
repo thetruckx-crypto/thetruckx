@@ -67,7 +67,7 @@ export const TermsPrivacyScreen: React.FC<TermsPrivacyScreenProps> = ({
       setDocModal({
         title: 'Data Usage Disclosure',
         content:
-          'How your operational data is utilized:\n\n1. Live Telematics: GPS coordinates are tracked only during active trip dispatches to provide live ETA updates to shippers.\n2. Invoicing & GST: Company GSTIN & PAN details are transmitted securely to GST portals for e-Way Bill generation.\n3. Performance Analytics: Delivery timelines are analyzed to reward top-performing fleet operators.',
+          'How your operational data is utilized:\n\n1. Live Telematics: GPS coordinates are tracked only during active trip dispatches to provide live ETA updates to clients.\n2. Invoicing & GST: Company GSTIN & PAN details are transmitted securely to GST portals for e-Way Bill generation.\n3. Performance Analytics: Delivery timelines are analyzed to reward top-performing fleet operators.',
       });
     }
   };

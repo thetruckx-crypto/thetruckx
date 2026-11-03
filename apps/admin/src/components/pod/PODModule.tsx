@@ -4,6 +4,7 @@ import {
   Search, Truck, ChevronLeft, ChevronRight, FileText, ExternalLink, ShieldCheck, AlertTriangle
 } from "lucide-react";
 import { supabase, ensureAdminSession } from "../../utils/supabase";
+import { formatDisplayId } from "../../utils/idGenerator";
 
 interface Trip {
   id: string;
@@ -74,8 +75,8 @@ export const PODModule: React.FC = () => {
       const tripsData = tripsRes.data || [];
       const enriched = tripsData.map((t: any, idx: number) => ({
         ...t,
-        trip_reference: t.trip_reference || `TRP-${String(idx + 1).padStart(3, "0")}`,
-        booking_reference: `BOK-${t.booking_id?.substring(0, 8) ?? ""}`,
+        trip_reference: t.trip_code?.startsWith('TRUCKX-TR-') ? t.trip_code : formatDisplayId('TR', t.id, t.created_at),
+        booking_reference: t.booking_code?.startsWith('TRUCKX-BK-') ? t.booking_code : (t.booking_id ? formatDisplayId('BK', t.booking_id) : 'N/A'),
         vehicle_registration: t.vehicles?.registration_number || t.vehicle_registration || "Unassigned",
         driver_name: t.drivers?.full_name || t.driver_name || "Unassigned",
         pod_status: t.pod_approved === false ? "REJECTED" : "PENDING",

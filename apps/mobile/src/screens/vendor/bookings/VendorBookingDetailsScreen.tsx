@@ -206,6 +206,16 @@ export const VendorBookingDetailsScreen: React.FC<VendorBookingDetailsScreenProp
               <Text style={styles.subDate}>
                 Confirmed on {new Date(booking.confirmedAt || Date.now()).toLocaleDateString('en-GB')}
               </Text>
+              {booking.requirementId && (
+                <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#64748B', marginTop: 2 }}>
+                  Requirement: <Text style={{ color: '#F05A22' }}>{booking.requirementId}</Text>
+                </Text>
+              )}
+              {booking.trip?.id && (
+                <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#64748B', marginTop: 1 }}>
+                  Trip / LR: <Text style={{ color: '#0C1A34' }}>{booking.trip.id}</Text>
+                </Text>
+              )}
             </View>
 
             <View style={styles.statusBadge}>

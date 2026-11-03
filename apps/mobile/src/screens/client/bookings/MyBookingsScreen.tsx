@@ -244,9 +244,21 @@ export const MyBookingsScreen: React.FC<MyBookingsScreenProps> = ({
       // 2. Search Query matching
       if (!debouncedQuery) return true;
 
-      const displayBookingId = formatDisplayId('BK', b.id, b.confirmed_at || b.created_at);
+      const displayBookingId =
+        (b as any).booking_code && (b as any).booking_code.startsWith('TRUCKX-BK-')
+          ? (b as any).booking_code
+          : formatDisplayId('BK', b.id, b.confirmed_at || b.created_at);
       const rawId = (b.id || '').toLowerCase();
-      const lrNumber = (b.trip?.lr_number || formatDisplayId('TRP', b.trip?.id, b.trip?.created_at) || '').toLowerCase();
+      const lrNumber = (
+        (b.trip as any)?.trip_code && (b.trip as any).trip_code.startsWith('TRUCKX-TR-')
+          ? (b.trip as any).trip_code
+          : (b.trip?.lr_number || (b.trip?.id ? formatDisplayId('TR', b.trip?.id, b.trip?.created_at) : ''))
+      ).toLowerCase();
+      const reqId = (
+        (b.requirements as any)?.requirement_code && (b.requirements as any).requirement_code.startsWith('TRUCKX-REQ-')
+          ? (b.requirements as any).requirement_code
+          : (b.requirement_id ? formatDisplayId('REQ', b.requirement_id, b.created_at) : '')
+      ).toLowerCase();
       const origin = `${b.requirements?.pickup_city || ''} ${b.requirements?.pickup_address || ''}`.toLowerCase();
       const dest = `${b.requirements?.destination_city || ''} ${b.requirements?.destination_address || ''}`.toLowerCase();
       const vehicleNum = (b.trip?.vehicles?.registration_number || '').toLowerCase();
@@ -256,6 +268,7 @@ export const MyBookingsScreen: React.FC<MyBookingsScreenProps> = ({
       return (
         rawId.includes(debouncedQuery) ||
         displayBookingId.toLowerCase().includes(debouncedQuery) ||
+        reqId.includes(debouncedQuery) ||
         lrNumber.includes(debouncedQuery) ||
         origin.includes(debouncedQuery) ||
         dest.includes(debouncedQuery) ||
@@ -595,7 +608,15 @@ export const MyBookingsScreen: React.FC<MyBookingsScreenProps> = ({
           filteredBookings.map((b) => {
             const category = mapBookingToCategory(b);
             const statusConfig = getStatusStyle(category);
-            const displayBookingId = formatDisplayId('BK', b.id, b.confirmed_at || b.created_at);
+            const displayBookingId =
+              (b as any).booking_code && (b as any).booking_code.startsWith('TRUCKX-BK-')
+                ? (b as any).booking_code
+                : formatDisplayId('BK', b.id, b.confirmed_at || b.created_at);
+
+            const displayReqId =
+              (b.requirements as any)?.requirement_code && (b.requirements as any).requirement_code.startsWith('TRUCKX-REQ-')
+                ? (b.requirements as any).requirement_code
+                : (b.requirement_id ? formatDisplayId('REQ', b.requirement_id, b.created_at) : null);
 
             const pickupCity =
               b.requirements?.pickup_city ||
@@ -622,8 +643,9 @@ export const MyBookingsScreen: React.FC<MyBookingsScreenProps> = ({
             const driverName = b.trip?.drivers?.name;
 
             const lrNumber =
-              b.trip?.lr_number ||
-              (b.trip?.id ? formatDisplayId('TRP', b.trip.id, b.trip.created_at) : null);
+              (b.trip as any)?.trip_code && (b.trip as any).trip_code.startsWith('TRUCKX-TR-')
+                ? (b.trip as any).trip_code
+                : (b.trip?.lr_number || (b.trip?.id ? formatDisplayId('TR', b.trip.id, b.trip.created_at) : null));
 
             const canCancel = isEligibleForCancellation(b);
 
@@ -652,6 +674,12 @@ export const MyBookingsScreen: React.FC<MyBookingsScreenProps> = ({
                       )}
                     </View>
                     <Text style={styles.bookingDateText}>Booked on {bookingDate}</Text>
+                    {displayReqId && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
+                        <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#64748B' }}>REQ:</Text>
+                        <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#F15A24' }}>{displayReqId}</Text>
+                      </View>
+                    )}
                   </View>
 
                   <View

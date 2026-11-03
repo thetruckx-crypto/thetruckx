@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -33,9 +33,12 @@ import {
   ChevronRight,
   X,
   FileCheck,
+  Check,
+  ArrowRight,
 } from 'lucide-react-native';
 import { clientService } from '../../../services/clientService';
 import { buildGoogleMapsDirectionsUrl } from '../../../utils/googleMapsUtil';
+import { formatDisplayId } from '../../../utils/idGenerator';
 
 interface RequirementDetailsScreenProps {
   requirementId: string;
@@ -44,6 +47,7 @@ interface RequirementDetailsScreenProps {
   onViewQuotations: (requirementId: string) => void;
   onEditRequirement?: (requirement: any) => void;
   onViewBooking?: (bookingId: string) => void;
+  onViewTracking?: (bookingId: string) => void;
 }
 
 export const RequirementDetailsScreen: React.FC<RequirementDetailsScreenProps> = ({
@@ -53,11 +57,133 @@ export const RequirementDetailsScreen: React.FC<RequirementDetailsScreenProps> =
   onViewQuotations,
   onEditRequirement,
   onViewBooking,
+  onViewTracking,
 }) => {
   const [data, setData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+
+  // Chronological Requirement Lifecycle Timeline (Task 7)
+  const timelineSteps = useMemo(() => {
+    const status = (data?.status || 'SUBMITTED').toUpperCase();
+    const hasBooking = Boolean(data?.booking_id || data?.booking_number);
+    const hasQuotes = Boolean(data?.quotes_count && data.quotes_count > 0);
+
+    let activeStep = 1;
+    if (status === 'COMPLETED') {
+      activeStep = 7;
+    } else if (status === 'POD_UPLOADED' || status === 'DELIVERED') {
+      activeStep = 7;
+    } else if (status === 'IN_TRANSIT' || status === 'LOADING') {
+      activeStep = 6;
+    } else if (status === 'DISPATCHED' || status === 'VEHICLE_ASSIGNED') {
+      activeStep = 5;
+    } else if (hasBooking || status === 'BOOKED' || status === 'CONFIRMED') {
+      activeStep = 4;
+    } else if (status === 'OPEN_FOR_BIDDING' || status === 'SOURCING' || hasQuotes) {
+      activeStep = 3;
+    } else if (status === 'UNDER_REVIEW' || status === 'VERIFIED' || status === 'APPROVED' || status === 'CORRECTIONS_REQUESTED') {
+      activeStep = 2;
+    } else {
+      activeStep = 1;
+    }
+
+    const isAllComplete = status === 'COMPLETED';
+
+    return [
+      {
+        num: 1,
+        title: 'Requirement Submitted',
+        desc: data?.created_at
+          ? `Submitted on ${new Date(data.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+          : 'Requirement recorded in TRUCKX database',
+        status: isAllComplete || activeStep > 1 ? 'COMPLETED' : activeStep === 1 ? 'CURRENT' : 'UPCOMING',
+      },
+      {
+        num: 2,
+        title: 'Operations Review & Compliance',
+        desc: status === 'CORRECTIONS_REQUESTED'
+          ? 'Clarifications requested by operations'
+          : status === 'UNDER_REVIEW'
+          ? 'Auditing cargo specifications and route compliance'
+          : isAllComplete || activeStep > 2
+          ? 'Specifications verified & approved'
+          : 'Feasibility check & corridor clearance',
+        status: isAllComplete || activeStep > 2 ? 'COMPLETED' : activeStep === 2 ? (status === 'CORRECTIONS_REQUESTED' ? 'ACTION_REQUIRED' : 'CURRENT') : 'UPCOMING',
+      },
+      {
+        num: 3,
+        title: 'Sourcing & Carrier Quotations',
+        desc: hasQuotes
+          ? `${data.quotes_count} transporter quote(s) received`
+          : activeStep === 3
+          ? 'Active RFQ broadcast to verified corridor carriers'
+          : isAllComplete || activeStep > 3
+          ? 'Transporter bidding completed'
+          : 'Corridor transporter bidding',
+        status: isAllComplete || activeStep > 3 ? 'COMPLETED' : activeStep === 3 ? 'CURRENT' : 'UPCOMING',
+        action: hasQuotes && onViewQuotations ? {
+          label: `Review Quotations (${data.quotes_count})`,
+          onPress: () => onViewQuotations(requirementId),
+        } : undefined,
+      },
+      {
+        num: 4,
+        title: 'Booking Confirmed',
+        desc: hasBooking
+          ? `Booking reference: ${data.booking_id ? formatDisplayId('BK', data.booking_id) : 'Confirmed'}`
+          : activeStep === 4
+          ? 'Commercial freight rate locked & booking confirmed'
+          : isAllComplete || activeStep > 4
+          ? 'Booking confirmed'
+          : 'Freight rate & terms contract confirmation',
+        status: isAllComplete || activeStep > 4 ? 'COMPLETED' : activeStep === 4 ? 'CURRENT' : 'UPCOMING',
+        action: hasBooking && onViewBooking ? {
+          label: 'View Booking Details',
+          onPress: () => onViewBooking(data.booking_id),
+        } : undefined,
+      },
+      {
+        num: 5,
+        title: 'Vehicle & Driver Allocation',
+        desc: data?.vehicle_registration
+          ? `Allocated: ${data.vehicle_registration} • Pilot: ${data.driver_name || 'Assigned'}`
+          : activeStep === 5
+          ? 'Carrier assigning verified commercial vehicle and driver'
+          : isAllComplete || activeStep > 5
+          ? 'Vehicle and driver verified on-duty'
+          : 'Commercial vehicle & driver assignment',
+        status: isAllComplete || activeStep > 5 ? 'COMPLETED' : activeStep === 5 ? 'CURRENT' : 'UPCOMING',
+      },
+      {
+        num: 6,
+        title: 'Transit & Milestone Tracking',
+        desc: status === 'IN_TRANSIT'
+          ? 'Consignment in transit with live GPS telematics'
+          : status === 'LOADING'
+          ? 'Vehicle at loading bay undergoing cargo loading'
+          : isAllComplete || activeStep > 6
+          ? 'Consignment reached delivery destination'
+          : 'Dispatch, GPS tracking & milestone updates',
+        status: isAllComplete || activeStep > 6 ? 'COMPLETED' : activeStep === 6 ? 'CURRENT' : 'UPCOMING',
+        action: (activeStep >= 6 && onViewTracking) ? {
+          label: 'Track Live Shipment',
+          onPress: () => onViewTracking(data.booking_id || requirementId),
+        } : undefined,
+      },
+      {
+        num: 7,
+        title: 'POD Verification & Completion',
+        desc: status === 'COMPLETED'
+          ? 'Consignment delivered, e-POD verified & closed'
+          : status === 'POD_UPLOADED'
+          ? 'Stamped delivery challan under operations audit'
+          : 'Delivery acknowledgement & stamped e-POD verification',
+        status: isAllComplete ? 'COMPLETED' : activeStep === 7 ? 'CURRENT' : 'UPCOMING',
+      },
+    ];
+  }, [data, requirementId, onViewQuotations, onViewBooking, onViewTracking]);
 
   const loadData = useCallback(async () => {
     try {
@@ -205,6 +331,25 @@ export const RequirementDetailsScreen: React.FC<RequirementDetailsScreenProps> =
   const isCancelled = data?.status === 'CANCELLED';
   const quoteCount = data?.quotationsCount || (data?.quotations && data.quotations.length) || 0;
 
+  // Canonical TRUCKX Identifiers
+  const displayReqId =
+    data?.requirement_code && data.requirement_code.startsWith('TRUCKX-REQ-')
+      ? data.requirement_code
+      : formatDisplayId('REQ', data?.requirement_code || data?.requirement_id || data?.id || requirementId, data?.created_at);
+
+  const displayClientId =
+    data?.client_companies?.client_code && data.client_companies.client_code.startsWith('TRUCKX-CL-')
+      ? data.client_companies.client_code
+      : (data?.client_code || formatDisplayId('CL', data?.client_id || clientId, data?.created_at));
+
+  const clientOrgName = data?.client_companies?.company_name || data?.company_name;
+
+  const displayBookingId = data?.booking_id
+    ? (data?.booking_code && data.booking_code.startsWith('TRUCKX-BK-')
+        ? data.booking_code
+        : formatDisplayId('BK', data.booking_code || data.booking_id, data?.created_at))
+    : null;
+
   return (
     <SafeAreaView style={styles.safeArea}>
       {/* ── Top Header Bar with Centered Title & Subtitle Matching Screenshot 4 ── */}
@@ -245,7 +390,7 @@ export const RequirementDetailsScreen: React.FC<RequirementDetailsScreenProps> =
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.metaIdLabel}>REQUIREMENT ID</Text>
-              <Text style={styles.metaIdValue}>{data?.id || requirementId}</Text>
+              <Text style={styles.metaIdValue} selectable>{displayReqId}</Text>
               <Text style={styles.postedDateText}>
                 Posted on {formatDate(data?.created_at)}
               </Text>
@@ -306,6 +451,38 @@ export const RequirementDetailsScreen: React.FC<RequirementDetailsScreenProps> =
           </View>
         </View>
 
+        {/* ── Enterprise Client & Booking Association (Task 12) ── */}
+        <View style={styles.clientMetaCard}>
+          <View style={styles.clientMetaRow}>
+            <View style={styles.clientMetaCol}>
+              <Text style={styles.clientMetaLabel}>CLIENT ID</Text>
+              <Text style={styles.clientMetaValue} selectable>{displayClientId}</Text>
+            </View>
+            {Boolean(clientOrgName) && (
+              <View style={[styles.clientMetaCol, { flex: 1.2 }]}>
+                <Text style={styles.clientMetaLabel}>ORGANIZATION</Text>
+                <Text style={styles.clientMetaValue} numberOfLines={1}>{clientOrgName}</Text>
+              </View>
+            )}
+          </View>
+          {displayBookingId && (
+            <View style={styles.bookingLinkRow}>
+              <View style={styles.bookingBadge}>
+                <CheckCircle2 size={13} color="#059669" />
+                <Text style={styles.bookingBadgeLabel}>CONFIRMED BOOKING</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => onViewBooking && onViewBooking(data.booking_id)}
+                style={styles.bookingIdBtn}
+                activeOpacity={0.75}
+              >
+                <Text style={styles.bookingIdText}>{displayBookingId}</Text>
+                <ChevronRight size={14} color="#F05A24" />
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
         {/* ── Corrections Banner if requested by Admin ── */}
         {data?.status === 'CORRECTIONS_REQUESTED' && (
           <View style={styles.correctionsBannerCard}>
@@ -332,6 +509,115 @@ export const RequirementDetailsScreen: React.FC<RequirementDetailsScreenProps> =
             )}
           </View>
         )}
+
+        {/* ── Chronological Requirement Lifecycle Timeline (Task 7) ── */}
+        <View style={styles.timelineSectionCard}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionIconBox}>
+              <Clock size={17} color="#F05A24" strokeWidth={2.4} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.sectionHeaderText}>Requirement Progress Timeline</Text>
+              <Text style={styles.timelineSubtitle}>
+                End-to-end lifecycle milestones from RFQ to final delivery & POD
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.lifecycleTimelineWrap}>
+            {timelineSteps.map((step, idx) => {
+              const isLast = idx === timelineSteps.length - 1;
+              const isCompleted = step.status === 'COMPLETED';
+              const isCurrent = step.status === 'CURRENT';
+              const isActionRequired = step.status === 'ACTION_REQUIRED';
+
+              return (
+                <View key={step.num} style={styles.lifecycleRow}>
+                  {/* Left Column: Node Circle and Connector Line */}
+                  <View style={styles.lifecycleNodeCol}>
+                    <View
+                      style={[
+                        styles.lifecycleNodeCircle,
+                        isCompleted
+                          ? styles.lifecycleNodeCompleted
+                          : isCurrent
+                          ? styles.lifecycleNodeCurrent
+                          : isActionRequired
+                          ? styles.lifecycleNodeAction
+                          : styles.lifecycleNodeUpcoming,
+                      ]}
+                    >
+                      {isCompleted ? (
+                        <Check size={12} color="#FFFFFF" strokeWidth={3} />
+                      ) : (
+                        <Text
+                          style={[
+                            styles.lifecycleNodeNumText,
+                            (isCurrent || isActionRequired) && { color: '#FFFFFF' },
+                          ]}
+                        >
+                          {step.num}
+                        </Text>
+                      )}
+                    </View>
+
+                    {!isLast && (
+                      <View
+                        style={[
+                          styles.lifecycleConnector,
+                          isCompleted && styles.lifecycleConnectorDone,
+                        ]}
+                      />
+                    )}
+                  </View>
+
+                  {/* Right Column: Title, Description, and Optional Action Button */}
+                  <View style={[styles.lifecycleContentCol, !isLast && { paddingBottom: 18 }]}>
+                    <View style={styles.lifecycleHeaderLine}>
+                      <Text
+                        style={[
+                          styles.lifecycleStepTitle,
+                          (isCurrent || isActionRequired) && styles.lifecycleStepTitleActive,
+                        ]}
+                      >
+                        {step.title}
+                      </Text>
+                      {isCurrent && (
+                        <View style={styles.currentStepPill}>
+                          <Text style={styles.currentStepPillText}>IN PROGRESS</Text>
+                        </View>
+                      )}
+                      {isCompleted && (
+                        <Text style={styles.stepCompletedTick}>✓ Completed</Text>
+                      )}
+                      {isActionRequired && (
+                        <View style={[styles.currentStepPill, { backgroundColor: '#FEE2E2' }]}>
+                          <Text style={[styles.currentStepPillText, { color: '#DC2626' }]}>
+                            ACTION REQUIRED
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+
+                    <Text style={styles.lifecycleStepDesc}>{step.desc}</Text>
+
+                    {/* Step Action Button if available */}
+                    {step.action && (
+                      <TouchableOpacity
+                        style={styles.stepActionBtn}
+                        onPress={step.action.onPress}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.stepActionBtnText}>{step.action.label}</Text>
+                        <ArrowRight size={13} color="#FFFFFF" strokeWidth={2.4} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </View>
 
         {/* ── Card 2: Vehicle & Route Details (Screenshot 4 Match) ── */}
         <View style={styles.sectionCard}>
@@ -794,6 +1080,76 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     color: '#64748B',
     marginTop: 2,
+  },
+  clientMetaCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+    marginBottom: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  clientMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  clientMetaCol: {
+    flex: 1,
+  },
+  clientMetaLabel: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#94A3B8',
+    letterSpacing: 0.5,
+  },
+  clientMetaValue: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: 2,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  bookingLinkRow: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  bookingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ECFDF5',
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+  },
+  bookingBadgeLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#059669',
+    letterSpacing: 0.4,
+  },
+  bookingIdBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  bookingIdText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#F05A24',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   summaryRightCol: {
     alignItems: 'flex-end',
@@ -1422,5 +1778,137 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     fontWeight: '800',
     color: '#DC2626',
+  },
+  /* ── Chronological Lifecycle Timeline Styles ── */
+  timelineSectionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    padding: 16,
+    marginHorizontal: 16,
+    marginTop: 14,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  timelineSubtitle: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  lifecycleTimelineWrap: {
+    marginTop: 14,
+    paddingLeft: 4,
+  },
+  lifecycleRow: {
+    flexDirection: 'row',
+  },
+  lifecycleNodeCol: {
+    alignItems: 'center',
+    width: 24,
+    marginRight: 12,
+  },
+  lifecycleNodeCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lifecycleNodeCompleted: {
+    backgroundColor: '#10B981',
+  },
+  lifecycleNodeCurrent: {
+    backgroundColor: '#F05A24',
+    shadowColor: '#F05A24',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  lifecycleNodeAction: {
+    backgroundColor: '#DC2626',
+  },
+  lifecycleNodeUpcoming: {
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+  },
+  lifecycleNodeNumText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#64748B',
+  },
+  lifecycleConnector: {
+    width: 2,
+    flex: 1,
+    backgroundColor: '#E2E8F0',
+    marginVertical: 4,
+  },
+  lifecycleConnectorDone: {
+    backgroundColor: '#10B981',
+  },
+  lifecycleContentCol: {
+    flex: 1,
+  },
+  lifecycleHeaderLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  lifecycleStepTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  lifecycleStepTitleActive: {
+    color: '#0F172A',
+    fontWeight: '800',
+  },
+  currentStepPill: {
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 6,
+  },
+  currentStepPillText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#EA580C',
+  },
+  stepCompletedTick: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#10B981',
+  },
+  lifecycleStepDesc: {
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  stepActionBtn: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#F05A24',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  stepActionBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

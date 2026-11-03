@@ -653,7 +653,7 @@ export const AdminUserManagement: React.FC = () => {
                   onChange={e => setManualDesiredRole(e.target.value as any)}
                   style={{ width: "100%", padding: "0.75rem", border: "1px solid rgba(244,83,37,0.3)", borderRadius: "6px", fontSize: "0.9rem" }}
                 >
-                  <option value="CLIENT">Client (Shipper)</option>
+                  <option value="CLIENT">Client (Enterprise Client)</option>
                   <option value="VENDOR">Vendor (Transporter / Fleet Owner)</option>
                   <option value="DRIVER">Driver</option>
                 </select>

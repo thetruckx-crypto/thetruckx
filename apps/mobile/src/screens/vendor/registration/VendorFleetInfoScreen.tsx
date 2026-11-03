@@ -94,7 +94,7 @@ export const VendorFleetInfoScreen: React.FC<VendorFleetInfoScreenProps> = ({
 
   // Lorry-specific registration and driver fields
   const [registrationNumberInput, setRegistrationNumberInput] = useState('');
-  const [makeModelInput, setMakeModelInput] = useState('');
+  const [attachedOwnerInput, setAttachedOwnerInput] = useState('');
   const [driverNameInput, setDriverNameInput] = useState('');
   const [driverPhoneInput, setDriverPhoneInput] = useState('');
   const [driverLicenceInput, setDriverLicenceInput] = useState('');
@@ -113,21 +113,17 @@ export const VendorFleetInfoScreen: React.FC<VendorFleetInfoScreenProps> = ({
       const draft = await vendorService.getDraftForm();
       if (draft?.vehicleConfigs && draft.vehicleConfigs.length > 0) {
         setVehicleConfigs(draft.vehicleConfigs);
-        const count = draft.vehicleConfigs.reduce((acc, c) => acc + (Number(c.vehicleCount) || 1), 0);
-        setTotalFleetCount(String(count));
+        setTotalFleetCount(String(draft.vehicleConfigs.length));
       }
       if (draft?.fleetOwnership) {
         setOverallOwnership(draft.fleetOwnership);
-        setSelectedOwnership(draft.fleetOwnership);
+        setSelectedOwnership(draft.fleetOwnership === 'Attached' ? 'Attached' : 'Owned');
       }
     })();
   }, []);
 
-  // Total Fleet Strength calculated strictly from saved configurations
-  const calculatedTotalFleet = vehicleConfigs.reduce(
-    (sum, cfg) => sum + (Number(cfg.vehicleCount) || 1),
-    0
-  );
+  // Total Fleet Strength calculated strictly from saved configurations (1 vehicle per registered config)
+  const calculatedTotalFleet = vehicleConfigs.length;
 
   const openAddModal = () => {
     setEditingConfigId(null);
@@ -135,12 +131,11 @@ export const VendorFleetInfoScreen: React.FC<VendorFleetInfoScreenProps> = ({
     setSelectedVehicleType('Lorry');
     setSelectedBodyType('Open Body');
     setCapacityInput('');
-    setVehicleCountInput('1');
-    setMakeModelInput('');
+    setAttachedOwnerInput('');
     setDriverNameInput('');
     setDriverPhoneInput('');
     setDriverLicenceInput('');
-    setSelectedOwnership(overallOwnership || 'Owned');
+    setSelectedOwnership(overallOwnership === 'Attached' ? 'Attached' : 'Owned');
     setModalError(null);
     setIsModalOpen(true);
   };
@@ -151,12 +146,11 @@ export const VendorFleetInfoScreen: React.FC<VendorFleetInfoScreenProps> = ({
     setSelectedVehicleType(config.vehicleType);
     setSelectedBodyType(config.bodyType);
     setCapacityInput(String(config.capacity));
-    setVehicleCountInput(String(config.vehicleCount || 1));
-    setMakeModelInput(config.makeModel || '');
+    setAttachedOwnerInput(config.attachedOwnerName || '');
     setDriverNameInput(config.driverName || '');
     setDriverPhoneInput(config.driverPhone || '');
     setDriverLicenceInput(config.driverLicence || '');
-    setSelectedOwnership(config.ownership || overallOwnership || 'Owned');
+    setSelectedOwnership(config.ownership || (overallOwnership === 'Attached' ? 'Attached' : 'Owned'));
     setModalError(null);
     setIsModalOpen(true);
   };
@@ -167,12 +161,12 @@ export const VendorFleetInfoScreen: React.FC<VendorFleetInfoScreenProps> = ({
     setModalError(null);
   };
 
-  const handleAddOrUpdateConfig = () => {
+  const handleAddOrUpdateConfig = async () => {
     setModalError(null);
 
     const cleanRegNo = registrationNumberInput.trim().toUpperCase().replace(/\s+/g, '-');
     if (!cleanRegNo) {
-      setModalError('Please enter the Lorry / Vehicle Registration Number (e.g. AS-01-AB-1234).');
+      setModalError('Please enter the Vehicle Registration Number (RC / Lorry No., e.g. AS-01-AB-1234).');
       return;
     }
 
@@ -183,10 +177,18 @@ export const VendorFleetInfoScreen: React.FC<VendorFleetInfoScreenProps> = ({
 
     // Check for duplicate registration numbers
     const duplicate = vehicleConfigs.find(
-      (c) => c.id !== editingConfigId && (c.registrationNumber || '').toUpperCase() === cleanRegNo
+      (c) => c.id !== editingConfigId && (c.registrationNumber || c.rcNumber || '').toUpperCase() === cleanRegNo
     );
     if (duplicate) {
-      setModalError(`A vehicle with Registration Number "${cleanRegNo}" is already added.`);
+      setModalError(`A vehicle with Registration Number "${cleanRegNo}" is already registered.`);
+      return;
+    }
+
+    // Determine vehicle ownership
+    const effectiveOwnership = overallOwnership === 'Both' ? selectedOwnership : overallOwnership;
+
+    if (effectiveOwnership === 'Attached' && !attachedOwnerInput.trim()) {
+      setModalError('Please enter the Attached Owner / Fleet Partner Name.');
       return;
     }
 
@@ -206,12 +208,6 @@ export const VendorFleetInfoScreen: React.FC<VendorFleetInfoScreenProps> = ({
       return;
     }
 
-    const cleanCount = parseInt(vehicleCountInput || '1', 10);
-    if (isNaN(cleanCount) || cleanCount <= 0 || !Number.isInteger(cleanCount)) {
-      setModalError('Please enter a valid positive whole number for vehicle count.');
-      return;
-    }
-
     if (driverPhoneInput.trim() && driverPhoneInput.replace(/\D/g, '').length !== 10) {
       setModalError('Assigned driver phone must be a valid 10-digit mobile number, or left empty.');
       return;
@@ -219,28 +215,28 @@ export const VendorFleetInfoScreen: React.FC<VendorFleetInfoScreenProps> = ({
 
     let updatedConfigs: VendorVehicleConfig[];
     if (editingConfigId) {
-      // Update existing configuration
+      // Update existing single vehicle
       updatedConfigs = vehicleConfigs.map((c) =>
         c.id === editingConfigId
           ? {
-              ...c,
-              registrationNumber: cleanRegNo,
-              rcNumber: cleanRegNo,
-              vehicleType: selectedVehicleType as 'Lorry' | 'Trailer' | 'Van' | 'Heavy Carrier',
-              bodyType: selectedBodyType as 'Open Body' | 'Closed Body',
-              capacity: cleanCap,
-              capacityUnit: 'MT' as const,
-              vehicleCount: cleanCount,
-              ownership: selectedOwnership,
-              makeModel: makeModelInput.trim() || undefined,
-              driverName: driverNameInput.trim() || undefined,
-              driverPhone: driverPhoneInput.trim().replace(/\D/g, '') || undefined,
-              driverLicence: driverLicenceInput.trim().toUpperCase() || undefined,
-            }
+            ...c,
+            registrationNumber: cleanRegNo,
+            rcNumber: cleanRegNo,
+            vehicleType: selectedVehicleType as 'Lorry' | 'Trailer' | 'Van' | 'Heavy Carrier',
+            bodyType: selectedBodyType as 'Open Body' | 'Closed Body',
+            capacity: cleanCap,
+            capacityUnit: 'MT' as const,
+            vehicleCount: 1,
+            ownership: effectiveOwnership,
+            attachedOwnerName: effectiveOwnership === 'Attached' ? attachedOwnerInput.trim() : undefined,
+            driverName: driverNameInput.trim() || undefined,
+            driverPhone: driverPhoneInput.trim().replace(/\D/g, '') || undefined,
+            driverLicence: driverLicenceInput.trim().toUpperCase() || undefined,
+          }
           : c
       );
     } else {
-      // Add new configuration
+      // Add new single vehicle configuration
       const newConfig: VendorVehicleConfig = {
         id: `vcfg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         registrationNumber: cleanRegNo,
@@ -249,9 +245,9 @@ export const VendorFleetInfoScreen: React.FC<VendorFleetInfoScreenProps> = ({
         bodyType: selectedBodyType as 'Open Body' | 'Closed Body',
         capacity: cleanCap,
         capacityUnit: 'MT',
-        vehicleCount: cleanCount,
-        ownership: selectedOwnership,
-        makeModel: makeModelInput.trim() || undefined,
+        vehicleCount: 1,
+        ownership: effectiveOwnership,
+        attachedOwnerName: effectiveOwnership === 'Attached' ? attachedOwnerInput.trim() : undefined,
         driverName: driverNameInput.trim() || undefined,
         driverPhone: driverPhoneInput.trim().replace(/\D/g, '') || undefined,
         driverLicence: driverLicenceInput.trim().toUpperCase() || undefined,
@@ -260,25 +256,44 @@ export const VendorFleetInfoScreen: React.FC<VendorFleetInfoScreenProps> = ({
     }
 
     setVehicleConfigs(updatedConfigs);
-    const newTotal = updatedConfigs.reduce((acc, c) => acc + (Number(c.vehicleCount) || 1), 0);
-    setTotalFleetCount(String(newTotal));
+    setTotalFleetCount(String(updatedConfigs.length));
+
+    // Save draft immediately to prevent data loss on navigation
+    try {
+      await vendorService.saveDraftForm({
+        vehicleConfigs: updatedConfigs,
+        totalFleetCount: updatedConfigs.length,
+        fleetOwnership: overallOwnership,
+      });
+    } catch (e) {
+      console.warn('Draft save notice:', e);
+    }
+
     closeModal();
   };
 
   const handleRemoveConfig = (id: string) => {
     Alert.alert(
-      'Remove Configuration',
-      'Are you sure you want to delete this vehicle configuration?',
+      'Remove Vehicle',
+      'Are you sure you want to delete this vehicle from your fleet registration?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
             const filtered = vehicleConfigs.filter((c) => c.id !== id);
             setVehicleConfigs(filtered);
-            const newTotal = filtered.reduce((acc, c) => acc + (Number(c.vehicleCount) || 1), 0);
-            setTotalFleetCount(newTotal > 0 ? String(newTotal) : '');
+            setTotalFleetCount(filtered.length > 0 ? String(filtered.length) : '');
+            try {
+              await vendorService.saveDraftForm({
+                vehicleConfigs: filtered,
+                totalFleetCount: filtered.length,
+                fleetOwnership: overallOwnership,
+              });
+            } catch (e) {
+              console.warn('Draft save notice:', e);
+            }
           },
         },
       ]
@@ -304,9 +319,8 @@ export const VendorFleetInfoScreen: React.FC<VendorFleetInfoScreenProps> = ({
 
     setIsSubmitting(true);
     try {
-      const fleetLabel = `${calculatedTotalFleet} Active ${
-        calculatedTotalFleet === 1 ? 'Commercial Vehicle' : 'Commercial Vehicles'
-      }`;
+      const fleetLabel = `${calculatedTotalFleet} Active ${calculatedTotalFleet === 1 ? 'Commercial Vehicle' : 'Commercial Vehicles'
+        }`;
       const truckCategoriesLabels = vehicleConfigs.map(
         (c) => `${c.bodyType} ${c.vehicleType} (${c.capacity} MT)`
       );
@@ -337,7 +351,7 @@ export const VendorFleetInfoScreen: React.FC<VendorFleetInfoScreenProps> = ({
         <TouchableOpacity style={styles.backBtn} onPress={onBack} accessibilityLabel="Back">
           <ChevronLeft size={22} color="#172B4D" />
         </TouchableOpacity>
-        
+
         <View style={styles.headerSpacer} />
       </View>
 
@@ -419,7 +433,7 @@ export const VendorFleetInfoScreen: React.FC<VendorFleetInfoScreenProps> = ({
                   style={[styles.ownershipBtn, isSelected && styles.ownershipBtnActive]}
                   onPress={() => {
                     setOverallOwnership(type);
-                    setSelectedOwnership(type);
+                    setSelectedOwnership(type === 'Attached' ? 'Attached' : 'Owned');
                   }}
                   activeOpacity={0.8}
                 >
@@ -433,29 +447,36 @@ export const VendorFleetInfoScreen: React.FC<VendorFleetInfoScreenProps> = ({
               );
             })}
           </View>
+          <View style={styles.ownershipHelperBanner}>
+            <Text style={styles.ownershipHelperText}>
+              {overallOwnership === 'Owned' && '• Fleet consists of company-owned commercial vehicles.'}
+              {overallOwnership === 'Attached' && '• Fleet operates with attached or contracted partner vehicles.'}
+              {overallOwnership === 'Both' && '• Fleet operates a mix of company-owned and attached vehicles.'}
+            </Text>
+          </View>
         </View>
 
-        {/* 3. Registered Fleet Configurations List */}
+        {/* 3. Registered Fleet Vehicles List (One vehicle at a time) */}
         <View style={styles.card}>
           <View style={styles.cardHeaderWithAction}>
             <View style={{ flex: 1 }}>
               <Text style={styles.sectionTitle}>
-                REGISTERED CONFIGURATIONS ({vehicleConfigs.length})
+                REGISTERED COMMERCIAL VEHICLES ({vehicleConfigs.length})
               </Text>
               <Text style={styles.helperText}>
-                Categories, body types, and MT capacities in your fleet:
+                Active commercial vehicles registered in your fleet:
               </Text>
             </View>
           </View>
 
-          {/* Add Vehicle Configuration Button */}
+          {/* Add Another Vehicle Button */}
           <TouchableOpacity
             style={styles.addConfigPrimaryBtn}
             onPress={openAddModal}
             activeOpacity={0.85}
           >
             <Plus size={18} color="#FFFFFF" strokeWidth={2.5} />
-            <Text style={styles.addConfigPrimaryBtnText}>Add Another Vehicle (+)</Text>
+            <Text style={styles.addConfigPrimaryBtnText}>+ Add Another Vehicle</Text>
           </TouchableOpacity>
 
           {/* Empty State */}
@@ -466,11 +487,11 @@ export const VendorFleetInfoScreen: React.FC<VendorFleetInfoScreenProps> = ({
               </View>
               <Text style={styles.emptyTitle}>No Vehicles Added Yet</Text>
               <Text style={styles.emptySubtitle}>
-                Tap the "Add Another Vehicle (+)" button above to add your Lorries, Trailers, Vans, or Heavy Carriers.
+                Tap "+ Add Another Vehicle" above to register your commercial vehicles one at a time.
               </Text>
             </View>
           ) : (
-            /* Populated Configuration List */
+            /* Populated Registered Vehicles List */
             <View style={styles.configsList}>
               {vehicleConfigs.map((cfg, index) => (
                 <View key={cfg.id} style={styles.configItemCard}>
@@ -478,7 +499,7 @@ export const VendorFleetInfoScreen: React.FC<VendorFleetInfoScreenProps> = ({
                     <View style={styles.regNoBadge}>
                       <Truck size={14} color="#FFFFFF" />
                       <Text style={styles.regNoBadgeText}>
-                        {cfg.registrationNumber || cfg.rcNumber || `LORRY #${index + 1}`}
+                        {cfg.registrationNumber || cfg.rcNumber || `VEHICLE #${index + 1}`}
                       </Text>
                     </View>
                     <View style={styles.categoryBadge}>
@@ -494,13 +515,17 @@ export const VendorFleetInfoScreen: React.FC<VendorFleetInfoScreenProps> = ({
 
                   <View style={styles.configCardMiddle}>
                     <View style={styles.specColumn}>
-                      <Text style={styles.specLabel}>Capacity</Text>
+                      <Text style={styles.specLabel}>Rated Capacity</Text>
                       <Text style={styles.specValueBold}>{cfg.capacity} MT</Text>
                     </View>
                     <View style={styles.specDivider} />
                     <View style={styles.specColumn}>
-                      <Text style={styles.specLabel}>Make / Model</Text>
-                      <Text style={styles.specValue} numberOfLines={1}>{cfg.makeModel || 'Commercial Lorry'}</Text>
+                      <Text style={styles.specLabel}>Ownership / Partner</Text>
+                      <Text style={styles.specValue} numberOfLines={1}>
+                        {cfg.ownership === 'Attached'
+                          ? (cfg.attachedOwnerName ? `Attached (${cfg.attachedOwnerName})` : 'Attached Partner')
+                          : 'Owned Fleet'}
+                      </Text>
                     </View>
                   </View>
 
@@ -536,20 +561,6 @@ export const VendorFleetInfoScreen: React.FC<VendorFleetInfoScreenProps> = ({
           )}
         </View>
 
-        {/* 4. Informational Guideline Card */}
-        <View style={styles.infoCard}>
-          <View style={styles.infoHeaderRow}>
-            <Info size={16} color="#0284C7" />
-            <Text style={styles.infoTitle}>TRUCKS Fleet Registration Guidelines</Text>
-          </View>
-          <Text style={styles.infoText}>
-            • Allowed Vehicle Categories: <Text style={styles.boldText}>Lorry, Trailer, Van, Heavy Carrier</Text>.{'\n'}
-            • Allowed Body Types: strictly <Text style={styles.boldText}>Open Body</Text> or <Text style={styles.boldText}>Closed Body</Text>.{'\n'}
-            • Each vehicle registration number must be authentic and registered under national RTO database.{'\n'}
-            • In Step 7, upload individual vehicle documents: RC, C-Book (Fitness), Route Permit, Insurance, PUC, and Driver's Licence.
-          </Text>
-        </View>
-
         <View style={{ height: 100 }} />
       </ScrollView>
 
@@ -580,7 +591,7 @@ export const VendorFleetInfoScreen: React.FC<VendorFleetInfoScreenProps> = ({
         </TouchableOpacity>
       </View>
 
-      {/* 5. Add / Edit Vehicle Configuration Modal / Bottom Sheet */}
+      {/* 5. Add / Edit Single Vehicle Registration Modal */}
       <Modal
         visible={isModalOpen}
         animationType="slide"
@@ -597,10 +608,10 @@ export const VendorFleetInfoScreen: React.FC<VendorFleetInfoScreenProps> = ({
               <View style={styles.modalHeader}>
                 <View>
                   <Text style={styles.modalTitle}>
-                    {editingConfigId ? 'Edit Vehicle Details' : 'Vehicle Registration Form'}
+                    {editingConfigId ? 'Edit Vehicle Details' : 'Register Vehicle (1 at a Time)'}
                   </Text>
                   <Text style={styles.modalSubtitle}>
-                    Enter vehicle registration number, category, capacity & driver
+                    Enter single vehicle registration number, category, capacity & driver
                   </Text>
                 </View>
                 <TouchableOpacity style={styles.modalCloseBtn} onPress={closeModal}>
@@ -633,6 +644,45 @@ export const VendorFleetInfoScreen: React.FC<VendorFleetInfoScreenProps> = ({
                   />
                   <Text style={styles.modalFieldHint}>Official RTO vehicle numberplate format</Text>
                 </View>
+
+                {/* Dynamic Ownership Selector when Overall Ownership is 'Both' */}
+                {overallOwnership === 'Both' && (
+                  <View style={styles.modalSection}>
+                    <Text style={styles.modalSectionLabel}>Vehicle Ownership *</Text>
+                    <View style={styles.ownershipRow}>
+                      {(['Owned', 'Attached'] as const).map((ot) => {
+                        const isSelected = selectedOwnership === ot;
+                        return (
+                          <TouchableOpacity
+                            key={ot}
+                            style={[styles.ownershipBtn, isSelected && styles.ownershipBtnActive]}
+                            onPress={() => setSelectedOwnership(ot)}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={[styles.ownershipBtnText, isSelected && styles.ownershipBtnTextActive]}>
+                              {ot}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+                )}
+
+                {/* Dynamic Field: Attached Owner / Fleet Partner Name when vehicle is Attached */}
+                {((overallOwnership === 'Both' && selectedOwnership === 'Attached') || overallOwnership === 'Attached') && (
+                  <View style={styles.modalSection}>
+                    <Text style={styles.modalSectionLabel}>Attached Owner / Fleet Partner Name *</Text>
+                    <TextInput
+                      style={styles.modalTextInputStandalone}
+                      placeholder="e.g. Sharma Transport / Raj Kumar"
+                      placeholderTextColor="#94A3B8"
+                      value={attachedOwnerInput}
+                      onChangeText={setAttachedOwnerInput}
+                    />
+                    <Text style={styles.modalFieldHint}>Name of the registered owner or transport partner</Text>
+                  </View>
+                )}
 
                 {/* Field 1: Vehicle Body Type */}
                 <View style={styles.modalSection}>
@@ -679,7 +729,7 @@ export const VendorFleetInfoScreen: React.FC<VendorFleetInfoScreenProps> = ({
                   </View>
                 </View>
 
-                {/* Field 3: Capacity in MT */}
+                {/* Field 3: Capacity in MT (Strictly 1 vehicle at a time) */}
                 <View style={styles.modalSection}>
                   <Text style={styles.modalSectionLabel}>3. Vehicle Capacity & Available Count *</Text>
                   <View style={styles.inputWithUnitWrap}>
@@ -695,66 +745,12 @@ export const VendorFleetInfoScreen: React.FC<VendorFleetInfoScreenProps> = ({
                       <Text style={styles.unitBadgeText}>MT</Text>
                     </View>
                   </View>
-                  <Text style={styles.modalFieldHint}>Rated gross metric tonnes per vehicle</Text>
+                  <Text style={styles.modalFieldHint}>Rated gross metric tonnes payload capacity</Text>
                 </View>
 
-                {/* Field 4: Number of Vehicles */}
+                {/* Field 4: Assigned Driver Details (Optional) */}
                 <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionLabel}>4. Number of Vehicles *</Text>
-                  <View style={styles.inputWithUnitWrap}>
-                    <TextInput
-                      style={styles.modalTextInput}
-                      placeholder="e.g. 1"
-                      placeholderTextColor="#94A3B8"
-                      value={vehicleCountInput}
-                      onChangeText={(val) => setVehicleCountInput(val.replace(/\D/g, ''))}
-                      keyboardType="number-pad"
-                    />
-                    <View style={styles.unitBadge}>
-                      <Text style={styles.unitBadgeText}>Vehicles</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.modalFieldHint}>Commercial vehicles with this exact registration / configuration</Text>
-                </View>
-
-                {/* Field 5: Vehicle Ownership */}
-                <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionLabel}>5. Vehicle Ownership *</Text>
-                  <View style={styles.ownershipRow}>
-                    {OWNERSHIP_TYPES.map((ot) => {
-                      const isSelected = selectedOwnership === ot;
-                      return (
-                        <TouchableOpacity
-                          key={ot}
-                          style={[styles.ownershipBtn, isSelected && styles.ownershipBtnActive]}
-                          onPress={() => setSelectedOwnership(ot)}
-                          activeOpacity={0.8}
-                        >
-                          <Text style={[styles.ownershipBtnText, isSelected && styles.ownershipBtnTextActive]}>
-                            {ot}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </View>
-
-                {/* Field 6: Vehicle Make & Model (Optional) */}
-                <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionLabel}>6. Vehicle Make & Model (Optional)</Text>
-                  <TextInput
-                    style={styles.modalTextInputStandalone}
-                    placeholder="e.g. Tata Signa 2823 / Ashok Leyland 1618"
-                    placeholderTextColor="#94A3B8"
-                    value={makeModelInput}
-                    onChangeText={setMakeModelInput}
-                  />
-                  <Text style={styles.modalFieldHint}>Commercial vehicle manufacturing details</Text>
-                </View>
-
-                {/* Field 7: Assigned Driver Details (Optional) */}
-                <View style={styles.modalSection}>
-                  <Text style={styles.modalSectionLabel}>7. Assigned Driver Details (Optional)</Text>
+                  <Text style={styles.modalSectionLabel}>4. Assigned Driver Details (Optional)</Text>
                   <View style={{ gap: 8 }}>
                     <TextInput
                       style={styles.modalTextInputStandalone}
@@ -769,7 +765,7 @@ export const VendorFleetInfoScreen: React.FC<VendorFleetInfoScreenProps> = ({
                       placeholderTextColor="#94A3B8"
                       value={driverPhoneInput}
                       onChangeText={(val) => setDriverPhoneInput(val.replace(/\D/g, '').slice(0, 10))}
-                      keyboardType="phone-pad"
+                      keyboardType="number-pad"
                     />
                     <TextInput
                       style={styles.modalTextInputStandalone}
@@ -793,7 +789,7 @@ export const VendorFleetInfoScreen: React.FC<VendorFleetInfoScreenProps> = ({
                 <TouchableOpacity style={styles.modalSaveBtn} onPress={handleAddOrUpdateConfig}>
                   <Check size={16} color="#FFFFFF" strokeWidth={2.5} />
                   <Text style={styles.modalSaveText}>
-                    {editingConfigId ? 'Save Changes' : 'Add Vehicle'}
+                    {editingConfigId ? 'Save Changes' : 'Save Vehicle'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1013,6 +1009,21 @@ const styles = StyleSheet.create({
   ownershipBtnTextActive: {
     color: '#F05A22',
     fontWeight: '700',
+  },
+  ownershipHelperBanner: {
+    marginTop: 10,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#F05A22',
+  },
+  ownershipHelperText: {
+    fontSize: 12,
+    color: '#475569',
+    lineHeight: 16,
+    fontWeight: '500',
   },
   cardHeaderWithAction: {
     flexDirection: 'row',

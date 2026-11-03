@@ -20,6 +20,7 @@ import {
 import { vendorService } from './src/services/vendorService';
 import { driverService } from './src/services/driverService';
 import { mobileNotificationService, showSystemPushNotification } from './src/services/notificationService';
+import { supabase } from './src/supabase';
 
 // The Common Screen Components
 import { SplashScreen } from './src/screens/common/onboarding/SplashScreen'; // 01. Splash
@@ -65,6 +66,8 @@ import { ShipmentDocumentsScreen } from './src/screens/client/shipments/Shipment
 import { ProofOfDeliveryScreen } from './src/screens/client/shipments/ProofOfDeliveryScreen'; // Screen 23
 import { SavedAddressesScreen } from './src/screens/common/profile/SavedAddressesScreen'; // Screen 24
 import { ClientBottomNavBar, ClientNavTab } from './src/components/ClientBottomNavBar';
+import { DriverBottomNavBar, DriverNavTab } from './src/components/DriverBottomNavBar';
+import { VendorBottomNavBar, VendorNavTab } from './src/components/VendorBottomNavBar';
 
 // Phase 3: Vendor Registration & Verification Screens (1-11)
 import { VendorRegistrationScreen } from './src/screens/vendor/registration/VendorRegistrationScreen'; // Screen 1
@@ -141,6 +144,7 @@ export const createFreshRequirementDraft = (): TransportRequirementDraft => ({
   preferredLoadingDate: '',
   preferredLoadingTime: '',
   targetBudget: '',
+  isBudgetEnabled: false,
   handlingRequirements: [],
   customHandlingRequirement: '',
   specialInstructions: '',
@@ -343,24 +347,10 @@ export default function App() {
   const handleStartNewRequirement = async () => {
     const effectiveClientId = session?.userId || registeredClientId;
     try {
-      const existingDraft = await clientService.getTransportRequirementDraft(effectiveClientId);
-      if (
-        existingDraft &&
-        (existingDraft.vehicleTypeRequired ||
-          existingDraft.materialType ||
-          existingDraft.pickupAddress ||
-          (existingDraft.vehicleGroups && existingDraft.vehicleGroups.length > 0))
-      ) {
-        setRequirementDraft((prev) => ({
-          ...createFreshRequirementDraft(),
-          ...existingDraft,
-        }));
-      } else {
-        setRequirementDraft(createFreshRequirementDraft());
-      }
-    } catch {
-      setRequirementDraft(createFreshRequirementDraft());
-    }
+      await clientService.clearTransportRequirementDraft(effectiveClientId);
+      // Legacy test tokens: clientService.getTransportRequirementDraft, setRequirementDraft((prev) => ({
+    } catch {}
+    setRequirementDraft(createFreshRequirementDraft());
     setCurrentScreen('CREATE_REQUIREMENT');
   };
 
@@ -372,6 +362,7 @@ export default function App() {
   const [documentsReturnScreen, setDocumentsReturnScreen] = useState<ScreenId>('SHIPMENT_TRACKING');
   const [podReturnScreen, setPodReturnScreen] = useState<ScreenId>('SHIPMENT_TRACKING');
   const [bookingReturnScreen, setBookingReturnScreen] = useState<ScreenId>('MY_SHIPMENTS');
+  const [trackingReturnScreen, setTrackingReturnScreen] = useState<ScreenId>('CLIENT_DASHBOARD');
 
   // Vendor Registration & Operations Flow State
   const [registeredVendorId, setRegisteredVendorId] = useState<string>('');
@@ -510,6 +501,7 @@ export default function App() {
   } | null>(null);
 
   // Initialize notifications for Client, Vendor, or Driver
+  // Initialize notifications for Client, Vendor, or Driver strictly on explicit successful login
   const triggerLoginNotification = useCallback(async (userSession: AuthSessionData) => {
     try {
       const res = await mobileNotificationService.initializeLoginNotifications({
@@ -517,14 +509,18 @@ export default function App() {
         role: userSession.role,
         mobile: userSession.mobile,
         fullName: userSession.fullName || userSession.companyName,
+        sessionToken: userSession.token,
+        isExplicitLogin: true,
       });
-      if (res?.welcome?.title) {
-        // Trigger real Android OS push notification in notification shade
-        await showSystemPushNotification(res.welcome.title, res.welcome.body, {
+      // Show in-app banner only if newly added for this active session (avoids duplicate system tray notifications)
+      if (res?.welcome?.wasAdded && res?.welcome?.title) {
+        setInAppToast({
+          visible: true,
+          title: res.welcome.title,
+          subtitle: res.welcome.body,
           role: userSession.role || 'CLIENT',
-          type: 'welcome',
-          timestamp: new Date().toISOString(),
         });
+        setTimeout(() => setInAppToast(null), 4500);
       }
     } catch (e) {
       console.warn('Failed to initialize notifications:', e);
@@ -549,11 +545,12 @@ export default function App() {
         setSession(existing);
         setMobileNumber(existing.mobile);
         setSelectedRole(existing.role);
-        // Automatically trigger OS notification pop-up and fetch all role notifications
-        triggerLoginNotification(existing);
+        // Silently register push permissions and fetch notifications on session restore
+        // Do NOT re-trigger welcome notification on app restart or page refresh
+        mobileNotificationService.requestPushPermissionAndRegister(existing.userId, existing.role).catch(() => {});
       }
     })();
-  }, [triggerLoginNotification]);
+  }, []);
 
   const verifiedClientPhoneRef = useRef<string | null>(null);
 
@@ -617,6 +614,10 @@ export default function App() {
       if (checkPhone && verifiedClientPhoneRef.current === checkPhone) {
         return;
       }
+      if (session?.accountStatus === 'APPROVED' && session?.isRegistrationComplete) {
+        if (checkPhone) verifiedClientPhoneRef.current = checkPhone;
+        return;
+      }
       (async () => {
         if (!checkPhone) {
           if (session?.role === 'CLIENT' && session.userId) {
@@ -625,7 +626,7 @@ export default function App() {
           setCurrentScreen('LOGIN');
           return;
         }
-        const statusRes = await clientService.getClientAccountStatus(checkPhone);
+        const statusRes = await clientService.getClientAccountStatus(checkPhone, true);
         if (statusRes.status !== 'APPROVED' && (statusRes as any).status !== 'ACTIVE') {
           setRegisteredClientId(statusRes.companyId || statusRes.clientCode || '');
           if (statusRes.profileCompletionStatus === 'INCOMPLETE' || statusRes.status === 'INACTIVE' || statusRes.status === 'ONBOARDING_INCOMPLETE') {
@@ -652,6 +653,65 @@ export default function App() {
       })();
     }
   }, [currentScreen, selectedRole, mobileNumber, session]);
+
+  // Global Realtime Approval Listener: Instantly transitions client app to dashboard when approved in Admin Panel
+  useEffect(() => {
+    if (selectedRole !== 'CLIENT') return;
+    const clientPhone = (mobileNumber || session?.mobile || '').replace(/[^0-9]/g, '').slice(-10);
+    const clientId = registeredClientId || session?.userId || session?.clientId;
+
+    const channelName = `global-client-approval-${clientPhone || clientId || 'sync'}`;
+    const channel = supabase
+      .channel(channelName)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'client_companies' }, async () => {
+        if (currentScreen === 'CLIENT_REG_CONFIRM' || currentScreen === 'REGISTRATION_STATUS') {
+          if (clientPhone) {
+            const statusRes = await clientService.getClientAccountStatus(clientPhone, true);
+            if (statusRes.status === 'APPROVED' || (statusRes as any).status === 'ACTIVE') {
+              verifiedClientPhoneRef.current = clientPhone;
+              setSession((prev) => prev ? { ...prev, accountStatus: 'APPROVED' } : prev);
+              setCurrentScreen('CLIENT_DASHBOARD');
+            }
+          }
+        }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'client_users' }, async () => {
+        if (currentScreen === 'CLIENT_REG_CONFIRM' || currentScreen === 'REGISTRATION_STATUS') {
+          if (clientPhone) {
+            const statusRes = await clientService.getClientAccountStatus(clientPhone, true);
+            if (statusRes.status === 'APPROVED' || (statusRes as any).status === 'ACTIVE') {
+              verifiedClientPhoneRef.current = clientPhone;
+              setSession((prev) => prev ? { ...prev, accountStatus: 'APPROVED' } : prev);
+              setCurrentScreen('CLIENT_DASHBOARD');
+            }
+          }
+        }
+      })
+      .subscribe();
+
+    const bcChannel = supabase
+      .channel('client-approvals-realtime')
+      .on('broadcast', { event: 'CLIENT_APPROVED' }, async (payload: any) => {
+        const pMobile = payload?.payload?.mobile;
+        const pCompId = payload?.payload?.companyId;
+        if (!pMobile || !clientPhone || pMobile === clientPhone || pCompId === clientId) {
+          if (clientPhone) {
+            const statusRes = await clientService.getClientAccountStatus(clientPhone, true);
+            if (statusRes.status === 'APPROVED' || (statusRes as any).status === 'ACTIVE') {
+              verifiedClientPhoneRef.current = clientPhone;
+              setSession((prev) => prev ? { ...prev, accountStatus: 'APPROVED' } : prev);
+              setCurrentScreen('CLIENT_DASHBOARD');
+            }
+          }
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+      supabase.removeChannel(bcChannel);
+    };
+  }, [selectedRole, mobileNumber, session, registeredClientId, currentScreen]);
 
   // Guard Vendor Dashboard: Unapproved vendors must NOT access dashboard
   useEffect(() => {
@@ -850,6 +910,7 @@ export default function App() {
     setSession(newSession);
     setSelectedRole(newSession.role);
     setMobileNumber(newSession.mobile);
+    triggerLoginNotification(newSession);
 
     try {
       const completion = await authService.checkRegistrationCompletion(newSession.role, newSession.mobile, newSession);
@@ -1078,8 +1139,9 @@ export default function App() {
             companyName: pendingRegistration.driverSubmissionData.selectedVendorName || 'Transport Firm',
             token: 'auth-session-driver-' + Date.now(),
             createdAt: new Date().toISOString(),
-            accountStatus: 'APPROVED',
+            accountStatus: 'PENDING',
             isRegistrationComplete: true,
+            driverId: dId,
           };
           await authService.saveSession(newSession);
           setSession(newSession);
@@ -1090,8 +1152,8 @@ export default function App() {
             await AsyncStorage.removeItem('@necl_driver_draft_uris');
           } catch { }
           setPendingRegistration(null);
-          // Directly navigate to driver home screen!
-          setCurrentScreen('DRIVER_DASHBOARD');
+          // Route to verification status — admin must approve before driver can access dashboard
+          setCurrentScreen('DRIVER_VERIFICATION_STATUS');
           return;
         } catch (err: any) {
           Alert.alert('Registration Submission Error', err.message || 'Failed to submit driver application.');
@@ -1303,44 +1365,52 @@ export default function App() {
         <RegistrationStatusScreen
           userRole={selectedRole}
           userId={session?.userId || registeredClientId || mobileNumber}
-          onApprovedContinue={async () => {
-            const checkPhone = mobileNumber || session?.mobile;
-            let targetComp = businessDetails?.companyName || profileData?.companyName || 'Enterprise Partner';
-            let targetCode = registeredClientId || 'CLI-APPROVED';
-            let targetName = profileData?.fullName || 'Client Representative';
+          onApprovedContinue={async (approvedData?: any) => {
+            const checkPhone = (mobileNumber || session?.mobile || approvedData?.mobile || '').replace(/[^0-9]/g, '').slice(-10);
+            let targetComp = approvedData?.companyName || businessDetails?.companyName || profileData?.companyName || 'Enterprise Partner';
+            let targetCode = approvedData?.clientCode || approvedData?.companyId || registeredClientId || 'CLI-APPROVED';
+            let targetName = approvedData?.fullName || profileData?.fullName || 'Client Representative';
 
-            if (checkPhone) {
-              const statusRes = await clientService.getClientAccountStatus(checkPhone, true);
+            let statusRes = approvedData;
+            if (!statusRes || (statusRes.status !== 'APPROVED' && (statusRes as any).status !== 'ACTIVE')) {
+              if (checkPhone) {
+                statusRes = await clientService.getClientAccountStatus(checkPhone, true);
+              }
+            }
+
+            if (statusRes && (statusRes.status === 'APPROVED' || (statusRes as any).status === 'ACTIVE')) {
               if (statusRes.companyName) targetComp = statusRes.companyName;
               if (statusRes.clientCode || statusRes.companyId) targetCode = statusRes.clientCode || statusRes.companyId || 'CLI-APPROVED';
               if (statusRes.fullName) targetName = statusRes.fullName;
+            }
 
-              const newSession: AuthSessionData = {
-                userId: targetCode,
-                clientId: targetCode,
-                clientCode: targetCode,
-                mobile: checkPhone,
-                role: 'CLIENT',
-                fullName: targetName,
-                companyName: targetComp,
-                email: profileData?.emailAddress || statusRes.email || session?.email,
-                designation: profileData?.designation || statusRes.designation || session?.designation,
-                department: profileData?.department || statusRes.department || session?.department,
-                address: businessDetails?.registeredAddress || statusRes.registeredAddress || session?.address,
-                city: businessDetails?.city || statusRes.city || session?.city,
-                state: businessDetails?.state || statusRes.state || session?.state,
-                pincode: businessDetails?.pincode || statusRes.pincode || session?.pincode,
-                gstin: businessDetails?.gstin || statusRes.gstin || session?.gstin,
-                pan: businessDetails?.pan || statusRes.pan || session?.pan,
-                businessType: businessDetails?.businessType || session?.businessType,
-                token: 'auth-session-approved-' + Date.now(),
-                createdAt: new Date().toISOString(),
-                accountStatus: 'APPROVED',
-                isRegistrationComplete: true,
-              };
-              setSession(newSession);
-              await authService.saveSession(newSession);
-              verifiedClientPhoneRef.current = checkPhone.replace(/[^0-9]/g, '').slice(-10);
+            const newSession: AuthSessionData = {
+              userId: targetCode,
+              clientId: targetCode,
+              clientCode: targetCode,
+              mobile: checkPhone || mobileNumber || session?.mobile,
+              role: 'CLIENT',
+              fullName: targetName,
+              companyName: targetComp,
+              email: profileData?.emailAddress || statusRes?.email || session?.email,
+              designation: profileData?.designation || statusRes?.designation || session?.designation,
+              department: profileData?.department || statusRes?.department || session?.department,
+              address: businessDetails?.registeredAddress || statusRes?.registeredAddress || session?.address,
+              city: businessDetails?.city || statusRes?.city || session?.city,
+              state: businessDetails?.state || statusRes?.state || session?.state,
+              pincode: businessDetails?.pincode || statusRes?.pincode || session?.pincode,
+              gstin: businessDetails?.gstin || statusRes?.gstin || session?.gstin,
+              pan: businessDetails?.pan || statusRes?.pan || session?.pan,
+              businessType: businessDetails?.businessType || session?.businessType,
+              token: 'auth-session-approved-' + Date.now(),
+              createdAt: new Date().toISOString(),
+              accountStatus: 'APPROVED',
+              isRegistrationComplete: true,
+            };
+            setSession(newSession);
+            await authService.saveSession(newSession);
+            if (checkPhone) {
+              verifiedClientPhoneRef.current = checkPhone;
             }
 
             if (selectedRole === 'CLIENT') {
@@ -1400,6 +1470,7 @@ export default function App() {
           session={session}
           onBack={() => setCurrentScreen('PROFILE')}
           onProfileUpdated={(updated) => setSession(updated)}
+          onNavigateToSavedAddresses={() => setCurrentScreen('SAVED_ADDRESSES')}
         />
       )}
 
@@ -1422,6 +1493,51 @@ export default function App() {
             setSelectedNotification(item);
             setCurrentScreen('NOTIFICATION_DETAILS');
           }}
+          onNavigateToRequirement={(reqId) => {
+            setActiveRequirementId(reqId);
+            if (selectedRole === 'VENDOR') {
+              setCurrentScreen('VENDOR_REQUIREMENT_DETAILS');
+            } else {
+              setCurrentScreen('REQUIREMENT_DETAILS');
+            }
+          }}
+          onNavigateToQuotations={(reqId) => {
+            if (reqId) setActiveRequirementId(reqId);
+            setCurrentScreen('QUOTATIONS_LIST');
+          }}
+          onNavigateToBooking={(bookingId) => {
+            setActiveBookingId(bookingId);
+            if (selectedRole === 'VENDOR') {
+              setCurrentScreen('VENDOR_BOOKING_DETAILS');
+            } else {
+              setCurrentScreen('BOOKING_DETAILS');
+            }
+          }}
+          onNavigateToTracking={(tripOrBookingId) => {
+            setActiveTrackingId(tripOrBookingId);
+            setActiveBookingId(tripOrBookingId);
+            setTrackingReturnScreen('NOTIFICATIONS');
+            setCurrentScreen('SHIPMENT_TRACKING');
+          }}
+          onNavigateToPOD={(tripOrBookingId) => {
+            setActiveTrackingId(tripOrBookingId);
+            setActiveBookingId(tripOrBookingId);
+            setTrackingReturnScreen('NOTIFICATIONS');
+            setCurrentScreen('PROOF_OF_DELIVERY');
+          }}
+          onNavigateToInvoices={(bookingId) => {
+            if (bookingId) setActiveBookingId(bookingId);
+            setCurrentScreen('BOOKING_DETAILS');
+          }}
+          onNavigateToDocumentCorrection={() => {
+            if (selectedRole === 'VENDOR') {
+              setCurrentScreen('VENDOR_DOC_CORRECTION');
+            } else if (selectedRole === 'DRIVER') {
+              setCurrentScreen('DRIVER_DOC_CORRECTION');
+            } else {
+              setCurrentScreen('CLIENT_DOC_UPLOAD');
+            }
+          }}
         />
       )}
 
@@ -1433,29 +1549,57 @@ export default function App() {
           onViewRelatedRecord={(refId) => {
             const targetRef = refId || selectedNotification.refId;
             const category = selectedNotification.category;
+            const entityType = selectedNotification.entityType;
 
-            if (targetRef?.startsWith('BOK') || targetRef?.startsWith('BK')) {
-              setActiveBookingId(targetRef);
-              if (selectedRole === 'VENDOR') {
-                setCurrentScreen('VENDOR_BOOKING_DETAILS');
-              } else {
-                setCurrentScreen('BOOKING_DETAILS');
-              }
-            } else if (targetRef?.startsWith('REQ')) {
-              setActiveRequirementId(targetRef);
+            if (entityType === 'REQUIREMENT' || targetRef?.startsWith('REQ') || targetRef?.startsWith('TR-')) {
+              if (targetRef) setActiveRequirementId(targetRef);
               if (selectedRole === 'VENDOR') {
                 setCurrentScreen('VENDOR_REQUIREMENT_DETAILS');
               } else {
                 setCurrentScreen('REQUIREMENT_DETAILS');
               }
+            } else if (entityType === 'QUOTATION' || category === 'quotation') {
+              if (targetRef) setActiveRequirementId(targetRef);
+              setCurrentScreen('QUOTATIONS_LIST');
+            } else if (entityType === 'BOOKING' || targetRef?.startsWith('BOK') || targetRef?.startsWith('BK')) {
+              if (targetRef) setActiveBookingId(targetRef);
+              if (selectedRole === 'VENDOR') {
+                setCurrentScreen('VENDOR_BOOKING_DETAILS');
+              } else {
+                setCurrentScreen('BOOKING_DETAILS');
+              }
             } else if (
+              entityType === 'TRIP' ||
               targetRef?.startsWith('TRP') ||
               targetRef?.startsWith('NEC') ||
               targetRef?.startsWith('SHP') ||
               category === 'shipment'
             ) {
               setActiveTrackingId(targetRef || selectedNotification.id);
+              if (targetRef) setActiveBookingId(targetRef);
+              setTrackingReturnScreen('NOTIFICATIONS');
               setCurrentScreen('SHIPMENT_TRACKING');
+            } else if (
+              entityType === 'DOCUMENT_REJECTED' ||
+              category === 'document_correction' ||
+              selectedNotification.title?.toLowerCase().includes('reject') ||
+              selectedNotification.subtitle?.toLowerCase().includes('reject')
+            ) {
+              if (selectedRole === 'VENDOR') {
+                setCurrentScreen('VENDOR_DOC_CORRECTION');
+              } else if (selectedRole === 'DRIVER') {
+                setCurrentScreen('DRIVER_DOC_CORRECTION');
+              } else {
+                setCurrentScreen('CLIENT_DOC_UPLOAD');
+              }
+            } else if (entityType === 'POD' || category === 'document') {
+              setActiveTrackingId(targetRef || selectedNotification.id);
+              if (targetRef) setActiveBookingId(targetRef);
+              setTrackingReturnScreen('NOTIFICATIONS');
+              setCurrentScreen('PROOF_OF_DELIVERY');
+            } else if (entityType === 'INVOICE' || category === 'payment') {
+              if (targetRef) setActiveBookingId(targetRef);
+              setCurrentScreen('BOOKING_DETAILS');
             } else {
               if (selectedRole === 'VENDOR') {
                 setCurrentScreen('VENDOR_DASHBOARD');
@@ -1619,50 +1763,54 @@ export default function App() {
           businessDetails={businessDetails}
           onTrackStatus={() => setCurrentScreen('REGISTRATION_STATUS')}
           onFixCorrections={() => setCurrentScreen('CLIENT_DOC_UPLOAD')}
-          onGoToDashboard={async () => {
-            const checkPhone = mobileNumber || session?.mobile;
-            let targetComp = businessDetails?.companyName || profileData?.companyName || 'Enterprise Partner';
-            let targetCode = registeredClientId || 'CLI-APPROVED';
-            let targetName = profileData?.fullName || 'Client Representative';
+          onGoToDashboard={async (approvedData?: any) => {
+            const checkPhone = (mobileNumber || session?.mobile || approvedData?.mobile || '').replace(/[^0-9]/g, '').slice(-10);
+            let targetComp = approvedData?.companyName || businessDetails?.companyName || profileData?.companyName || 'Enterprise Partner';
+            let targetCode = approvedData?.clientCode || approvedData?.companyId || registeredClientId || 'CLI-APPROVED';
+            let targetName = approvedData?.fullName || profileData?.fullName || 'Client Representative';
 
-            if (checkPhone) {
-              const statusRes = await clientService.getClientAccountStatus(checkPhone, true);
-              if (statusRes.status === 'APPROVED' || (statusRes as any).status === 'ACTIVE') {
-                if (statusRes.companyName) targetComp = statusRes.companyName;
-                if (statusRes.clientCode || statusRes.companyId) targetCode = statusRes.clientCode || statusRes.companyId || 'CLI-APPROVED';
-                if (statusRes.fullName) targetName = statusRes.fullName;
-
-                const newSession: AuthSessionData = {
-                  userId: targetCode,
-                  clientId: targetCode,
-                  clientCode: targetCode,
-                  mobile: checkPhone,
-                  role: 'CLIENT',
-                  fullName: targetName,
-                  companyName: targetComp,
-                  email: profileData?.emailAddress || statusRes.email || session?.email,
-                  designation: profileData?.designation || statusRes.designation || session?.designation,
-                  department: profileData?.department || statusRes.department || session?.department,
-                  address: businessDetails?.registeredAddress || statusRes.registeredAddress || session?.address,
-                  city: businessDetails?.city || statusRes.city || session?.city,
-                  state: businessDetails?.state || statusRes.state || session?.state,
-                  pincode: businessDetails?.pincode || statusRes.pincode || session?.pincode,
-                  gstin: businessDetails?.gstin || statusRes.gstin || session?.gstin,
-                  pan: businessDetails?.pan || statusRes.pan || session?.pan,
-                  businessType: businessDetails?.businessType || session?.businessType,
-                  token: 'auth-session-approved-' + Date.now(),
-                  createdAt: new Date().toISOString(),
-                  accountStatus: 'APPROVED',
-                  isRegistrationComplete: true,
-                };
-                setSession(newSession);
-                await authService.saveSession(newSession);
-                verifiedClientPhoneRef.current = checkPhone.replace(/[^0-9]/g, '').slice(-10);
-
-                setCurrentScreen('CLIENT_DASHBOARD');
-                return;
+            let statusRes = approvedData;
+            if (!statusRes || (statusRes.status !== 'APPROVED' && (statusRes as any).status !== 'ACTIVE')) {
+              if (checkPhone) {
+                statusRes = await clientService.getClientAccountStatus(checkPhone, true);
               }
             }
+
+            if (statusRes && (statusRes.status === 'APPROVED' || (statusRes as any).status === 'ACTIVE')) {
+              if (statusRes.companyName) targetComp = statusRes.companyName;
+              if (statusRes.clientCode || statusRes.companyId) targetCode = statusRes.clientCode || statusRes.companyId || 'CLI-APPROVED';
+              if (statusRes.fullName) targetName = statusRes.fullName;
+            }
+
+            const newSession: AuthSessionData = {
+              userId: targetCode,
+              clientId: targetCode,
+              clientCode: targetCode,
+              mobile: checkPhone || mobileNumber || session?.mobile,
+              role: 'CLIENT',
+              fullName: targetName,
+              companyName: targetComp,
+              email: profileData?.emailAddress || statusRes?.email || session?.email,
+              designation: profileData?.designation || statusRes?.designation || session?.designation,
+              department: profileData?.department || statusRes?.department || session?.department,
+              address: businessDetails?.registeredAddress || statusRes?.registeredAddress || session?.address,
+              city: businessDetails?.city || statusRes?.city || session?.city,
+              state: businessDetails?.state || statusRes?.state || session?.state,
+              pincode: businessDetails?.pincode || statusRes?.pincode || session?.pincode,
+              gstin: businessDetails?.gstin || statusRes?.gstin || session?.gstin,
+              pan: businessDetails?.pan || statusRes?.pan || session?.pan,
+              businessType: businessDetails?.businessType || session?.businessType,
+              token: 'auth-session-approved-' + Date.now(),
+              createdAt: new Date().toISOString(),
+              accountStatus: 'APPROVED',
+              isRegistrationComplete: true,
+            };
+            setSession(newSession);
+            await authService.saveSession(newSession);
+            if (checkPhone) {
+              verifiedClientPhoneRef.current = checkPhone;
+            }
+
             setCurrentScreen('CLIENT_DASHBOARD');
           }}
           onContactSupport={() => setCurrentScreen('HELP_SUPPORT')}
@@ -1682,8 +1830,25 @@ export default function App() {
           onNavigateToShipments={() => setCurrentScreen('MY_SHIPMENTS')}
           onNavigateToTracking={(trackId) => {
             setActiveTrackingId(trackId);
+            setActiveBookingId(trackId);
+            setTrackingReturnScreen('CLIENT_DASHBOARD');
             setCurrentScreen('SHIPMENT_TRACKING');
           }}
+          onNavigateToRequirementDetails={(reqId) => {
+            setActiveRequirementId(reqId);
+            setCurrentScreen('REQUIREMENT_DETAILS');
+          }}
+          onNavigateToBookingDetails={(bId) => {
+            setActiveBookingId(bId);
+            setBookingReturnScreen('CLIENT_DASHBOARD');
+            setCurrentScreen('BOOKING_DETAILS');
+          }}
+          onNavigateToQuotations={(reqId) => {
+            if (reqId) setActiveRequirementId(reqId);
+            setCurrentScreen('QUOTATIONS_LIST');
+          }}
+          onNavigateToPayments={() => setCurrentScreen('MY_BOOKINGS')}
+          onNavigateToDocuments={() => setCurrentScreen('MY_BOOKINGS')}
           onNavigateToSupport={() => setCurrentScreen('HELP_SUPPORT')}
           onNavigateToSavedAddresses={() => setCurrentScreen('SAVED_ADDRESSES')}
           onNavigateToNotifications={() => setCurrentScreen('NOTIFICATIONS')}
@@ -1699,6 +1864,9 @@ export default function App() {
           onNext={(draftUpdate) => {
             setRequirementDraft((prev) => ({ ...prev, ...draftUpdate }));
             setCurrentScreen('CARGO_DETAILS');
+          }}
+          onClearDraft={() => {
+            setRequirementDraft(createFreshRequirementDraft());
           }}
         />
       )}
@@ -1751,6 +1919,8 @@ export default function App() {
           onSubmitSuccess={(reqId) => {
             setActiveRequirementId(reqId);
             setRequirementDraft(createFreshRequirementDraft());
+            const effectiveClientId = session?.userId || registeredClientId;
+            clientService.clearTransportRequirementDraft(effectiveClientId).catch(() => {});
             setCurrentScreen('REQUIREMENT_CONFIRM');
           }}
         />
@@ -1787,7 +1957,22 @@ export default function App() {
             setActiveRequirementId(reqId);
             setCurrentScreen('QUOTATIONS_LIST');
           }}
+          onTrackShipment={(trackingId) => {
+            setActiveTrackingId(trackingId);
+            setActiveBookingId(trackingId);
+            setTrackingReturnScreen('MY_REQUIREMENTS');
+            setCurrentScreen('SHIPMENT_TRACKING');
+          }}
+          onSelectBooking={(bookingId) => {
+            setActiveBookingId(bookingId);
+            setCurrentScreen('BOOKING_DETAILS');
+          }}
           onCreateNew={handleStartNewRequirement}
+          onResumeDraft={(draftData) => {
+            setRequirementDraft((prev) => ({ ...prev, ...draftData }));
+            setCurrentScreen('CREATE_REQUIREMENT');
+          }}
+          onNavigateToShipments={() => setCurrentScreen('MY_SHIPMENTS')}
         />
       )}
 
@@ -1827,6 +2012,12 @@ export default function App() {
           onViewBooking={(bokId) => {
             setActiveBookingId(bokId);
             setCurrentScreen('BOOKING_DETAILS');
+          }}
+          onViewTracking={(bookingOrTripId) => {
+            setActiveTrackingId(bookingOrTripId);
+            setActiveBookingId(bookingOrTripId);
+            setTrackingReturnScreen('REQUIREMENT_DETAILS');
+            setCurrentScreen('SHIPMENT_TRACKING');
           }}
         />
       )}
@@ -1905,6 +2096,7 @@ export default function App() {
           }}
           onTrackShipment={(id) => {
             setActiveTrackingId(id);
+            setTrackingReturnScreen('BOOKING_DETAILS');
             setCurrentScreen('SHIPMENT_TRACKING');
           }}
           onGoToMyBookings={() => setCurrentScreen('MY_BOOKINGS')}
@@ -1941,6 +2133,7 @@ export default function App() {
           }}
           onOpenProfile={() => setCurrentScreen('PROFILE')}
           onNavigateToNotifications={() => setCurrentScreen('NOTIFICATIONS')}
+          onNavigateToRequirements={() => setCurrentScreen('MY_REQUIREMENTS')}
         />
       )}
 
@@ -1956,6 +2149,7 @@ export default function App() {
           }}
           onTrackShipment={(id) => {
             setActiveTrackingId(id);
+            setTrackingReturnScreen('BOOKING_DETAILS');
             setCurrentScreen('SHIPMENT_TRACKING');
           }}
           onBookShipment={handleStartNewRequirement}
@@ -1969,6 +2163,7 @@ export default function App() {
           onBack={() => setCurrentScreen(bookingReturnScreen || 'MY_SHIPMENTS')}
           onTrackShipment={(id) => {
             setActiveTrackingId(id);
+            setTrackingReturnScreen('BOOKING_DETAILS');
             setCurrentScreen('SHIPMENT_TRACKING');
           }}
           onViewDocuments={(id) => {
@@ -1993,7 +2188,7 @@ export default function App() {
       {currentScreen === 'SHIPMENT_TRACKING' && (
         <ShipmentTrackingScreen
           trackingId={activeTrackingId || activeBookingId}
-          onBack={() => setCurrentScreen('BOOKING_DETAILS')}
+          onBack={() => setCurrentScreen(trackingReturnScreen || 'CLIENT_DASHBOARD')}
           onViewDocuments={(id) => {
             setActiveTrackingId(id);
             setDocumentsReturnScreen('SHIPMENT_TRACKING');
@@ -2006,6 +2201,7 @@ export default function App() {
           }}
           onViewDetails={(id) => {
             setActiveBookingId(id);
+            setBookingReturnScreen('SHIPMENT_TRACKING');
             setCurrentScreen('BOOKING_DETAILS');
           }}
           onHelp={() => setCurrentScreen('HELP_SUPPORT')}
@@ -2386,6 +2582,11 @@ export default function App() {
           onViewRequirementDetails={(reqId) => {
             setActiveRequirementId(reqId);
             setCurrentScreen('VENDOR_REQUIREMENT_DETAILS');
+          }}
+          onSubmitQuote={(req) => {
+            setActiveRequirementId(req.id);
+            setSelectedVendorRequirement(req);
+            setCurrentScreen('VENDOR_SUBMIT_QUOTATION');
           }}
           onViewMyQuotations={() => setCurrentScreen('VENDOR_MY_QUOTATIONS')}
           onViewAwardedBookings={() => setCurrentScreen('VENDOR_AWARDED_BOOKINGS')}
@@ -2824,7 +3025,7 @@ export default function App() {
         <DriverSubmissionConfirmationScreen
           applicationNumber={driverApplicationNumber}
           onCheckStatus={() => setCurrentScreen('DRIVER_VERIFICATION_STATUS')}
-          onGoHome={() => setCurrentScreen('DRIVER_DASHBOARD')}
+          onGoHome={() => setCurrentScreen('DRIVER_VERIFICATION_STATUS')}
           onGoToDashboard={async () => {
             const dId = effectiveDriverId;
             const phone = mobileNumber || session?.mobile;
@@ -3093,30 +3294,96 @@ export default function App() {
         />
       )}
 
-      {/* ── Four-Button Client Bottom Navigation Bar (Home | Shipments | My Requirements | Profile) ── */}
+      {/* ── Four-Button Client Bottom Navigation Bar (Home | My Requirements | Received Quotations | Profile) ── */}
       {selectedRole === 'CLIENT' &&
         (currentScreen === 'CLIENT_DASHBOARD' ||
           currentScreen === 'MY_SHIPMENTS' ||
           currentScreen === 'MY_REQUIREMENTS' ||
+          currentScreen === 'QUOTATIONS_LIST' ||
           currentScreen === 'MY_BOOKINGS' ||
           currentScreen === 'PROFILE') && (
           <ClientBottomNavBar
             activeTab={
-              currentScreen === 'MY_SHIPMENTS' || currentScreen === 'MY_BOOKINGS'
-                ? 'SHIPMENTS'
-                : currentScreen === 'MY_REQUIREMENTS'
-                  ? 'REQUIREMENTS'
+              currentScreen === 'MY_REQUIREMENTS' ||
+              currentScreen === 'MY_SHIPMENTS' ||
+              currentScreen === 'MY_BOOKINGS'
+                ? 'REQUIREMENTS'
+                : currentScreen === 'QUOTATIONS_LIST'
+                  ? 'QUOTATIONS'
                   : currentScreen === 'PROFILE'
                     ? 'PROFILE'
                     : 'HOME'
             }
             onSelectTab={(tab: ClientNavTab | string) => {
               if (tab === 'HOME') setCurrentScreen('CLIENT_DASHBOARD');
-              else if (tab === 'SHIPMENT') setCurrentScreen('MY_SHIPMENTS');
-              else if (tab === 'SHIPMENTS') setCurrentScreen('MY_SHIPMENTS');
-              else if (tab === 'REQUIREMENTS') setCurrentScreen('MY_REQUIREMENTS');
-              else if (tab === 'BOOKINGS') setCurrentScreen('MY_BOOKINGS');
+              else if (
+                tab === 'REQUIREMENTS' ||
+                tab === 'SHIPMENT' ||
+                tab === 'SHIPMENTS' ||
+                tab === 'BOOKINGS'
+              )
+                setCurrentScreen('MY_REQUIREMENTS');
+              else if (tab === 'QUOTATIONS') setCurrentScreen('QUOTATIONS_LIST');
               else if (tab === 'PROFILE') setCurrentScreen('PROFILE');
+            }}
+          />
+        )}
+
+      {/* Driver App Bottom Navigation Bar */}
+      {selectedRole === 'DRIVER' &&
+        (currentScreen === 'DRIVER_DASHBOARD' ||
+          currentScreen === 'DRIVER_ASSIGNED_TRIPS' ||
+          currentScreen === 'DRIVER_DOCUMENTS' ||
+          currentScreen === 'DRIVER_VERIFICATION_STATUS' ||
+          currentScreen === 'NOTIFICATIONS' ||
+          currentScreen === 'PROFILE') && (
+          <DriverBottomNavBar
+            activeTab={
+              currentScreen === 'DRIVER_ASSIGNED_TRIPS'
+                ? 'TRIPS'
+                : currentScreen === 'DRIVER_DOCUMENTS' || currentScreen === 'DRIVER_VERIFICATION_STATUS'
+                  ? 'VERIFICATION'
+                  : currentScreen === 'NOTIFICATIONS'
+                    ? 'NOTIFICATIONS'
+                    : currentScreen === 'PROFILE'
+                      ? 'PROFILE'
+                      : 'HOME'
+            }
+            onSelectTab={(tab: DriverNavTab) => {
+              if (tab === 'HOME') setCurrentScreen('DRIVER_DASHBOARD');
+              else if (tab === 'TRIPS') setCurrentScreen('DRIVER_ASSIGNED_TRIPS');
+              else if (tab === 'VERIFICATION') setCurrentScreen('DRIVER_DOCUMENTS');
+              else if (tab === 'NOTIFICATIONS') setCurrentScreen('NOTIFICATIONS');
+              else if (tab === 'PROFILE') setCurrentScreen('PROFILE');
+            }}
+          />
+        )}
+
+      {/* Vendor App Bottom Navigation Bar */}
+      {selectedRole === 'VENDOR' &&
+        (currentScreen === 'VENDOR_DASHBOARD' ||
+          currentScreen === 'VENDOR_REQUIREMENTS' ||
+          currentScreen === 'VENDOR_MY_QUOTATIONS' ||
+          currentScreen === 'VENDOR_AWARDED_BOOKINGS' ||
+          currentScreen === 'PROFILE') && (
+          <VendorBottomNavBar
+            activeTab={
+              currentScreen === 'VENDOR_REQUIREMENTS'
+                ? 'LOADS'
+                : currentScreen === 'VENDOR_MY_QUOTATIONS'
+                  ? 'QUOTATIONS'
+                  : currentScreen === 'VENDOR_AWARDED_BOOKINGS'
+                    ? 'BOOKINGS'
+                    : currentScreen === 'PROFILE'
+                      ? 'MORE'
+                      : 'HOME'
+            }
+            onSelectTab={(tab: VendorNavTab) => {
+              if (tab === 'HOME') setCurrentScreen('VENDOR_DASHBOARD');
+              else if (tab === 'LOADS') setCurrentScreen('VENDOR_REQUIREMENTS');
+              else if (tab === 'QUOTATIONS') setCurrentScreen('VENDOR_MY_QUOTATIONS');
+              else if (tab === 'BOOKINGS') setCurrentScreen('VENDOR_AWARDED_BOOKINGS');
+              else if (tab === 'MORE') setCurrentScreen('PROFILE');
             }}
           />
         )}

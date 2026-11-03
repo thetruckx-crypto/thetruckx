@@ -793,7 +793,7 @@ export const DriverDetailsDrawer: React.FC<DriverDetailsDrawerProps> = ({
                     </div>
                     <div className="vfv-info-row">
                       <div className="vfv-info-label">Hub / City</div>
-                      <div className="vfv-info-value">{vendorDetails?.city || 'Guwahati Hub'}</div>
+                      <div className="vfv-info-value">{vendorDetails?.city || vendorDetails?.address || 'Guwahati Hub'}</div>
                     </div>
                     <div className="vfv-info-row">
                       <div className="vfv-info-label">Vendor Status</div>

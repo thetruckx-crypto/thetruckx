@@ -1,0 +1,531 @@
+{
+  "references": [
+    {
+      "column": "trip_id",
+      "targetTable": "trips",
+      "targetColumn": "id"
+    },
+    {
+      "column": "trip_id",
+      "targetTable": "trips",
+      "targetColumn": "id"
+    },
+    {
+      "column": "driver_id",
+      "targetTable": "drivers",
+      "targetColumn": "id"
+    }
+  ],
+  "indexes": [
+    {
+      "indexName": "idx_admin_users_email",
+      "table": "admin_users",
+      "columns": "email"
+    },
+    {
+      "indexName": "idx_admin_users_role",
+      "table": "admin_users",
+      "columns": "role"
+    },
+    {
+      "indexName": "idx_documents_reference",
+      "table": "documents",
+      "columns": "reference_id,category,document_type"
+    },
+    {
+      "indexName": "idx_otp_phone_number",
+      "table": "otp_verifications",
+      "columns": "phone_number"
+    },
+    {
+      "indexName": "idx_otp_expires_at",
+      "table": "otp_verifications",
+      "columns": "expires_at"
+    },
+    {
+      "indexName": "idx_otp_verified",
+      "table": "otp_verifications",
+      "columns": "is_verified"
+    },
+    {
+      "indexName": "idx_otp_created_at",
+      "table": "otp_verifications",
+      "columns": "created_atDESC"
+    },
+    {
+      "indexName": "idx_otp_phone_purpose",
+      "table": "otp_verifications",
+      "columns": "phone_number,purpose,is_verified"
+    },
+    {
+      "indexName": "idx_drivers_phone",
+      "table": "drivers",
+      "columns": "phone"
+    },
+    {
+      "indexName": "idx_drivers_verification_status",
+      "table": "drivers",
+      "columns": "verification_status"
+    },
+    {
+      "indexName": "idx_drivers_license",
+      "table": "drivers",
+      "columns": "license_number"
+    },
+    {
+      "indexName": "idx_sessions_token",
+      "table": "auth_sessions",
+      "columns": "session_token"
+    },
+    {
+      "indexName": "idx_sessions_user",
+      "table": "auth_sessions",
+      "columns": "user_id,user_type"
+    },
+    {
+      "indexName": "idx_sessions_expires",
+      "table": "auth_sessions",
+      "columns": "expires_at"
+    },
+    {
+      "indexName": "idx_sessions_active",
+      "table": "auth_sessions",
+      "columns": "is_active,expires_at"
+    },
+    {
+      "indexName": "idx_rate_limit_phone",
+      "table": "otp_rate_limits",
+      "columns": "phone_number"
+    },
+    {
+      "indexName": "idx_rate_limit_window",
+      "table": "otp_rate_limits",
+      "columns": "window_start"
+    },
+    {
+      "indexName": "idx_audit_user",
+      "table": "auth_audit_log",
+      "columns": "user_id,user_type"
+    },
+    {
+      "indexName": "idx_audit_event",
+      "table": "auth_audit_log",
+      "columns": "event_type"
+    },
+    {
+      "indexName": "idx_audit_created",
+      "table": "auth_audit_log",
+      "columns": "created_atDESC"
+    },
+    {
+      "indexName": "idx_otp_verifications_mobile",
+      "table": "otp_verifications",
+      "columns": "mobile"
+    },
+    {
+      "indexName": "idx_otp_verifications_expires_at",
+      "table": "otp_verifications",
+      "columns": "expires_at"
+    },
+    {
+      "indexName": "idx_auth_audit_log_created_at",
+      "table": "auth_audit_log",
+      "columns": "created_atDESC"
+    },
+    {
+      "indexName": "idx_auth_audit_log_user_id",
+      "table": "auth_audit_log",
+      "columns": "user_id"
+    },
+    {
+      "indexName": "idx_client_companies_status",
+      "table": "client_companies",
+      "columns": "status"
+    },
+    {
+      "indexName": "idx_client_companies_client_code",
+      "table": "client_companies",
+      "columns": "client_code"
+    },
+    {
+      "indexName": "idx_client_companies_gstin",
+      "table": "client_companies",
+      "columns": "gstin"
+    },
+    {
+      "indexName": "idx_client_users_mobile",
+      "table": "client_users",
+      "columns": "mobile"
+    },
+    {
+      "indexName": "idx_client_users_client_company_id",
+      "table": "client_users",
+      "columns": "client_company_id"
+    },
+    {
+      "indexName": "idx_documents_category_ref",
+      "table": "documents",
+      "columns": "category,reference_id"
+    },
+    {
+      "indexName": "idx_documents_verification_status",
+      "table": "documents",
+      "columns": "verification_status"
+    },
+    {
+      "indexName": "idx_client_companies_pan",
+      "table": "client_companies",
+      "columns": "pan"
+    },
+    {
+      "indexName": "idx_client_companies_profile_completion",
+      "table": "client_companies",
+      "columns": "profile_completion_status"
+    },
+    {
+      "indexName": "idx_documents_upload_resp",
+      "table": "documents",
+      "columns": "upload_responsibility"
+    },
+    {
+      "indexName": "idx_requirements_code",
+      "table": "requirements",
+      "columns": "requirement_code"
+    },
+    {
+      "indexName": "idx_bookings_code",
+      "table": "bookings",
+      "columns": "booking_code"
+    },
+    {
+      "indexName": "idx_vendor_companies_code",
+      "table": "vendor_companies",
+      "columns": "vendor_code"
+    },
+    {
+      "indexName": "idx_drivers_code",
+      "table": "drivers",
+      "columns": "driver_code"
+    },
+    {
+      "indexName": "idx_vehicles_code",
+      "table": "vehicles",
+      "columns": "vehicle_code"
+    },
+    {
+      "indexName": "idx_drivers_primary_vendor_id",
+      "table": "drivers",
+      "columns": "primary_vendor_id"
+    },
+    {
+      "indexName": "idx_regional_hubs_status",
+      "table": "regional_hubs",
+      "columns": "status"
+    },
+    {
+      "indexName": "idx_regional_hubs_name",
+      "table": "regional_hubs",
+      "columns": "name"
+    },
+    {
+      "indexName": "idx_regional_hubs_state",
+      "table": "regional_hubs",
+      "columns": "state"
+    },
+    {
+      "indexName": "idx_vendor_companies_code",
+      "table": "vendor_companies",
+      "columns": "vendor_code"
+    },
+    {
+      "indexName": "idx_vendor_companies_status",
+      "table": "vendor_companies",
+      "columns": "status"
+    },
+    {
+      "indexName": "idx_vendor_companies_compliance",
+      "table": "vendor_companies",
+      "columns": "compliance_status"
+    },
+    {
+      "indexName": "idx_vendor_users_mobile",
+      "table": "vendor_users",
+      "columns": "mobile"
+    },
+    {
+      "indexName": "idx_vendor_users_vendor_id",
+      "table": "vendor_users",
+      "columns": "vendor_id"
+    },
+    {
+      "indexName": "idx_requirements_is_hazardous",
+      "table": "requirements",
+      "columns": "is_hazardous"
+    },
+    {
+      "indexName": "idx_requirements_measurement_verified",
+      "table": "requirements",
+      "columns": "is_measurement_verified"
+    },
+    {
+      "indexName": "idx_regional_hubs_name_city_unique",
+      "table": "regional_hubs",
+      "columns": "lower(trim(name"
+    },
+    {
+      "indexName": "idx_admin_registration_drafts_entity",
+      "table": "admin_registration_drafts",
+      "columns": "entity_type,status"
+    },
+    {
+      "indexName": "idx_admin_registration_drafts_updated",
+      "table": "admin_registration_drafts",
+      "columns": "updated_atDESC"
+    },
+    {
+      "indexName": "idx_requirements_client_status",
+      "table": "requirements",
+      "columns": "client_id,status"
+    },
+    {
+      "indexName": "idx_vendor_requests_req_vendor",
+      "table": "vendor_requests",
+      "columns": "requirement_id,vendor_id"
+    },
+    {
+      "indexName": "idx_client_quotes_requirement",
+      "table": "client_quotes",
+      "columns": "requirement_id"
+    },
+    {
+      "indexName": "idx_client_quotes_status",
+      "table": "client_quotes",
+      "columns": "status"
+    },
+    {
+      "indexName": "idx_bookings_client_req",
+      "table": "bookings",
+      "columns": "client_id,requirement_id"
+    },
+    {
+      "indexName": "idx_weighments_trip_stage",
+      "table": "weighments",
+      "columns": "trip_id,stage"
+    },
+    {
+      "indexName": "idx_trips_booking_status",
+      "table": "trips",
+      "columns": "booking_id,trip_status"
+    },
+    {
+      "indexName": "idx_vendor_requests_unique_req_vendor",
+      "table": "vendor_requests",
+      "columns": "requirement_id,vendor_id"
+    },
+    {
+      "indexName": "idx_vendor_requests_vendor_status",
+      "table": "vendor_requests",
+      "columns": "vendor_id,status"
+    },
+    {
+      "indexName": "idx_vendor_requests_deadline",
+      "table": "vendor_requests",
+      "columns": "requirement_id,deadline_at"
+    },
+    {
+      "indexName": "idx_client_quotes_req_version",
+      "table": "client_quotes",
+      "columns": "requirement_id,version"
+    },
+    {
+      "indexName": "idx_client_quotes_status_validity",
+      "table": "client_quotes",
+      "columns": "status,validity_expires_at"
+    },
+    {
+      "indexName": "idx_vendor_quotations_vr_version",
+      "table": "vendor_quotations",
+      "columns": "vendor_request_id,version"
+    },
+    {
+      "indexName": "idx_vendor_quotations_locked",
+      "table": "vendor_quotations",
+      "columns": "is_locked"
+    },
+    {
+      "indexName": "idx_bookings_accepted_quote",
+      "table": "bookings",
+      "columns": "accepted_quote_id"
+    },
+    {
+      "indexName": "idx_bookings_status_created",
+      "table": "bookings",
+      "columns": "booking_status,created_atDESC"
+    },
+    {
+      "indexName": "idx_trips_trip_code",
+      "table": "trips",
+      "columns": "trip_code"
+    },
+    {
+      "indexName": "idx_trips_vendor_status",
+      "table": "trips",
+      "columns": "vendor_id,trip_status"
+    },
+    {
+      "indexName": "idx_trips_vehicle_status",
+      "table": "trips",
+      "columns": "vehicle_id,trip_status"
+    },
+    {
+      "indexName": "idx_trips_driver_status",
+      "table": "trips",
+      "columns": "driver_id,trip_status"
+    },
+    {
+      "indexName": "idx_trips_lr_number",
+      "table": "trips",
+      "columns": "lr_number"
+    },
+    {
+      "indexName": "idx_trips_ewaybill",
+      "table": "trips",
+      "columns": "ewaybill_number"
+    },
+    {
+      "indexName": "idx_trip_location_logs_trip_time",
+      "table": "trip_location_logs",
+      "columns": "trip_id,recorded_atDESC"
+    },
+    {
+      "indexName": "idx_trip_waypoint_events_trip_time",
+      "table": "trip_waypoint_events",
+      "columns": "trip_id,triggered_atDESC"
+    },
+    {
+      "indexName": "idx_trip_pod_submissions_trip_id",
+      "table": "trip_pod_submissions",
+      "columns": "trip_id"
+    },
+    {
+      "indexName": "idx_trip_pod_submissions_review_status",
+      "table": "trip_pod_submissions",
+      "columns": "review_status"
+    },
+    {
+      "indexName": "idx_weighments_trip_id_stage",
+      "table": "weighments",
+      "columns": "trip_id,stage"
+    },
+    {
+      "indexName": "idx_weighments_status",
+      "table": "weighments",
+      "columns": "status"
+    },
+    {
+      "indexName": "idx_trip_claims_trip_id",
+      "table": "trip_claims",
+      "columns": "trip_id"
+    },
+    {
+      "indexName": "idx_trip_claims_status",
+      "table": "trip_claims",
+      "columns": "status"
+    },
+    {
+      "indexName": "idx_client_invoices_booking_id",
+      "table": "client_invoices",
+      "columns": "booking_id"
+    },
+    {
+      "indexName": "idx_client_invoices_client_id",
+      "table": "client_invoices",
+      "columns": "client_id"
+    },
+    {
+      "indexName": "idx_client_invoices_payment_status",
+      "table": "client_invoices",
+      "columns": "payment_status"
+    },
+    {
+      "indexName": "idx_transporter_payouts_trip_id",
+      "table": "transporter_payouts",
+      "columns": "trip_id"
+    },
+    {
+      "indexName": "idx_transporter_payouts_vendor_id",
+      "table": "transporter_payouts",
+      "columns": "vendor_id"
+    },
+    {
+      "indexName": "idx_transporter_payouts_status",
+      "table": "transporter_payouts",
+      "columns": "payout_status"
+    },
+    {
+      "indexName": "idx_client_users_account_id",
+      "table": "client_users",
+      "columns": "account_id"
+    },
+    {
+      "indexName": "idx_client_companies_client_code",
+      "table": "client_companies",
+      "columns": "client_code"
+    },
+    {
+      "indexName": "idx_vendor_companies_vendor_code",
+      "table": "vendor_companies",
+      "columns": "vendor_code"
+    },
+    {
+      "indexName": "idx_vendors_vendor_code",
+      "table": "vendors",
+      "columns": "vendor_code"
+    },
+    {
+      "indexName": "idx_vendor_users_account_id",
+      "table": "vendor_users",
+      "columns": "account_id"
+    },
+    {
+      "indexName": "idx_drivers_driver_code",
+      "table": "drivers",
+      "columns": "driver_code"
+    },
+    {
+      "indexName": "idx_drivers_account_id",
+      "table": "drivers",
+      "columns": "account_id"
+    },
+    {
+      "indexName": "idx_vehicles_vehicle_code",
+      "table": "vehicles",
+      "columns": "vehicle_code"
+    },
+    {
+      "indexName": "idx_requirements_requirement_code",
+      "table": "requirements",
+      "columns": "requirement_code"
+    },
+    {
+      "indexName": "idx_client_quotes_quote_code",
+      "table": "client_quotes",
+      "columns": "quote_code"
+    },
+    {
+      "indexName": "idx_bookings_booking_number",
+      "table": "bookings",
+      "columns": "booking_number"
+    },
+    {
+      "indexName": "idx_trips_trip_code",
+      "table": "trips",
+      "columns": "trip_code"
+    },
+    {
+      "indexName": "idx_auth_sessions_account_id",
+      "table": "auth_sessions",
+      "columns": "account_id"
+    }
+  ]
+}

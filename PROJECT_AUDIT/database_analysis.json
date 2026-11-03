@@ -1,0 +1,806 @@
+{
+  "totalFiles": 27,
+  "tables": [
+    "admin_users",
+    "otp_verifications",
+    "drivers",
+    "auth_sessions",
+    "otp_rate_limits",
+    "auth_audit_log",
+    "exceptions",
+    "rfq_batches",
+    "role_change_requests",
+    "necl_id_sequences",
+    "regional_hubs",
+    "admin_registration_drafts",
+    "trip_location_logs",
+    "trip_waypoint_events",
+    "trip_pod_submissions",
+    "weighments",
+    "trip_claims",
+    "client_invoices",
+    "transporter_payouts",
+    "truckx_id_sequences"
+  ],
+  "alteredTables": [
+    "admin_users",
+    "vendors",
+    "otp_verifications",
+    "drivers",
+    "auth_sessions",
+    "otp_rate_limits",
+    "auth_audit_log",
+    "client_users",
+    "client_companies",
+    "vendor_companies",
+    "documents",
+    "trips",
+    "bookings",
+    "requirements",
+    "vehicles",
+    "vendor_users",
+    "vendor_requests",
+    "client_quotes",
+    "vendor_quotations"
+  ],
+  "functions": [
+    "is_super_admin",
+    "update_admin_users_updated_at",
+    "is_active_admin",
+    "necl_set_updated_at",
+    "cleanup_expired_otps",
+    "check_otp_rate_limit",
+    "get_active_otp",
+    "check_account_approval",
+    "generate_client_code",
+    "submit_client_registration",
+    "admin_review_client_registration",
+    "admin_review_client_document",
+    "check_client_account_status",
+    "generate_necl_id",
+    "get_client_lifetime_metrics",
+    "admin_review_vendor_registration",
+    "admin_review_vendor_document",
+    "rpc_accept_quotation_and_create_booking",
+    "fn_validate_weighment_tolerance",
+    "fn_guard_trip_transit_on_weighment_discrepancy",
+    "rpc_create_client_quotation",
+    "rpc_reject_client_quotation",
+    "rpc_emergency_direct_booking_bypass",
+    "rpc_generate_trip_for_booking",
+    "rpc_assign_vehicle_and_driver_to_trip",
+    "rpc_driver_acknowledge_dispatch",
+    "rpc_generate_digital_lr",
+    "rpc_link_ewaybill_to_trip",
+    "necl_haversine_distance",
+    "rpc_ingest_trip_location_ping",
+    "rpc_update_trip_milestone",
+    "rpc_submit_epod",
+    "rpc_record_weighment",
+    "rpc_file_damage_claim",
+    "rpc_review_epod",
+    "rpc_generate_client_invoice",
+    "rpc_generate_transporter_payout",
+    "generate_truckx_id"
+  ],
+  "triggers": [
+    "admin_users_updated_at",
+    "trigger_update_otp_timestamp",
+    "trigger_update_session_timestamp",
+    "trigger_update_driver_timestamp",
+    "trigger_update_rate_limit_timestamp",
+    "trg_validate_weighment_tolerance",
+    "trg_guard_trip_transit"
+  ],
+  "policiesCount": 39,
+  "indexesCount": 102,
+  "policies": [
+    {
+      "policy": "admin_self_read",
+      "table": "admin_users",
+      "file": "20261004000001_create_admin_users.sql"
+    },
+    {
+      "policy": "super_admin_read_all",
+      "table": "admin_users",
+      "file": "20261004000001_create_admin_users.sql"
+    },
+    {
+      "policy": "admin_self_update",
+      "table": "admin_users",
+      "file": "20261004000001_create_admin_users.sql"
+    },
+    {
+      "policy": "super_admin_insert",
+      "table": "admin_users",
+      "file": "20261004000001_create_admin_users.sql"
+    },
+    {
+      "policy": "super_admin_update_all",
+      "table": "admin_users",
+      "file": "20261004000001_create_admin_users.sql"
+    },
+    {
+      "policy": "super_admin_delete",
+      "table": "admin_users",
+      "file": "20261004000001_create_admin_users.sql"
+    },
+    {
+      "policy": "admin_read_audit_logs",
+      "table": "audit_logs",
+      "file": "20261004000003_production_rls_policies.sql"
+    },
+    {
+      "policy": "admin_insert_audit_logs",
+      "table": "audit_logs",
+      "file": "20261004000003_production_rls_policies.sql"
+    },
+    {
+      "policy": "%I",
+      "table": "public",
+      "file": "20261004000003_production_rls_policies.sql"
+    },
+    {
+      "policy": "otp_server_only",
+      "table": "otp_verifications",
+      "file": "20261005000006_mobile_app_access_and_rls.sql"
+    },
+    {
+      "policy": "audit_log_server_only",
+      "table": "auth_audit_log",
+      "file": "20261005000006_mobile_app_access_and_rls.sql"
+    },
+    {
+      "policy": "client_company_register",
+      "table": "client_companies",
+      "file": "20261005000006_mobile_app_access_and_rls.sql"
+    },
+    {
+      "policy": "client_company_read_own",
+      "table": "client_companies",
+      "file": "20261005000006_mobile_app_access_and_rls.sql"
+    },
+    {
+      "policy": "client_user_register",
+      "table": "client_users",
+      "file": "20261005000006_mobile_app_access_and_rls.sql"
+    },
+    {
+      "policy": "client_user_read_own",
+      "table": "client_users",
+      "file": "20261005000006_mobile_app_access_and_rls.sql"
+    },
+    {
+      "policy": "driver_register",
+      "table": "drivers",
+      "file": "20261005000006_mobile_app_access_and_rls.sql"
+    },
+    {
+      "policy": "driver_read_own",
+      "table": "drivers",
+      "file": "20261005000006_mobile_app_access_and_rls.sql"
+    },
+    {
+      "policy": "vendor_register",
+      "table": "vendor_companies",
+      "file": "20261005000006_mobile_app_access_and_rls.sql"
+    },
+    {
+      "policy": "vendor_read_own",
+      "table": "vendor_companies",
+      "file": "20261005000006_mobile_app_access_and_rls.sql"
+    },
+    {
+      "policy": "client_docs_upload",
+      "table": "storage",
+      "file": "20261013000007_client_registration_kyc_approval.sql"
+    },
+    {
+      "policy": "client_docs_select",
+      "table": "storage",
+      "file": "20261013000007_client_registration_kyc_approval.sql"
+    },
+    {
+      "policy": "client_docs_service_role",
+      "table": "storage",
+      "file": "20261013000007_client_registration_kyc_approval.sql"
+    },
+    {
+      "policy": "client_company_insert_policy",
+      "table": "client_companies",
+      "file": "20261013000007_client_registration_kyc_approval.sql"
+    },
+    {
+      "policy": "client_company_select_policy",
+      "table": "client_companies",
+      "file": "20261013000007_client_registration_kyc_approval.sql"
+    },
+    {
+      "policy": "client_users_insert_policy",
+      "table": "client_users",
+      "file": "20261013000007_client_registration_kyc_approval.sql"
+    },
+    {
+      "policy": "client_users_select_policy",
+      "table": "client_users",
+      "file": "20261013000007_client_registration_kyc_approval.sql"
+    },
+    {
+      "policy": "documents_insert_policy",
+      "table": "documents",
+      "file": "20261013000007_client_registration_kyc_approval.sql"
+    },
+    {
+      "policy": "documents_select_policy",
+      "table": "documents",
+      "file": "20261013000007_client_registration_kyc_approval.sql"
+    },
+    {
+      "policy": "documents_update_policy",
+      "table": "documents",
+      "file": "20261013000007_client_registration_kyc_approval.sql"
+    },
+    {
+      "policy": "exceptions_admin_all",
+      "table": "exceptions",
+      "file": "20261015000008_database_and_storage_healing.sql"
+    },
+    {
+      "policy": "rfq_batches_all",
+      "table": "rfq_batches",
+      "file": "20261015000008_database_and_storage_healing.sql"
+    },
+    {
+      "policy": "role_change_requests_all",
+      "table": "role_change_requests",
+      "file": "20261015000008_database_and_storage_healing.sql"
+    },
+    {
+      "policy": "role_change_requests_anon_insert",
+      "table": "role_change_requests",
+      "file": "20261015000008_database_and_storage_healing.sql"
+    },
+    {
+      "policy": "otp_allow_phone_verification",
+      "table": "otp_verifications",
+      "file": "20261015000008_database_and_storage_healing.sql"
+    },
+    {
+      "policy": "audit_log_access",
+      "table": "auth_audit_log",
+      "file": "20261015000008_database_and_storage_healing.sql"
+    },
+    {
+      "policy": "necl_id_sequences_all",
+      "table": "necl_id_sequences",
+      "file": "20261015000009_necl_unique_id_and_client_registration_upgrade.sql"
+    },
+    {
+      "policy": "avatars_public_select",
+      "table": "storage",
+      "file": "20261030000027_the_truckx_profile_photo_and_client_fields.sql"
+    },
+    {
+      "policy": "avatars_auth_upload",
+      "table": "storage",
+      "file": "20261030000027_the_truckx_profile_photo_and_client_fields.sql"
+    },
+    {
+      "policy": "avatars_auth_update",
+      "table": "storage",
+      "file": "20261030000027_the_truckx_profile_photo_and_client_fields.sql"
+    }
+  ],
+  "indexes": [
+    {
+      "index": "idx_admin_users_email",
+      "table": "admin_users",
+      "file": "20261004000001_create_admin_users.sql"
+    },
+    {
+      "index": "idx_admin_users_role",
+      "table": "admin_users",
+      "file": "20261004000001_create_admin_users.sql"
+    },
+    {
+      "index": "idx_documents_reference",
+      "table": "documents",
+      "file": "20261004000004_vehicle_verification_system.sql"
+    },
+    {
+      "index": "idx_otp_phone_number",
+      "table": "otp_verifications",
+      "file": "20261004000005_auth_otp_system.sql"
+    },
+    {
+      "index": "idx_otp_expires_at",
+      "table": "otp_verifications",
+      "file": "20261004000005_auth_otp_system.sql"
+    },
+    {
+      "index": "idx_otp_verified",
+      "table": "otp_verifications",
+      "file": "20261004000005_auth_otp_system.sql"
+    },
+    {
+      "index": "idx_otp_created_at",
+      "table": "otp_verifications",
+      "file": "20261004000005_auth_otp_system.sql"
+    },
+    {
+      "index": "idx_otp_phone_purpose",
+      "table": "otp_verifications",
+      "file": "20261004000005_auth_otp_system.sql"
+    },
+    {
+      "index": "idx_drivers_phone",
+      "table": "drivers",
+      "file": "20261004000005_auth_otp_system.sql"
+    },
+    {
+      "index": "idx_drivers_verification_status",
+      "table": "drivers",
+      "file": "20261004000005_auth_otp_system.sql"
+    },
+    {
+      "index": "idx_drivers_license",
+      "table": "drivers",
+      "file": "20261004000005_auth_otp_system.sql"
+    },
+    {
+      "index": "idx_sessions_token",
+      "table": "auth_sessions",
+      "file": "20261004000005_auth_otp_system.sql"
+    },
+    {
+      "index": "idx_sessions_user",
+      "table": "auth_sessions",
+      "file": "20261004000005_auth_otp_system.sql"
+    },
+    {
+      "index": "idx_sessions_expires",
+      "table": "auth_sessions",
+      "file": "20261004000005_auth_otp_system.sql"
+    },
+    {
+      "index": "idx_sessions_active",
+      "table": "auth_sessions",
+      "file": "20261004000005_auth_otp_system.sql"
+    },
+    {
+      "index": "idx_rate_limit_phone",
+      "table": "otp_rate_limits",
+      "file": "20261004000005_auth_otp_system.sql"
+    },
+    {
+      "index": "idx_rate_limit_window",
+      "table": "otp_rate_limits",
+      "file": "20261004000005_auth_otp_system.sql"
+    },
+    {
+      "index": "idx_audit_user",
+      "table": "auth_audit_log",
+      "file": "20261004000005_auth_otp_system.sql"
+    },
+    {
+      "index": "idx_audit_event",
+      "table": "auth_audit_log",
+      "file": "20261004000005_auth_otp_system.sql"
+    },
+    {
+      "index": "idx_audit_created",
+      "table": "auth_audit_log",
+      "file": "20261004000005_auth_otp_system.sql"
+    },
+    {
+      "index": "idx_otp_verifications_mobile",
+      "table": "otp_verifications",
+      "file": "20261005000006_mobile_app_access_and_rls.sql"
+    },
+    {
+      "index": "idx_otp_verifications_expires_at",
+      "table": "otp_verifications",
+      "file": "20261005000006_mobile_app_access_and_rls.sql"
+    },
+    {
+      "index": "idx_auth_audit_log_created_at",
+      "table": "auth_audit_log",
+      "file": "20261005000006_mobile_app_access_and_rls.sql"
+    },
+    {
+      "index": "idx_auth_audit_log_user_id",
+      "table": "auth_audit_log",
+      "file": "20261005000006_mobile_app_access_and_rls.sql"
+    },
+    {
+      "index": "idx_client_companies_status",
+      "table": "client_companies",
+      "file": "20261013000007_client_registration_kyc_approval.sql"
+    },
+    {
+      "index": "idx_client_companies_client_code",
+      "table": "client_companies",
+      "file": "20261013000007_client_registration_kyc_approval.sql"
+    },
+    {
+      "index": "idx_client_companies_gstin",
+      "table": "client_companies",
+      "file": "20261013000007_client_registration_kyc_approval.sql"
+    },
+    {
+      "index": "idx_client_users_mobile",
+      "table": "client_users",
+      "file": "20261013000007_client_registration_kyc_approval.sql"
+    },
+    {
+      "index": "idx_client_users_client_company_id",
+      "table": "client_users",
+      "file": "20261013000007_client_registration_kyc_approval.sql"
+    },
+    {
+      "index": "idx_documents_category_ref",
+      "table": "documents",
+      "file": "20261013000007_client_registration_kyc_approval.sql"
+    },
+    {
+      "index": "idx_documents_verification_status",
+      "table": "documents",
+      "file": "20261013000007_client_registration_kyc_approval.sql"
+    },
+    {
+      "index": "idx_client_companies_pan",
+      "table": "client_companies",
+      "file": "20261015000009_necl_unique_id_and_client_registration_upgrade.sql"
+    },
+    {
+      "index": "idx_client_companies_profile_completion",
+      "table": "client_companies",
+      "file": "20261015000009_necl_unique_id_and_client_registration_upgrade.sql"
+    },
+    {
+      "index": "idx_documents_upload_resp",
+      "table": "documents",
+      "file": "20261015000009_necl_unique_id_and_client_registration_upgrade.sql"
+    },
+    {
+      "index": "idx_requirements_code",
+      "table": "requirements",
+      "file": "20261015000009_necl_unique_id_and_client_registration_upgrade.sql"
+    },
+    {
+      "index": "idx_bookings_code",
+      "table": "bookings",
+      "file": "20261015000009_necl_unique_id_and_client_registration_upgrade.sql"
+    },
+    {
+      "index": "idx_vendor_companies_code",
+      "table": "vendor_companies",
+      "file": "20261015000009_necl_unique_id_and_client_registration_upgrade.sql"
+    },
+    {
+      "index": "idx_drivers_code",
+      "table": "drivers",
+      "file": "20261015000009_necl_unique_id_and_client_registration_upgrade.sql"
+    },
+    {
+      "index": "idx_vehicles_code",
+      "table": "vehicles",
+      "file": "20261015000009_necl_unique_id_and_client_registration_upgrade.sql"
+    },
+    {
+      "index": "idx_drivers_primary_vendor_id",
+      "table": "drivers",
+      "file": "20261016000010_driver_registration_single_screen.sql"
+    },
+    {
+      "index": "idx_regional_hubs_status",
+      "table": "regional_hubs",
+      "file": "20261016000011_create_regional_hubs.sql"
+    },
+    {
+      "index": "idx_regional_hubs_name",
+      "table": "regional_hubs",
+      "file": "20261016000011_create_regional_hubs.sql"
+    },
+    {
+      "index": "idx_regional_hubs_state",
+      "table": "regional_hubs",
+      "file": "20261016000011_create_regional_hubs.sql"
+    },
+    {
+      "index": "idx_vendor_companies_code",
+      "table": "vendor_companies",
+      "file": "20261017000012_vendor_transporter_compliance_and_approval_upgrade.sql"
+    },
+    {
+      "index": "idx_vendor_companies_status",
+      "table": "vendor_companies",
+      "file": "20261017000012_vendor_transporter_compliance_and_approval_upgrade.sql"
+    },
+    {
+      "index": "idx_vendor_companies_compliance",
+      "table": "vendor_companies",
+      "file": "20261017000012_vendor_transporter_compliance_and_approval_upgrade.sql"
+    },
+    {
+      "index": "idx_vendor_users_mobile",
+      "table": "vendor_users",
+      "file": "20261017000012_vendor_transporter_compliance_and_approval_upgrade.sql"
+    },
+    {
+      "index": "idx_vendor_users_vendor_id",
+      "table": "vendor_users",
+      "file": "20261017000012_vendor_transporter_compliance_and_approval_upgrade.sql"
+    },
+    {
+      "index": "idx_requirements_is_hazardous",
+      "table": "requirements",
+      "file": "20261018000013_add_extended_cargo_and_vehicle_groups_to_requirements.sql"
+    },
+    {
+      "index": "idx_requirements_measurement_verified",
+      "table": "requirements",
+      "file": "20261018000013_add_extended_cargo_and_vehicle_groups_to_requirements.sql"
+    },
+    {
+      "index": "idx_regional_hubs_name_city_unique",
+      "table": "regional_hubs",
+      "file": "20261019000015_add_quantity_unit_and_vendor_hub_optimizations.sql"
+    },
+    {
+      "index": "idx_admin_registration_drafts_entity",
+      "table": "admin_registration_drafts",
+      "file": "20261019000016_create_admin_registration_drafts.sql"
+    },
+    {
+      "index": "idx_admin_registration_drafts_updated",
+      "table": "admin_registration_drafts",
+      "file": "20261019000016_create_admin_registration_drafts.sql"
+    },
+    {
+      "index": "idx_requirements_client_status",
+      "table": "requirements",
+      "file": "20261024000017_phase2_backend_stabilization_and_booking_rpc.sql"
+    },
+    {
+      "index": "idx_vendor_requests_req_vendor",
+      "table": "vendor_requests",
+      "file": "20261024000017_phase2_backend_stabilization_and_booking_rpc.sql"
+    },
+    {
+      "index": "idx_client_quotes_requirement",
+      "table": "client_quotes",
+      "file": "20261024000017_phase2_backend_stabilization_and_booking_rpc.sql"
+    },
+    {
+      "index": "idx_client_quotes_status",
+      "table": "client_quotes",
+      "file": "20261024000017_phase2_backend_stabilization_and_booking_rpc.sql"
+    },
+    {
+      "index": "idx_bookings_client_req",
+      "table": "bookings",
+      "file": "20261024000017_phase2_backend_stabilization_and_booking_rpc.sql"
+    },
+    {
+      "index": "idx_weighments_trip_stage",
+      "table": "weighments",
+      "file": "20261024000017_phase2_backend_stabilization_and_booking_rpc.sql"
+    },
+    {
+      "index": "idx_trips_booking_status",
+      "table": "trips",
+      "file": "20261024000017_phase2_backend_stabilization_and_booking_rpc.sql"
+    },
+    {
+      "index": "idx_vendor_requests_unique_req_vendor",
+      "table": "vendor_requests",
+      "file": "20261024000018_phase4_client_requirements_and_rfq_workflow.sql"
+    },
+    {
+      "index": "idx_vendor_requests_vendor_status",
+      "table": "vendor_requests",
+      "file": "20261024000018_phase4_client_requirements_and_rfq_workflow.sql"
+    },
+    {
+      "index": "idx_vendor_requests_deadline",
+      "table": "vendor_requests",
+      "file": "20261024000018_phase4_client_requirements_and_rfq_workflow.sql"
+    },
+    {
+      "index": "idx_client_quotes_req_version",
+      "table": "client_quotes",
+      "file": "20261024000019_phase5_commercial_pricing_and_margin_engine.sql"
+    },
+    {
+      "index": "idx_client_quotes_status_validity",
+      "table": "client_quotes",
+      "file": "20261024000019_phase5_commercial_pricing_and_margin_engine.sql"
+    },
+    {
+      "index": "idx_vendor_quotations_vr_version",
+      "table": "vendor_quotations",
+      "file": "20261024000019_phase5_commercial_pricing_and_margin_engine.sql"
+    },
+    {
+      "index": "idx_vendor_quotations_locked",
+      "table": "vendor_quotations",
+      "file": "20261024000019_phase5_commercial_pricing_and_margin_engine.sql"
+    },
+    {
+      "index": "idx_bookings_accepted_quote",
+      "table": "bookings",
+      "file": "20261024000020_phase6_client_quotation_acceptance_and_booking.sql"
+    },
+    {
+      "index": "idx_bookings_status_created",
+      "table": "bookings",
+      "file": "20261024000020_phase6_client_quotation_acceptance_and_booking.sql"
+    },
+    {
+      "index": "idx_trips_trip_code",
+      "table": "trips",
+      "file": "20261024000021_phase7_vendor_award_trip_generation_assignment.sql"
+    },
+    {
+      "index": "idx_trips_vendor_status",
+      "table": "trips",
+      "file": "20261024000021_phase7_vendor_award_trip_generation_assignment.sql"
+    },
+    {
+      "index": "idx_trips_vehicle_status",
+      "table": "trips",
+      "file": "20261024000021_phase7_vendor_award_trip_generation_assignment.sql"
+    },
+    {
+      "index": "idx_trips_driver_status",
+      "table": "trips",
+      "file": "20261024000021_phase7_vendor_award_trip_generation_assignment.sql"
+    },
+    {
+      "index": "idx_trips_lr_number",
+      "table": "trips",
+      "file": "20261024000022_phase8_driver_dispatch_digital_lr_waybill.sql"
+    },
+    {
+      "index": "idx_trips_ewaybill",
+      "table": "trips",
+      "file": "20261024000022_phase8_driver_dispatch_digital_lr_waybill.sql"
+    },
+    {
+      "index": "idx_trip_location_logs_trip_time",
+      "table": "trip_location_logs",
+      "file": "20261024000023_phase9_realtime_tracking_geofencing_milestones.sql"
+    },
+    {
+      "index": "idx_trip_waypoint_events_trip_time",
+      "table": "trip_waypoint_events",
+      "file": "20261024000023_phase9_realtime_tracking_geofencing_milestones.sql"
+    },
+    {
+      "index": "idx_trip_pod_submissions_trip_id",
+      "table": "trip_pod_submissions",
+      "file": "20261024000024_phase10_epod_weighbridge_clearance_damage_claims.sql"
+    },
+    {
+      "index": "idx_trip_pod_submissions_review_status",
+      "table": "trip_pod_submissions",
+      "file": "20261024000024_phase10_epod_weighbridge_clearance_damage_claims.sql"
+    },
+    {
+      "index": "idx_weighments_trip_id_stage",
+      "table": "weighments",
+      "file": "20261024000024_phase10_epod_weighbridge_clearance_damage_claims.sql"
+    },
+    {
+      "index": "idx_weighments_status",
+      "table": "weighments",
+      "file": "20261024000024_phase10_epod_weighbridge_clearance_damage_claims.sql"
+    },
+    {
+      "index": "idx_trip_claims_trip_id",
+      "table": "trip_claims",
+      "file": "20261024000024_phase10_epod_weighbridge_clearance_damage_claims.sql"
+    },
+    {
+      "index": "idx_trip_claims_status",
+      "table": "trip_claims",
+      "file": "20261024000024_phase10_epod_weighbridge_clearance_damage_claims.sql"
+    },
+    {
+      "index": "idx_client_invoices_booking_id",
+      "table": "client_invoices",
+      "file": "20261024000025_phase11_commercial_invoicing_transporter_settlement_tds.sql"
+    },
+    {
+      "index": "idx_client_invoices_client_id",
+      "table": "client_invoices",
+      "file": "20261024000025_phase11_commercial_invoicing_transporter_settlement_tds.sql"
+    },
+    {
+      "index": "idx_client_invoices_payment_status",
+      "table": "client_invoices",
+      "file": "20261024000025_phase11_commercial_invoicing_transporter_settlement_tds.sql"
+    },
+    {
+      "index": "idx_transporter_payouts_trip_id",
+      "table": "transporter_payouts",
+      "file": "20261024000025_phase11_commercial_invoicing_transporter_settlement_tds.sql"
+    },
+    {
+      "index": "idx_transporter_payouts_vendor_id",
+      "table": "transporter_payouts",
+      "file": "20261024000025_phase11_commercial_invoicing_transporter_settlement_tds.sql"
+    },
+    {
+      "index": "idx_transporter_payouts_status",
+      "table": "transporter_payouts",
+      "file": "20261024000025_phase11_commercial_invoicing_transporter_settlement_tds.sql"
+    },
+    {
+      "index": "idx_client_users_account_id",
+      "table": "client_users",
+      "file": "20261030000026_the_truckx_unified_id_management.sql"
+    },
+    {
+      "index": "idx_client_companies_client_code",
+      "table": "client_companies",
+      "file": "20261030000026_the_truckx_unified_id_management.sql"
+    },
+    {
+      "index": "idx_vendor_companies_vendor_code",
+      "table": "vendor_companies",
+      "file": "20261030000026_the_truckx_unified_id_management.sql"
+    },
+    {
+      "index": "idx_vendors_vendor_code",
+      "table": "vendors",
+      "file": "20261030000026_the_truckx_unified_id_management.sql"
+    },
+    {
+      "index": "idx_vendor_users_account_id",
+      "table": "vendor_users",
+      "file": "20261030000026_the_truckx_unified_id_management.sql"
+    },
+    {
+      "index": "idx_drivers_driver_code",
+      "table": "drivers",
+      "file": "20261030000026_the_truckx_unified_id_management.sql"
+    },
+    {
+      "index": "idx_drivers_account_id",
+      "table": "drivers",
+      "file": "20261030000026_the_truckx_unified_id_management.sql"
+    },
+    {
+      "index": "idx_vehicles_vehicle_code",
+      "table": "vehicles",
+      "file": "20261030000026_the_truckx_unified_id_management.sql"
+    },
+    {
+      "index": "idx_requirements_requirement_code",
+      "table": "requirements",
+      "file": "20261030000026_the_truckx_unified_id_management.sql"
+    },
+    {
+      "index": "idx_client_quotes_quote_code",
+      "table": "client_quotes",
+      "file": "20261030000026_the_truckx_unified_id_management.sql"
+    },
+    {
+      "index": "idx_bookings_booking_number",
+      "table": "bookings",
+      "file": "20261030000026_the_truckx_unified_id_management.sql"
+    },
+    {
+      "index": "idx_trips_trip_code",
+      "table": "trips",
+      "file": "20261030000026_the_truckx_unified_id_management.sql"
+    },
+    {
+      "index": "idx_auth_sessions_account_id",
+      "table": "auth_sessions",
+      "file": "20261030000026_the_truckx_unified_id_management.sql"
+    }
+  ]
+}

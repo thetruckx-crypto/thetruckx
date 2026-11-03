@@ -33,13 +33,15 @@ import {
   ExternalLink,
   User,
   ShieldCheck,
+  ShieldAlert,
+  MoreVertical,
   Activity,
   Layers,
 } from 'lucide-react';
 import { supabase, ensureAdminSession } from '../../utils/supabase';
 import { DriverLicenceAudit } from './DriverLicenceAudit';
 import { DriverDetailsDrawer } from './DriverDetailsDrawer';
-import { formatDisplayId, generateDbNeclId } from '../../utils/idGenerator';
+import { formatDisplayId, generateDbTruckxId, generateDbNeclId } from '../../utils/idGenerator';
 import { optimizeFileForUpload } from '../../utils/fileCompressor';
 import { apiFetch } from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
@@ -196,6 +198,85 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteReason, setDeleteReason] = useState('');
 
+  // Three-Dot Floating Action Menu State
+  const [menuAnchor, setMenuAnchor] = useState<{
+    id: string;
+    top?: number;
+    bottom?: number;
+    right: number;
+    isDropup: boolean;
+  } | null>(null);
+  const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
+
+  // Approve Driver Modal State
+  const [approvingDriver, setApprovingDriver] = useState<any | null>(null);
+  const [isApprovingDriver, setIsApprovingDriver] = useState(false);
+
+  // Reject Driver Modal State
+  const [rejectingDriver, setRejectingDriver] = useState<any | null>(null);
+  const [rejectionReasonText, setRejectionReasonText] = useState('');
+  const [rejectionReasonError, setRejectionReasonError] = useState('');
+  const [isRejectingDriver, setIsRejectingDriver] = useState(false);
+
+  const handleToggleActionMenu = (driver: any, e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    if (menuAnchor?.id === driver.id) {
+      setMenuAnchor(null);
+      setOpenActionMenuId(null);
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const menuHeight = 320;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const isDropup = spaceBelow < menuHeight + 20;
+
+    setOpenActionMenuId(driver.id);
+    setMenuAnchor({
+      id: driver.id,
+      top: isDropup ? undefined : rect.bottom + 6,
+      bottom: isDropup ? window.innerHeight - rect.top + 6 : undefined,
+      right: Math.max(16, window.innerWidth - rect.right),
+      isDropup,
+    });
+  };
+
+  // Close floating action menu on outside click or escape
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuAnchor && !(event.target as HTMLElement).closest('.driver-action-menu-container') && !(event.target as HTMLElement).closest('.driver-action-menu-dropdown')) {
+        setOpenActionMenuId(null);
+        setMenuAnchor(null);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMenuAnchor(null);
+        setOpenActionMenuId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [menuAnchor]);
+
+  // Close floating action menu on window scroll or resize to prevent dislocation
+  useEffect(() => {
+    if (!menuAnchor) return;
+    const handleClose = () => {
+      setMenuAnchor(null);
+      setOpenActionMenuId(null);
+    };
+    window.addEventListener('resize', handleClose);
+    window.addEventListener('scroll', handleClose, true);
+    return () => {
+      window.removeEventListener('resize', handleClose);
+      window.removeEventListener('scroll', handleClose, true);
+    };
+  }, [menuAnchor]);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3800);
@@ -233,11 +314,11 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
       const [driversRes, vendorsRes, tripsRes, vehiclesRes, linksRes] = await Promise.all([
         supabase
           .from('drivers')
-          .select('*, vendor_companies:primary_vendor_id(id, vendor_name, vendor_code, status, city)')
+          .select('*, vendor_companies:primary_vendor_id(id, vendor_name, vendor_code)')
           .order('created_at', { ascending: false }),
         supabase
           .from('vendor_companies')
-          .select('id, vendor_name, vendor_code, status, city, phone')
+          .select('id, vendor_name, vendor_code, status, address')
           .order('vendor_name', { ascending: true }),
         supabase
           .from('trips')
@@ -251,17 +332,44 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
           .select('vendor_id, vehicle_id'),
       ]);
 
-      let fetchedDrivers = driversRes.data || [];
+      const rawDrivers = driversRes.data || [];
+      const vendorsData = vendorsRes.data || [];
+      const vendorLookup = new Map(vendorsData.map((v: any) => [v.id, v]));
+
+      let fetchedDrivers = rawDrivers.map((d: any) => ({
+        ...d,
+        vendor_companies: d.vendor_companies || (d.primary_vendor_id ? vendorLookup.get(d.primary_vendor_id) || null : null),
+      }));
+
+      // If drivers query failed, try API fallback
       if (driversRes.error || fetchedDrivers.length === 0) {
+        if (driversRes.error) {
+          console.warn('[DriverQueue] Supabase driver query notice:', driversRes.error.message);
+        }
+
+        // Always attempt API fallback to ensure freshly registered drivers are visible
+        // even when Supabase RLS restricts direct reads for the current session.
         try {
           const apiRes = await apiFetch('/admin/drivers');
           if (apiRes.ok) {
             const json = await apiRes.json();
-            if (json.data && Array.isArray(json.data)) {
+            if (json.data && Array.isArray(json.data) && json.data.length > 0) {
               fetchedDrivers = json.data;
             }
           }
-        } catch {}
+        } catch { /* non-blocking */ }
+      } else {
+        // Even when Supabase returned results, reconcile with backend to pick up any
+        // drivers created via server endpoints
+        try {
+          const apiRes = await apiFetch('/admin/drivers');
+          if (apiRes.ok) {
+            const json = await apiRes.json();
+            if (json.data && Array.isArray(json.data) && json.data.length > fetchedDrivers.length) {
+              fetchedDrivers = json.data;
+            }
+          }
+        } catch { /* non-blocking */ }
       }
 
       setDrivers(fetchedDrivers);
@@ -476,10 +584,16 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
   const kpis = useMemo(() => {
     const total = drivers.length;
     const pending = drivers.filter(
-      (d) => d.status === 'PENDING' || d.status === 'PENDING_APPROVAL'
+      (d) =>
+        d.status === 'PENDING' ||
+        d.status === 'PENDING_APPROVAL' ||
+        d.status === 'SUBMITTED' ||
+        d.status === 'UNDER_REVIEW' ||
+        d.verification_status === 'PENDING' ||
+        (d.status === 'INACTIVE' && d.verification_status !== 'APPROVED' && d.verification_status !== 'REJECTED')
     ).length;
-    const approved = drivers.filter((d) => d.status === 'APPROVED').length;
-    const rejected = drivers.filter((d) => d.status === 'REJECTED').length;
+    const approved = drivers.filter((d) => d.status === 'APPROVED' || d.verification_status === 'APPROVED').length;
+    const rejected = drivers.filter((d) => d.status === 'REJECTED' || d.verification_status === 'REJECTED').length;
 
     const today = new Date();
     const expired = drivers.filter((d) => {
@@ -501,7 +615,7 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
       const assignment = getDriverVehicleAssignment(d.id);
       if (assignment.vehicle) assignedVehCount++;
       const tStatus = getDriverTransportStatus(d, assignment.trip);
-      if (d.status === 'APPROVED' && tStatus.key === 'AVAILABLE') readyTransportCount++;
+      if ((d.status === 'APPROVED' || d.verification_status === 'APPROVED') && tStatus.key === 'AVAILABLE') readyTransportCount++;
     });
 
     return {
@@ -515,9 +629,18 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
   const filteredDrivers = useMemo(() => {
     return drivers.filter((d) => {
       // 1. Status Tab Filter
-      if (activeTab === 'pending' && d.status !== 'PENDING' && d.status !== 'PENDING_APPROVAL') return false;
-      if (activeTab === 'approved' && d.status !== 'APPROVED') return false;
-      if (activeTab === 'rejected' && d.status !== 'REJECTED') return false;
+      if (activeTab === 'pending') {
+        const isPending =
+          d.status === 'PENDING' ||
+          d.status === 'PENDING_APPROVAL' ||
+          d.status === 'SUBMITTED' ||
+          d.status === 'UNDER_REVIEW' ||
+          d.verification_status === 'PENDING' ||
+          (d.status === 'INACTIVE' && d.verification_status !== 'APPROVED' && d.verification_status !== 'REJECTED');
+        if (!isPending) return false;
+      }
+      if (activeTab === 'approved' && d.status !== 'APPROVED' && d.verification_status !== 'APPROVED') return false;
+      if (activeTab === 'rejected' && d.status !== 'REJECTED' && d.verification_status !== 'REJECTED') return false;
       if (activeTab === 'expired') {
         const today = new Date();
         const expiry = d.licence_expiry_date ? new Date(d.licence_expiry_date) : null;
@@ -526,8 +649,22 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
 
       // 2. Status Dropdown Filter
       if (statusFilter !== 'all') {
-        if (statusFilter === 'pending' && d.status !== 'PENDING' && d.status !== 'PENDING_APPROVAL') return false;
-        else if (statusFilter !== 'pending' && d.status !== statusFilter.toUpperCase()) return false;
+        if (statusFilter === 'pending') {
+          const isPending =
+            d.status === 'PENDING' ||
+            d.status === 'PENDING_APPROVAL' ||
+            d.status === 'SUBMITTED' ||
+            d.status === 'UNDER_REVIEW' ||
+            d.verification_status === 'PENDING' ||
+            (d.status === 'INACTIVE' && d.verification_status !== 'APPROVED' && d.verification_status !== 'REJECTED');
+          if (!isPending) return false;
+        } else if (statusFilter === 'approved') {
+          if (d.status !== 'APPROVED' && d.verification_status !== 'APPROVED') return false;
+        } else if (statusFilter === 'rejected') {
+          if (d.status !== 'REJECTED' && d.verification_status !== 'REJECTED') return false;
+        } else if (d.status !== statusFilter.toUpperCase() && d.verification_status !== statusFilter.toUpperCase()) {
+          return false;
+        }
       }
 
       // 3. Vendor Dropdown Filter
@@ -767,6 +904,20 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
 
       if (error) throw error;
 
+      // Sync user registry and trigger instant push notification via server endpoint
+      try {
+        await apiFetch('/admin/driver-approval', {
+          method: 'POST',
+          body: JSON.stringify({
+            driverId: driver.id,
+            decision: 'APPROVED',
+            reviewerName: adminProfile?.name || 'Administrator',
+          }),
+        });
+      } catch (syncErr) {
+        console.warn('Driver approval server sync warning:', syncErr);
+      }
+
       showToast(`✅ Driver "${driver.full_name}" verified & approved!`);
       loadData();
       if (selectedDrawerDriver?.id === driver.id) {
@@ -793,6 +944,21 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
         .eq('id', driver.id);
 
       if (error) throw error;
+
+      // Sync user registry and trigger instant push notification via server endpoint
+      try {
+        await apiFetch('/admin/driver-approval', {
+          method: 'POST',
+          body: JSON.stringify({
+            driverId: driver.id,
+            decision: 'REJECTED',
+            reviewerName: adminProfile?.name || 'Administrator',
+            reason,
+          }),
+        });
+      } catch (syncErr) {
+        console.warn('Driver rejection server sync warning:', syncErr);
+      }
 
       showToast(`Driver "${driver.full_name}" rejected`);
       loadData();
@@ -1012,12 +1178,14 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
 
     setIsCreatingDriver(true);
     try {
-      const driverCode = await generateDbNeclId('DR');
+      const driverCode = await generateDbTruckxId('DR');
+      const accountId = await generateDbTruckxId('AC');
       const { data, error } = await supabase
         .from('drivers')
         .insert([
           {
             driver_code: driverCode,
+            account_id: accountId,
             full_name: createFormData.fullName.trim(),
             mobile: cleanMobile,
             phone: cleanMobile,
@@ -2085,100 +2253,32 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
                         </td>
                       )}
 
-                      <td onClick={(e) => e.stopPropagation()} style={{ textAlign: 'right' }}>
-                        <div className="row-actions-group">
-                          {/* View Full Drawer */}
+                      <td onClick={(e) => e.stopPropagation()} style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        <div className="driver-action-menu-container" style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end' }}>
                           <button
-                            className="row-action-btn-circle"
-                            title="View Driver Details Drawer"
-                            id={`btn-view-driver-details-${driver.id}`}
-                            onClick={() => setSelectedDrawerDriver(driver)}
-                          >
-                            <Eye size={14} />
-                          </button>
-
-                          {/* Audit Documents */}
-                          <button
-                            className="row-action-btn-circle"
-                            title="Audit Licence & Documents"
-                            id={`btn-audit-driver-${driver.id}`}
-                            onClick={() => {
-                              setSelectedAuditDriver(driver);
-                              setIsAuditModalOpen(true);
-                              if (onAuditDriver) onAuditDriver(driver.id);
+                            type="button"
+                            className={`row-action-btn-circle ${menuAnchor?.id === driver.id ? 'active' : ''}`}
+                            id={`btn-driver-actions-${driver.id}`}
+                            onClick={(e) => handleToggleActionMenu(driver, e)}
+                            title="More actions"
+                            aria-label={`Actions for driver ${driver.full_name || driver.name}`}
+                            aria-expanded={menuAnchor?.id === driver.id}
+                            style={{
+                              width: '32px',
+                              height: '32px',
+                              borderRadius: '6px',
+                              border: menuAnchor?.id === driver.id ? '1px solid #F05A22' : '1px solid #CBD5E1',
+                              background: menuAnchor?.id === driver.id ? '#FFF5F0' : '#FFFFFF',
+                              color: menuAnchor?.id === driver.id ? '#F05A22' : '#334155',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease-in-out',
                             }}
                           >
-                            <FileCheck size={14} />
+                            <MoreVertical size={16} />
                           </button>
-
-                          {/* Assign / Change Vehicle */}
-                          <button
-                            className="row-action-btn-circle"
-                            title="Assign / Change Vehicle"
-                            id={`btn-assign-vehicle-${driver.id}`}
-                            onClick={() => {
-                              setAssigningVehicleDriver(driver);
-                              const curr = getDriverVehicleAssignment(driver.id);
-                              setSelectedVehicleToAssign(curr.vehicle?.id || '');
-                            }}
-                          >
-                            <Truck size={14} />
-                          </button>
-
-                          {/* Edit Driver */}
-                          {canEdit && (
-                            <button
-                              className="row-action-btn-circle"
-                              title="Edit Driver"
-                              id={`btn-edit-driver-${driver.id}`}
-                              onClick={() => {
-                                setEditingDriver(driver);
-                                setEditFormData({
-                                  fullName: driver.full_name || '',
-                                  mobile: driver.mobile || driver.phone || '',
-                                  dateOfBirth: driver.date_of_birth || driver.dob || '',
-                                  licenceNumber: driver.licence_number || '',
-                                  licenceExpiryDate: driver.licence_expiry_date || '',
-                                  primaryVendorId: driver.primary_vendor_id || '',
-                                  address: driver.address || '',
-                                  city: driver.city || '',
-                                  state: driver.state || '',
-                                  emergencyContactName: driver.emergency_contact_name || '',
-                                  emergencyContactPhone: driver.emergency_contact_phone || '',
-                                });
-                              }}
-                            >
-                              <Edit2 size={14} />
-                            </button>
-                          )}
-
-                          {/* Transport Status */}
-                          <button
-                            className="row-action-btn-circle"
-                            title="Update Transport Availability"
-                            id={`btn-transport-status-${driver.id}`}
-                            onClick={() => {
-                              setStatusUpdatingDriver(driver);
-                              const vehAssign = getDriverVehicleAssignment(driver.id);
-                              const tStatus = getDriverTransportStatus(driver, vehAssign.trip);
-                              setSelectedTransportStatus(tStatus.key);
-                            }}
-                          >
-                            <SlidersHorizontal size={14} />
-                          </button>
-
-                          {/* Delete Driver */}
-                          {canDelete && (
-                            <button
-                              className="row-action-btn-circle"
-                              title="Delete Driver"
-                              style={{ color: '#DC2626' }}
-                              id={`btn-delete-driver-${driver.id}`}
-                              onClick={() => setDeletingDriver(driver)}
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          )}
                         </div>
                       </td>
                     </tr>
@@ -2317,6 +2417,366 @@ export const DriverVerificationQueue: React.FC<DriverVerificationQueueProps> = (
             showToast(`Driver ${updated.full_name} status updated to ${updated.status}`);
           }}
         />
+      )}
+
+      {/* Driver Floating Three-Dot Action Menu */}
+      {menuAnchor && (() => {
+        const driver = drivers.find((d) => d.id === menuAnchor.id);
+        if (!driver) return null;
+
+        const isDriverApproved = driver.status === 'APPROVED' || driver.verification_status === 'APPROVED';
+        const isDriverRejected = driver.status === 'REJECTED' || driver.verification_status === 'REJECTED';
+
+        return (
+          <div
+            className="driver-action-menu-dropdown"
+            style={{
+              position: 'fixed',
+              top: menuAnchor.top !== undefined ? `${menuAnchor.top}px` : undefined,
+              bottom: menuAnchor.bottom !== undefined ? `${menuAnchor.bottom}px` : undefined,
+              right: `${menuAnchor.right}px`,
+              zIndex: 99999,
+              width: '235px',
+              background: '#FFFFFF',
+              border: '1px solid #CBD5E1',
+              borderRadius: '10px',
+              boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.20), 0 8px 10px -6px rgba(15, 23, 42, 0.10)',
+              padding: '6px 0',
+              textAlign: 'left',
+            }}
+            role="menu"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 1. View Driver Details */}
+            <button
+              type="button"
+              className="driver-menu-item"
+              id={`btn-view-driver-details-${driver.id}`}
+              onClick={() => {
+                setMenuAnchor(null);
+                setOpenActionMenuId(null);
+                setSelectedDrawerDriver(driver);
+              }}
+            >
+              <Eye size={15} color="#0284C7" />
+              <span>View Driver Details</span>
+            </button>
+
+            {/* 2. View Documents */}
+            <button
+              type="button"
+              className="driver-menu-item"
+              id={`btn-audit-driver-${driver.id}`}
+              onClick={() => {
+                setMenuAnchor(null);
+                setOpenActionMenuId(null);
+                setSelectedAuditDriver(driver);
+                setIsAuditModalOpen(true);
+                if (onAuditDriver) onAuditDriver(driver.id);
+              }}
+            >
+              <FileCheck size={15} color="#F05A22" />
+              <span>View Documents</span>
+            </button>
+
+            {/* 3. Verify / Approve Driver (Only when not approved) */}
+            {canApprove && !isDriverApproved && (
+              <button
+                type="button"
+                className="driver-menu-item"
+                id={`btn-approve-driver-${driver.id}`}
+                onClick={() => {
+                  setMenuAnchor(null);
+                  setOpenActionMenuId(null);
+                  setApprovingDriver(driver);
+                }}
+              >
+                <ShieldCheck size={15} color="#16A34A" />
+                <span style={{ color: '#16A34A', fontWeight: 600 }}>Verify / Approve Driver</span>
+              </button>
+            )}
+
+            {/* 4. Reject Verification (Only when not rejected) */}
+            {canApprove && !isDriverRejected && (
+              <button
+                type="button"
+                className="driver-menu-item"
+                id={`btn-reject-driver-${driver.id}`}
+                onClick={() => {
+                  setMenuAnchor(null);
+                  setOpenActionMenuId(null);
+                  setRejectingDriver(driver);
+                  setRejectionReasonText('');
+                  setRejectionReasonError('');
+                }}
+              >
+                <ShieldAlert size={15} color="#DC2626" />
+                <span style={{ color: '#DC2626' }}>Reject Verification</span>
+              </button>
+            )}
+
+            {/* 5. Assign / Change Vehicle */}
+            <button
+              type="button"
+              className="driver-menu-item"
+              id={`btn-assign-vehicle-${driver.id}`}
+              onClick={() => {
+                setMenuAnchor(null);
+                setOpenActionMenuId(null);
+                setAssigningVehicleDriver(driver);
+                const curr = getDriverVehicleAssignment(driver.id);
+                setSelectedVehicleToAssign(curr.vehicle?.id || '');
+              }}
+            >
+              <Truck size={15} color="#475569" />
+              <span>Assign / Change Vehicle</span>
+            </button>
+
+            {/* 6. Update Transport Availability */}
+            <button
+              type="button"
+              className="driver-menu-item"
+              id={`btn-transport-status-${driver.id}`}
+              onClick={() => {
+                setMenuAnchor(null);
+                setOpenActionMenuId(null);
+                setStatusUpdatingDriver(driver);
+                const vehAssign = getDriverVehicleAssignment(driver.id);
+                const tStatus = getDriverTransportStatus(driver, vehAssign.trip);
+                setSelectedTransportStatus(tStatus.key);
+              }}
+            >
+              <SlidersHorizontal size={15} color="#475569" />
+              <span>Update Availability</span>
+            </button>
+
+            {/* 7. Edit Driver Details */}
+            {canEdit && (
+              <button
+                type="button"
+                className="driver-menu-item"
+                id={`btn-edit-driver-${driver.id}`}
+                onClick={() => {
+                  setMenuAnchor(null);
+                  setOpenActionMenuId(null);
+                  setEditingDriver(driver);
+                  setEditFormData({
+                    fullName: driver.full_name || '',
+                    mobile: driver.mobile || driver.phone || '',
+                    dateOfBirth: driver.date_of_birth || driver.dob || '',
+                    licenceNumber: driver.licence_number || '',
+                    licenceExpiryDate: driver.licence_expiry_date || '',
+                    primaryVendorId: driver.primary_vendor_id || '',
+                    address: driver.address || '',
+                    city: driver.city || '',
+                    state: driver.state || '',
+                    emergencyContactName: driver.emergency_contact_name || '',
+                    emergencyContactPhone: driver.emergency_contact_phone || '',
+                  });
+                }}
+              >
+                <Edit2 size={15} color="#475569" />
+                <span>Edit Driver Details</span>
+              </button>
+            )}
+
+            {/* Divider before destructive action */}
+            {canDelete && <div style={{ height: '1px', background: '#F1F5F9', margin: '4px 0' }} />}
+
+            {/* 8. Delete Driver */}
+            {canDelete && (
+              <button
+                type="button"
+                className="driver-menu-item danger"
+                id={`btn-delete-driver-${driver.id}`}
+                onClick={() => {
+                  setMenuAnchor(null);
+                  setOpenActionMenuId(null);
+                  setDeletingDriver(driver);
+                }}
+              >
+                <Trash2 size={15} color="#DC2626" />
+                <span style={{ color: '#DC2626' }}>Delete Driver</span>
+              </button>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* Approve Driver Confirmation Modal */}
+      {approvingDriver && (
+        <div className="client-modal-overlay" style={{ zIndex: 1200 }}>
+          <div className="client-modal-container" style={{ maxWidth: '480px' }}>
+            <div className="client-modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <ShieldCheck size={20} color="#16A34A" />
+                </div>
+                <div>
+                  <h3 className="client-modal-title">Approve Driver Verification</h3>
+                  <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#64748B' }}>
+                    Grant active commercial status for dispatch allocations
+                  </p>
+                </div>
+              </div>
+              <button className="client-modal-close" onClick={() => setApprovingDriver(null)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="client-modal-body" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '12px 14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: getAvatarColor(approvingDriver.full_name || 'DR'), color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
+                    {getInitials(approvingDriver.full_name)}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A' }}>{approvingDriver.full_name}</div>
+                    <div style={{ fontSize: '12px', color: '#64748B', fontFamily: 'monospace' }}>
+                      {formatDisplayId('DR', approvingDriver.driver_code || approvingDriver.id, approvingDriver.created_at)}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '12px', paddingTop: '10px', borderTop: '1px solid #E2E8F0', fontSize: '12px' }}>
+                  <div>
+                    <span style={{ color: '#64748B' }}>Licence No: </span>
+                    <strong style={{ color: '#0F172A', fontFamily: 'monospace' }}>{approvingDriver.licence_number || '—'}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: '#64748B' }}>Connected Vendor: </span>
+                    <strong style={{ color: '#0F172A' }}>{getVendorInfo(approvingDriver).name}</strong>
+                  </div>
+                </div>
+              </div>
+
+              <p style={{ margin: 0, fontSize: '13px', color: '#475569', lineHeight: 1.5 }}>
+                Are you sure you want to verify and approve this commercial driver? This will verify their driving credentials, grant active status on THE TRUCKX network, and allow transport allocations.
+              </p>
+            </div>
+
+            <div className="client-modal-footer">
+              <button
+                type="button"
+                className="btn-modal-cancel"
+                onClick={() => setApprovingDriver(null)}
+                disabled={isApprovingDriver}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-modal-submit"
+                disabled={isApprovingDriver}
+                onClick={async () => {
+                  setIsApprovingDriver(true);
+                  try {
+                    await handleApproveDriver(approvingDriver);
+                    setApprovingDriver(null);
+                  } finally {
+                    setIsApprovingDriver(false);
+                  }
+                }}
+                style={{ background: '#16A34A', borderColor: '#16A34A' }}
+              >
+                {isApprovingDriver ? 'Approving...' : 'Confirm Approval'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject Driver Verification Modal */}
+      {rejectingDriver && (
+        <div className="client-modal-overlay" style={{ zIndex: 1200 }}>
+          <div className="client-modal-container" style={{ maxWidth: '480px' }}>
+            <div className="client-modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#FEE2E2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <ShieldAlert size={20} color="#DC2626" />
+                </div>
+                <div>
+                  <h3 className="client-modal-title">Reject Driver Verification</h3>
+                  <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#64748B' }}>
+                    Provide a clear reason for the rejection
+                  </p>
+                </div>
+              </div>
+              <button className="client-modal-close" onClick={() => setRejectingDriver(null)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="client-modal-body" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '12px 14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: getAvatarColor(rejectingDriver.full_name || 'DR'), color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
+                    {getInitials(rejectingDriver.full_name)}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A' }}>{rejectingDriver.full_name}</div>
+                    <div style={{ fontSize: '12px', color: '#64748B', fontFamily: 'monospace' }}>
+                      {formatDisplayId('DR', rejectingDriver.driver_code || rejectingDriver.id, rejectingDriver.created_at)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="form-field-group">
+                <label className="field-label-req" style={{ fontSize: '13px', fontWeight: 600, color: '#1E293B' }}>
+                  Rejection Reason <span style={{ color: '#DC2626' }}>*</span>
+                </label>
+                <textarea
+                  rows={3}
+                  className="client-field-input"
+                  placeholder="Please specify why this driver verification is rejected (e.g., Expired licence copy, illegible Aadhaar card, invalid commercial endorsement)..."
+                  value={rejectionReasonText}
+                  onChange={(e) => {
+                    setRejectionReasonText(e.target.value);
+                    if (e.target.value.trim()) setRejectionReasonError('');
+                  }}
+                  style={{ borderColor: rejectionReasonError ? '#DC2626' : undefined }}
+                />
+                {rejectionReasonError && (
+                  <div style={{ fontSize: '12px', color: '#DC2626', marginTop: '4px' }}>
+                    {rejectionReasonError}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="client-modal-footer">
+              <button
+                type="button"
+                className="btn-modal-cancel"
+                onClick={() => setRejectingDriver(null)}
+                disabled={isRejectingDriver}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-modal-submit"
+                disabled={isRejectingDriver}
+                onClick={async () => {
+                  if (!rejectionReasonText.trim()) {
+                    setRejectionReasonError('Please provide a reason before rejecting the driver.');
+                    return;
+                  }
+                  setIsRejectingDriver(true);
+                  try {
+                    await handleRejectDriver(rejectingDriver, rejectionReasonText.trim());
+                    setRejectingDriver(null);
+                  } finally {
+                    setIsRejectingDriver(false);
+                  }
+                }}
+                style={{ background: '#DC2626', borderColor: '#DC2626' }}
+              >
+                {isRejectingDriver ? 'Rejecting...' : 'Confirm Rejection'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* 11. Tasks 10 & 11: Assign / Change / Remove Vehicle Modal */}

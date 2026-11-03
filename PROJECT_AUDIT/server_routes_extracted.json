@@ -1,0 +1,778 @@
+[
+  {
+    "method": "POST",
+    "path": "/api/auth/admin-login",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const { email, password, otp } = req.body;\n  const cleanEmail = (email || '').trim().toLowerCase();\n  const enteredPassword = (password || '').trim();\n  const enteredOtp = (otp || '').trim();\n\n  if (!cleanEmail || !enteredPassword) {\n    return res.status"
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/check-registration",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const { mobile, role } = req.body;\n  if (!mobile) {\n    return res.status(400).json({ error: 'mobile is required' });\n  }\n\n  const result = await checkUserRegistration(mobile, role);\n  return res.json(result);\n});\n\n// 2a-2. Synchronize / Persist Registrat"
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/register-sync",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const { fullName, mobile, role, email, companyName, status = 'ACTIVE' } = req.body;\n  const cleanPhone = (mobile || '').replace(/[^0-9]/g, '').slice(-10);\n\n  if (cleanPhone.length !== 10 || !role || !fullName) {\n    return res.status(400).json({ error: 'f"
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/send-otp",
+    "auth": "None (Public)",
+    "tables": [
+      "otp_verifications"
+    ],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const { mobile, role, purpose = 'LOGIN' } = req.body;\n  const cleanPhone = (mobile || '').replace(/[^0-9]/g, '').slice(-10);\n\n  if (cleanPhone.length !== 10) {\n    return res.status(400).json({\n      success: false,\n      error: 'INVALID_PHONE',\n      mes"
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/verify-otp",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const { mobile, role, code, otp, purpose = 'LOGIN' } = req.body;\n  const cleanPhone = (mobile || '').replace(/[^0-9]/g, '').slice(-10);\n  const trimmedCode = ((code || otp) || '').trim();\n\n  if (cleanPhone.length !== 10 || (trimmedCode.length !== 5 && tri"
+  },
+  {
+    "method": "GET",
+    "path": "/api/auth/registration-status",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const mobile = (req.query.mobile as string) || '';\n  const role = (req.query.role as any) || undefined;\n  const cleanPhone = mobile.replace(/[^0-9]/g, '').slice(-10);\n\n  if (cleanPhone.length !== 10) {\n    return res.status(400).json({\n      success: fals"
+  },
+  {
+    "method": "GET",
+    "path": "/api/health",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", (req: Request, res: Response) => {\n  res.json({ status: 'ok', service: 'TRUCKS Backend', timestamp: new Date().toISOString() });\n});\n\n// 2d. Current Authenticated User Info\n"
+  },
+  {
+    "method": "GET",
+    "path": "/api/auth/me",
+    "auth": "authenticateToken (JWT Required)",
+    "tables": [],
+    "bodySnippet": ", authenticateToken, async (req: AuthenticatedRequest, res: Response) => {\n  if (!req.user) {\n    return res.status(401).json({ error: 'UNAUTHORIZED' });\n  }\n\n  const check = await checkUserRegistration(req.user.mobile || '', req.user.role);\n  if (!check.isRegistered) {\n    return res.status(403).js"
+  },
+  {
+    "method": "GET",
+    "path": "/api/client/dashboard-data",
+    "auth": "authenticateToken (JWT Required)",
+    "tables": [],
+    "bodySnippet": ",\n  authenticateToken,\n  requireRole(['CLIENT']),\n  async (req: AuthenticatedRequest, res: Response) => {\n    if (!req.user?.mobile) {\n      return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Authentication required.' });\n    }\n\n    const check = await checkUserRegistration(req.user.mobi"
+  },
+  {
+    "method": "POST",
+    "path": "/api/client/submit-registration",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  try {\n    const {\n      fullName,\n      mobile,\n      companyPhone,\n      email,\n      designation,\n      department,\n      companyName,\n      businessType,\n      gstin,\n      pan,\n      registeredAddress,\n      city,\n      state,\n      pincode,\n      doc"
+  },
+  {
+    "method": "GET",
+    "path": "/api/client/status/:identifier",
+    "auth": "None (Public)",
+    "tables": [
+      "client_companies"
+    ],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const { identifier } = req.params;\n  const idStr = String(identifier || '');\n  const cleanPhone = idStr.replace(/[^0-9]/g, '').slice(-10);\n\n  try {\n    // 1. Try matching by phone or company ID in Supabase\n    let query = supabase.from('client_companies')"
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/admin-review-client",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [],
+    "bodySnippet": ", authenticateAdmin, handleAdminClientReview);\n"
+  },
+  {
+    "method": "POST",
+    "path": "/api/client/admin-review",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [],
+    "bodySnippet": ", authenticateAdmin, handleAdminClientReview);\n\n// ==========================================\n// Regional Logistics Hubs Endpoints\n// ==========================================\nexport const DEFAULT_REGIONAL_HUBS = [\n  { id: 'hub_ghy', name: 'Guwahati (Gateway Hub)', city: 'Guwahati', state: 'Assam',"
+  },
+  {
+    "method": "GET",
+    "path": "/api/regional-hubs",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (_req: Request, res: Response) => {\n  const now = Date.now();\n  if (cachedRegionalHubs && cachedRegionalHubs.expiresAt > now) {\n    res.setHeader('Cache-Control', 'public, max-age=300');\n    return res.json({ success: true, hubs: cachedRegionalHubs.hubs, cached: true });\n  }\n\n  try {\n    con"
+  },
+  {
+    "method": "POST",
+    "path": "/api/regional-hubs",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const { name, city, state, region } = req.body;\n  if (!name?.trim() || !city?.trim() || !state?.trim()) {\n    return res.status(400).json({\n      error: 'VALIDATION_ERROR',\n      message: 'Name, City, and State are mandatory fields for creating a regional"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/regional-hubs/:id",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const { id } = req.params;\n  const { name, city, state, region, status } = req.body;\n  if (!id) {\n    return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Hub ID is required.' });\n  }\n\n  const updates: any = { updated_at: new Date().toISOStr"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/regional-hubs/:id",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const { id } = req.params;\n  if (!id) {\n    return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Hub ID is required.' });\n  }\n\n  try {\n    // Soft-deactivate by setting status to INACTIVE\n    const { error } = await supabase\n      .from('reg"
+  },
+  {
+    "method": "POST",
+    "path": "/api/vendor/submit-registration",
+    "auth": "None (Public)",
+    "tables": [
+      "vendor_users",
+      "documents",
+      "auth_audit_log"
+    ],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const {\n    transporterName,\n    contactPerson,\n    mobile,\n    email,\n    pan,\n    gstin,\n    registeredAddress,\n    city,\n    state,\n    pincode,\n    operatingHubs = [],\n    manualOperatingLocations = [],\n    totalFleetCount,\n    fleetStrength,\n    vehi"
+  },
+  {
+    "method": "GET",
+    "path": "/api/vendor/status/:identifier",
+    "auth": "None (Public)",
+    "tables": [
+      "vendor_companies"
+    ],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const { identifier } = req.params;\n  const idStr = String(identifier || '');\n  const cleanPhone = idStr.replace(/[^0-9]/g, '').slice(-10);\n\n  try {\n    await ensureAdminAuth();\n    if (cleanPhone.length === 10) {\n      // 1. Check vendor_users with join t"
+  },
+  {
+    "method": "GET",
+    "path": "/api/database/vendors",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", handleGetVendors);\n"
+  },
+  {
+    "method": "GET",
+    "path": "/api/vendors",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", handleGetVendors);\n"
+  },
+  {
+    "method": "GET",
+    "path": "/database/vendors",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", handleGetVendors);\n\n// ==========================================\n// Driver Registration & Lifecycle Endpoints\n// ==========================================\n"
+  },
+  {
+    "method": "POST",
+    "path": "/api/driver/submit-registration",
+    "auth": "None (Public)",
+    "tables": [
+      "drivers",
+      "documents"
+    ],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const {\n    fullName,\n    mobile,\n    dateOfBirth,\n    dob,\n    licenceNumber,\n    licenceExpiryDate,\n    primaryVendorId,\n    dlFrontUri,\n    dlBackUri,\n    aadhaarFrontUri,\n    aadhaarBackUri,\n    documents = [],\n  } = req.body;\n\n  const cleanPhone = (m"
+  },
+  {
+    "method": "GET",
+    "path": "/api/driver/status/:identifier",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const { identifier } = req.params;\n  const idStr = String(identifier || '');\n  const cleanPhone = idStr.replace(/[^0-9]/g, '').slice(-10);\n\n  try {\n    await ensureAdminAuth();\n    if (cleanPhone.length === 10) {\n      const { data: driverRec } = await su"
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/drivers",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  try {\n    await ensureAdminAuth();\n    \n    // Direct drivers select to prevent relational join failure if foreign keys are unmapped\n    const { data: drivers, error } = await supabase\n      .from('drivers')\n      .select('*')\n      .order('created_at', {"
+  },
+  {
+    "method": "GET",
+    "path": "/api/drivers",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  try {\n    await ensureAdminAuth();\n    const { data: drivers, error } = await supabase\n      .from('drivers')\n      .select('*')\n      .order('created_at', { ascending: false });\n\n    if (error) throw error;\n    return res.json(drivers || []);\n  } catch ("
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/vendor-approval",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [],
+    "bodySnippet": ", authenticateAdmin, async (req: Request, res: Response) => {\n  const { vendorId, decision, reviewerName = 'TRUCKS Admin Compliance Desk' } = req.body;\n  if (!vendorId || !decision) {\n    return res.status(400).json({ error: 'vendorId and decision are required' });\n  }\n\n  await ensureAdminAuth();\n\n "
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/driver-approval",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [
+      "audit_logs"
+    ],
+    "bodySnippet": ", authenticateAdmin, async (req: Request, res: Response) => {\n  const { driverId, decision, reviewerName = 'TRUCKS Admin Compliance Desk', reason } = req.body;\n  if (!driverId || !decision) {\n    return res.status(400).json({ error: 'driverId and decision are required' });\n  }\n\n  await ensureAdminAu"
+  },
+  {
+    "method": "GET",
+    "path": "/api/vendor/dashboard-data",
+    "auth": "authenticateToken (JWT Required)",
+    "tables": [],
+    "bodySnippet": ", authenticateToken, requireRole(['VENDOR']), (req: AuthenticatedRequest, res: Response) => {\n  res.json({ success: true, message: 'Welcome to Vendor Dashboard API', user: req.user });\n});\n\n"
+  },
+  {
+    "method": "GET",
+    "path": "/api/driver/dashboard-data",
+    "auth": "authenticateToken (JWT Required)",
+    "tables": [],
+    "bodySnippet": ", authenticateToken, requireRole(['DRIVER']), (req: AuthenticatedRequest, res: Response) => {\n  res.json({ success: true, message: 'Welcome to Driver Dashboard API', user: req.user });\n});\n\n// ==========================================\n// Admin Users & Toggle-based Permission Management\n// ========="
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/users",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [],
+    "bodySnippet": ", authenticateAdmin, async (req: AuthenticatedRequest, res: Response) => {\n  await ensureAdminAuth();\n  try {\n    const { data: adminUsers, error } = await supabase\n      .from('admin_users')\n      .select('id, auth_uid, name, email, role, avatar_url, is_active, created_at, updated_at')\n      .order"
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/users",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [
+      "audit_logs"
+    ],
+    "bodySnippet": ", authenticateAdmin, requireSuperAdmin, async (req: AuthenticatedRequest, res: Response) => {\n  const { name, email, permissions } = req.body;\n  if (!name || !email) {\n    return res.status(400).json({ error: 'Name and email are required' });\n  }\n\n  await ensureAdminAuth();\n\n  try {\n    const cleanE"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/admin/users/:id/status",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [
+      "audit_logs"
+    ],
+    "bodySnippet": ", authenticateAdmin, requireSuperAdmin, async (req: AuthenticatedRequest, res: Response) => {\n  const { id } = req.params;\n  const { is_active, reason } = req.body;\n\n  if (typeof is_active !== 'boolean') {\n    return res.status(400).json({ error: 'is_active (boolean) is required' });\n  }\n\n  await en"
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/users/:id/permissions",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [],
+    "bodySnippet": ", authenticateAdmin, async (req: AuthenticatedRequest, res: Response) => {\n  const { id } = req.params;\n\n  await ensureAdminAuth();\n\n  try {\n    const { data: targetUser } = await supabase\n      .from('admin_users')\n      .select('id, role')\n      .eq('id', id)\n      .maybeSingle();\n\n    if (!target"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/admin/users/:id/permissions",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [],
+    "bodySnippet": ", authenticateAdmin, requireSuperAdmin, async (req: AuthenticatedRequest, res: Response) => {\n  const { id } = req.params;\n  const { permissions } = req.body;\n\n  if (!permissions || typeof permissions !== 'object') {\n    return res.status(400).json({ error: 'Valid permissions object is required' });"
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/current-user-permissions",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [],
+    "bodySnippet": ", authenticateAdmin, async (req: AuthenticatedRequest, res: Response) => {\n  if (!req.user) {\n    return res.status(401).json({ error: 'UNAUTHORIZED' });\n  }\n  const permissions = permissionService.getPermissionsForUser(req.user.userId, req.user.role as any);\n  return res.json({\n    success: true,\n "
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/delete-user",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [
+      "client_quotations",
+      "client_quotes",
+      "vendor_quotations",
+      "vendor_requests",
+      "requirements",
+      "client_users",
+      "vendor_driver_links",
+      "vendor_vehicle_links",
+      "documents",
+      "vendor_users",
+      "vendor_companies",
+      "driver_documents",
+      "drivers",
+      "admin_users",
+      "auth_audit_log",
+      "audit_logs"
+    ],
+    "bodySnippet": ", authenticateAdmin, async (req: AuthenticatedRequest, res: Response) => {\n  const { userId, role, mobile, companyId, reason } = req.body;\n  const adminActor = req.user?.email || 'admin@necl.com';\n\n  if (!userId && !mobile && !companyId) {\n    return res.status(400).json({ error: 'At least one ident"
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/drafts",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [
+      "admin_registration_drafts"
+    ],
+    "bodySnippet": ", authenticateAdmin, async (req: Request, res: Response) => {\n  const entityType = req.query.entityType as string | undefined;\n  await ensureAdminAuth();\n\n  let drafts: AdminRegistrationDraftRecord[] = getFileDrafts();\n\n  try {\n    let query = supabase.from('admin_registration_drafts').select('*').o"
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/drafts/:id",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [],
+    "bodySnippet": ", authenticateAdmin, async (req: Request, res: Response) => {\n  const { id } = req.params;\n  await ensureAdminAuth();\n\n  let draft = getFileDrafts().find((d) => d.id === id);\n\n  try {\n    const { data: dbDraft, error } = await supabase\n      .from('admin_registration_drafts')\n      .select('*')\n    "
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/drafts",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [
+      "admin_registration_drafts"
+    ],
+    "bodySnippet": ", authenticateAdmin, async (req: AuthenticatedRequest, res: Response) => {\n  const {\n    id,\n    entityType,\n    title,\n    status = 'DRAFT',\n    stepProgress = 1,\n    completionPercentage,\n    formData = {},\n    documentRefs = [],\n    vehicleDetails = [],\n    operatingLanes = [],\n    selectedServic"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/admin/drafts/:id",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [
+      "admin_registration_drafts"
+    ],
+    "bodySnippet": ", authenticateAdmin, async (req: Request, res: Response) => {\n  const { id } = req.params;\n  await ensureAdminAuth();\n\n  // Remove from file storage\n  const fileDrafts = getFileDrafts();\n  const filtered = fileDrafts.filter((d) => d.id !== id);\n  saveFileDrafts(filtered);\n\n  // Remove from Supabase\n"
+  },
+  {
+    "method": "POST",
+    "path": "/api/admin/drafts/:id/complete",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [
+      "admin_registration_drafts"
+    ],
+    "bodySnippet": ", authenticateAdmin, async (req: Request, res: Response) => {\n  const { id } = req.params;\n  await ensureAdminAuth();\n\n  // Update file storage\n  const fileDrafts = getFileDrafts();\n  const draft = fileDrafts.find((d) => d.id === id);\n  if (draft) {\n    draft.status = 'COMPLETED';\n    draft.updatedA"
+  },
+  {
+    "method": "GET",
+    "path": "/api/admin/audit-logs",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [],
+    "bodySnippet": ", authenticateAdmin, requireAdminPermission('audit_logs', 'view'), async (req: Request, res: Response) => {\n  await ensureAdminAuth();\n  try {\n    const { data, error } = await supabase\n      .from('audit_logs')\n      .select('*')\n      .order('timestamp', { ascending: false })\n      .limit(100);\n\n "
+  },
+  {
+    "method": "GET",
+    "path": "/api/database/status",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  try {\n    await ensureAdminAuth();\n\n    const tables = [\n      'client_companies',\n      'vendor_companies',\n      'vehicles',\n      'drivers',\n      'requirements',\n      'bookings',\n      'trips',\n      'documents',\n      'payment_records'\n    ];\n\n    c"
+  },
+  {
+    "method": "GET",
+    "path": "/api/database/clients",
+    "auth": "None (Public)",
+    "tables": [
+      "client_companies"
+    ],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const { data, error } = await supabase.from('client_companies').select('*, client_users(*)');\n  if (error) return res.status(500).json({ error: error.message });\n  res.json(data || []);\n});\n\n"
+  },
+  {
+    "method": "GET",
+    "path": "/api/database/vendors",
+    "auth": "None (Public)",
+    "tables": [
+      "vendor_companies"
+    ],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const { data, error } = await supabase.from('vendor_companies').select('*, drivers(*), vendor_vehicle_links(vehicle:vehicles(*))');\n  if (error) return res.status(500).json({ error: error.message });\n  res.json(data || []);\n});\n\n"
+  },
+  {
+    "method": "GET",
+    "path": "/api/database/vehicles",
+    "auth": "None (Public)",
+    "tables": [
+      "vehicles"
+    ],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const { data, error } = await supabase.from('vehicles').select('*');\n  if (error) return res.status(500).json({ error: error.message });\n  res.json(data || []);\n});\n\n// 4. Dashboard KPIs & Analytics\nlet cachedDashboardStats: { data: any; expiresAt: number"
+  },
+  {
+    "method": "GET",
+    "path": "/api/dashboard/stats",
+    "auth": "None (Public)",
+    "tables": [
+      "requirements",
+      "bookings",
+      "trips"
+    ],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const now = Date.now();\n  if (cachedDashboardStats && cachedDashboardStats.expiresAt > now) {\n    res.setHeader('Cache-Control', 'public, max-age=15');\n    return res.json(cachedDashboardStats.data);\n  }\n\n  try {\n    const [reqsRes, boksRes, tripsRes] = a"
+  },
+  {
+    "method": "GET",
+    "path": "/api/search",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const query = (req.query.q as string || '').toLowerCase().trim();\n  const category = (req.query.category as string || 'all').toLowerCase();\n\n  if (!query) {\n    return res.json({\n      query: '',\n      total: 0,\n      results: [],\n      recentSearches,\n  "
+  },
+  {
+    "method": "POST",
+    "path": "/api/search/recent/clear",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", (req: Request, res: Response) => {\n  recentSearches = [];\n  res.json({ success: true, recentSearches });\n});\n\n// 6. Notifications API (queries Supabase audit_logs for real activity)\n"
+  },
+  {
+    "method": "GET",
+    "path": "/api/notifications",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  try {\n    const { data: auditData } = await supabase\n      .from('audit_logs')\n      .select('id, action, table_name, record_id, changed_by, created_at')\n      .order('created_at', { ascending: false })\n      .limit(50);\n\n    const notifs = (auditData || "
+  },
+  {
+    "method": "POST",
+    "path": "/api/notifications/:id/read",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", (req: Request, res: Response) => {\n  // Read-state is managed client-side; return success\n  res.json({ success: true, unreadCount: 0 });\n});\n\n"
+  },
+  {
+    "method": "POST",
+    "path": "/api/notifications/read-all",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", (req: Request, res: Response) => {\n  res.json({ success: true, unreadCount: 0 });\n});\n\n// Push Notification Token Registry\n"
+  },
+  {
+    "method": "POST",
+    "path": "/api/notifications/register-token",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", (req: Request, res: Response) => {\n  const { pushToken, userId, role, platform } = req.body;\n  if (!pushToken) {\n    return res.status(400).json({ success: false, error: 'pushToken is required' });\n  }\n\n  const result = NotificationService.registerToken({\n    pushToken,\n    userId,\n    role,\n    p"
+  },
+  {
+    "method": "POST",
+    "path": "/api/notifications/send-push",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const { to, userId, role, title, body, data } = req.body;\n\n  if (!title || !body) {\n    return res.status(400).json({ success: false, error: 'title and body are required' });\n  }\n\n  // Resolve recipient tokens\n  let targetTokens: string[] = [];\n  if (to) "
+  },
+  {
+    "method": "POST",
+    "path": "/api/notifications/test-fcm",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const { targetRole, role, targetUserId, title, body, icon } = req.body;\n  const effectiveRole = (role || targetRole || 'CLIENT') as 'CLIENT' | 'VENDOR' | 'DRIVER' | 'ADMIN';\n\n  let defaultTitle = 'THE TRUCKX - Live Dispatch Alert';\n  let defaultBody = 'Tr"
+  },
+  {
+    "method": "POST",
+    "path": "/api/notifications/test-vendor",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const { title, body, targetUserId } = req.body;\n  const testTitle = title || 'Trip Awarded: Assign Vehicle & Driver 🏆';\n  const testBody = body || 'Booking #BK-2026-904 (Guwahati → Siliguri) has been awarded to your fleet. Assign driver to issue digital "
+  },
+  {
+    "method": "POST",
+    "path": "/api/notifications/test-driver",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const { title, body, targetUserId } = req.body;\n  const testTitle = title || 'New Trip Assigned: Guwahati → Siliguri 🚚';\n  const testBody = body || 'Trip #TRP-8821. Vehicle: AS-01-EC-9942. Report to loading bay for digital LR verification.';\n\n  let token"
+  },
+  {
+    "method": "GET",
+    "path": "/api/notifications/device-tokens",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", (req: Request, res: Response) => {\n  const { role, userId } = req.query;\n  const tokens = NotificationService.getTokens({\n    role: typeof role === 'string' ? role : undefined,\n    userId: typeof userId === 'string' ? userId : undefined,\n  });\n  res.json({ total: tokens.length, tokens });\n});\n\n// "
+  },
+  {
+    "method": "POST",
+    "path": "/api/quick-actions/create-booking",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [],
+    "bodySnippet": ", authenticateAdmin, async (req: Request, res: Response) => {\n  const { client, origin, destination, lorry, rate } = req.body;\n\n  if (!client || !origin || !destination) {\n    return res.status(400).json({ error: 'client, origin, and destination are required.' });\n  }\n\n  try {\n    // Look up client_"
+  },
+  {
+    "method": "POST",
+    "path": "/api/pricing/create-client-quote",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "bodySnippet": ", authenticateAdmin, async (req: AuthenticatedRequest, res: Response) => {\n  try {\n    const {\n      requirementId,\n      vendorQuotationId,\n      vendorCost,\n      marginType = 'FIXED',\n      marginValue = 0,\n      extraCharges = 0,\n      gstRatePercent = 18,\n      validityDays = 7,\n      status = "
+  },
+  {
+    "method": "GET",
+    "path": "/api/client/quotes/:requirementId",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  try {\n    const { requirementId } = req.params;\n    if (!requirementId) {\n      return res.status(400).json({ error: 'requirementId is required.' });\n    }\n\n    const { data: quotes, error } = await supabase\n      .from('client_quotes')\n      .select('id,"
+  },
+  {
+    "method": "GET",
+    "path": "/api/vendor/quotes/:requirementId",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  try {\n    const { requirementId } = req.params;\n    const vendorId = req.query.vendorId as string;\n\n    if (!requirementId || !vendorId) {\n      return res.status(400).json({ error: 'requirementId and vendorId query parameter are required.' });\n    }\n\n   "
+  },
+  {
+    "method": "POST",
+    "path": "/api/vendor/submit-quotation",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  try {\n    const {\n      vendorId,\n      requirementId,\n      vehicleId,\n      driverId,\n      quotedRate,\n      transitDays,\n      remarks,\n    } = req.body;\n\n    if (!vendorId || !requirementId) {\n      return res.status(400).json({ success: false, error"
+  },
+  {
+    "method": "POST",
+    "path": "/api/pricing/override-margin",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "bodySnippet": ", authenticateAdmin, async (req: AuthenticatedRequest, res: Response) => {\n  try {\n    const { quoteId, newMargin, justification } = req.body;\n\n    if (!quoteId || newMargin === undefined || newMargin === null) {\n      return res.status(400).json({ error: 'quoteId and newMargin are required.' });\n  "
+  },
+  {
+    "method": "POST",
+    "path": "/api/client/quotes/:quoteId/accept",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const { quoteId } = req.params;\n  const { clientId, notes } = req.body;\n  const db = getSupabaseClient(req.headers['authorization']);\n\n  if (!quoteId) {\n    return res.status(400).json({ error: 'Quotation ID (quoteId) is mandatory.' });\n  }\n\n  try {\n    /"
+  },
+  {
+    "method": "POST",
+    "path": "/api/client/quotes/:quoteId/reject",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const { quoteId } = req.params;\n  const { clientId, reason } = req.body;\n  const db = getSupabaseClient(req.headers['authorization']);\n\n  if (!quoteId) {\n    return res.status(400).json({ error: 'Quotation ID (quoteId) is mandatory.' });\n  }\n\n  try {\n    "
+  },
+  {
+    "method": "POST",
+    "path": "/api/bookings/emergency-direct-create",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [],
+    "bodySnippet": ", authenticateAdmin, async (req: AuthenticatedRequest, res: Response) => {\n  const { requirementId, clientId, justification, agreedRate, notes } = req.body;\n  const db = getSupabaseClient(req.headers['authorization']);\n\n  // 1. Mandatory justification validation (minimum 10 characters)\n  if (!justif"
+  },
+  {
+    "method": "GET",
+    "path": "/api/bookings/:bookingId",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const { bookingId } = req.params;\n  try {\n    const { data: booking, error: bErr } = await supabase\n      .from('bookings')\n      .select('*')\n      .eq('id', bookingId)\n      .maybeSingle();\n\n    if (bErr || !booking) {\n      return res.status(404).json("
+  },
+  {
+    "method": "POST",
+    "path": "/api/trips/generate-from-booking",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const { bookingId, vendorId, vendorRate, vehicleId, driverId } = req.body;\n  const db = getSupabaseClient(req.headers['authorization']);\n\n  if (!bookingId) {\n    return res.status(400).json({ error: 'bookingId is required.' });\n  }\n\n  try {\n    // 1. Idem"
+  },
+  {
+    "method": "POST",
+    "path": "/api/trips/:tripId/assign",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const { tripId } = req.params;\n  const { vendorId, vehicleId, driverId } = req.body;\n  const db = getSupabaseClient(req.headers['authorization']);\n\n  if (!tripId || !vehicleId || !driverId) {\n    return res.status(400).json({\n      error: 'tripId, vehicle"
+  },
+  {
+    "method": "GET",
+    "path": "/api/vendor/trips",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const vendorId = req.query.vendorId as string;\n  const db = getSupabaseClient(req.headers['authorization']);\n\n  if (!vendorId) {\n    return res.status(400).json({ error: 'vendorId query parameter is required.' });\n  }\n\n  try {\n    const { data: trips, err"
+  },
+  {
+    "method": "GET",
+    "path": "/api/trips/:tripId",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const tripId = req.params.tripId as string;\n  const role = ((req.query.role as string) || (req.headers['x-user-role'] as string) || 'CLIENT').toUpperCase();\n  const db = getSupabaseClient(req.headers['authorization']);\n\n  try {\n    const { data: trip, err"
+  },
+  {
+    "method": "POST",
+    "path": "/api/driver/trips/:tripId/acknowledge-dispatch",
+    "auth": "None (Public)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const { tripId } = req.params;\n  const { driverId } = req.body;\n  const db = getSupabaseClient(req.headers['authorization']);\n\n  if (!tripId) {\n    return res.status(400).json({ error: 'tripId is mandatory.' });\n  }\n\n  try {\n    // 1. Fetch trip\n    const"
+  },
+  {
+    "method": "POST",
+    "path": "/api/trips/:tripId/generate-lr",
+    "auth": "None (Public)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const { tripId } = req.params;\n  const { createdBy } = req.body;\n  const db = getSupabaseClient(req.headers['authorization']);\n\n  if (!tripId) {\n    return res.status(400).json({ error: 'tripId is mandatory.' });\n  }\n\n  try {\n    // 1. Fetch trip with ful"
+  },
+  {
+    "method": "POST",
+    "path": "/api/trips/:tripId/link-ewaybill",
+    "auth": "None (Public)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const { tripId } = req.params;\n  const { ewaybillNumber, validUntil, linkedBy } = req.body;\n  const db = getSupabaseClient(req.headers['authorization']);\n\n  if (!tripId) {\n    return res.status(400).json({ error: 'tripId is mandatory.' });\n  }\n\n  if (!ewa"
+  },
+  {
+    "method": "GET",
+    "path": "/api/trips/:tripId/lr",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const { tripId } = req.params;\n  const role = ((req.query.role as string) || (req.headers['x-user-role'] as string) || 'DRIVER').toUpperCase();\n  const db = getSupabaseClient(req.headers['authorization']);\n\n  if (!tripId) {\n    return res.status(400).json"
+  },
+  {
+    "method": "GET",
+    "path": "/api/driver/trips",
+    "auth": "None (Public)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const driverId = req.query.driverId as string;\n  const db = getSupabaseClient(req.headers['authorization']);\n\n  if (!driverId) {\n    return res.status(400).json({ error: 'driverId query parameter is required.' });\n  }\n\n  try {\n    const { data: trips, err"
+  },
+  {
+    "method": "GET",
+    "path": "/api/audit-logs",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", (req: Request, res: Response) => {\n  const { eventType, limit = 50 } = req.query;\n  let logs = memoryAuditLogs;\n  if (eventType) {\n    logs = logs.filter((l) => l.event_type === eventType);\n  }\n  return res.json({ success: true, logs: logs.slice(0, Number(limit)) });\n});\n\n/**\n * POST /api/trips/:t"
+  },
+  {
+    "method": "POST",
+    "path": "/api/trips/:tripId/location-ping",
+    "auth": "None (Public)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const tripId = req.params.tripId as string;\n  const { latitude, longitude, speed, heading, accuracy, batteryLevel, recordedAt, isMock } = req.body;\n  const db = getSupabaseClient(req.headers['authorization'] as string | undefined);\n\n  if (!tripId) {\n    r"
+  },
+  {
+    "method": "POST",
+    "path": "/api/trips/:tripId/milestone",
+    "auth": "None (Public)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const tripId = req.params.tripId as string;\n  const { newStatus, notes, updatedBy } = req.body;\n  const db = getSupabaseClient(req.headers['authorization'] as string | undefined);\n\n  if (!tripId || !newStatus) {\n    return res.status(400).json({ error: 't"
+  },
+  {
+    "method": "POST",
+    "path": "/api/trips/:tripId/geofence-check",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const tripId = req.params.tripId as string;\n  const { latitude, longitude, targetType } = req.body;\n  const db = getSupabaseClient(req.headers['authorization'] as string | undefined);\n\n  if (!tripId) {\n    return res.status(400).json({ error: 'tripId is m"
+  },
+  {
+    "method": "GET",
+    "path": "/api/trips/:tripId/tracking",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const tripId = req.params.tripId as string;\n  const db = getSupabaseClient(req.headers['authorization'] as string | undefined);\n\n  if (!tripId) {\n    return res.status(400).json({ error: 'tripId is mandatory.' });\n  }\n\n  try {\n    const { data: trip, erro"
+  },
+  {
+    "method": "POST",
+    "path": "/api/trips/:tripId/pod",
+    "auth": "None (Public)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const tripId = req.params.tripId as string;\n  const {\n    receiverName,\n    receiverPhone,\n    deliveredCondition = 'CLEAN',\n    consigneeStampVerified = false,\n    podDocumentUrl,\n    signatureUrl,\n    remarks,\n    submittedBy,\n  } = req.body;\n  const db"
+  },
+  {
+    "method": "GET",
+    "path": "/api/trips/:tripId/pod",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const tripId = req.params.tripId as string;\n  const db = getSupabaseClient(req.headers['authorization'] as string | undefined);\n\n  if (!tripId) {\n    return res.status(400).json({ error: 'tripId is mandatory.' });\n  }\n\n  try {\n    const { data: trip } = a"
+  },
+  {
+    "method": "POST",
+    "path": "/api/trips/:tripId/pod/review",
+    "auth": "None (Public)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const tripId = req.params.tripId as string;\n  const { action, rejectionReason, adminNotes, adminId } = req.body;\n  const db = getSupabaseClient(req.headers['authorization'] as string | undefined);\n\n  if (!tripId || !action) {\n    return res.status(400).js"
+  },
+  {
+    "method": "POST",
+    "path": "/api/trips/:tripId/weighbridge",
+    "auth": "None (Public)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const tripId = req.params.tripId as string;\n  const {\n    stage,\n    grossWeightMt,\n    tareWeightMt,\n    slipNumber,\n    slipLocation,\n    slipDocumentUrl,\n    weighbridgeName,\n    recordedBy,\n  } = req.body;\n  const db = getSupabaseClient(req.headers['a"
+  },
+  {
+    "method": "GET",
+    "path": "/api/trips/:tripId/weighbridge",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const tripId = req.params.tripId as string;\n  const db = getSupabaseClient(req.headers['authorization'] as string | undefined);\n\n  if (!tripId) {\n    return res.status(400).json({ error: 'tripId is mandatory.' });\n  }\n\n  try {\n    let weighments: any[] = "
+  },
+  {
+    "method": "POST",
+    "path": "/api/trips/:tripId/claims",
+    "auth": "None (Public)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const tripId = req.params.tripId as string;\n  const {\n    claimType,\n    claimedAmount,\n    itemDescription,\n    damagedQuantity,\n    evidenceUrls = [],\n    submittedBy,\n  } = req.body;\n  const db = getSupabaseClient(req.headers['authorization'] as string"
+  },
+  {
+    "method": "GET",
+    "path": "/api/trips/:tripId/claims",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const tripId = req.params.tripId as string;\n  const db = getSupabaseClient(req.headers['authorization'] as string | undefined);\n\n  if (!tripId) {\n    return res.status(400).json({ error: 'tripId is mandatory.' });\n  }\n\n  try {\n    let claims: any[] = [];\n"
+  },
+  {
+    "method": "POST",
+    "path": "/api/claims/:claimId/resolve",
+    "auth": "None (Public)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const claimId = req.params.claimId as string;\n  const { action, approvedAmount = 0, settlementNotes, reviewedBy } = req.body;\n  const db = getSupabaseClient(req.headers['authorization'] as string | undefined);\n\n  if (!claimId || !action) {\n    return res."
+  },
+  {
+    "method": "POST",
+    "path": "/api/invoices/client/generate",
+    "auth": "None (Public)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const {\n    bookingId,\n    loadingDetention = 0,\n    unloadingDetention = 0,\n    platformFee = 0,\n    creditDays = 30,\n    generatedBy,\n  } = req.body;\n  const db = getSupabaseClient(req.headers['authorization'] as string | undefined);\n\n  if (!bookingId) "
+  },
+  {
+    "method": "GET",
+    "path": "/api/invoices/client/:invoiceId",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const invoiceId = req.params.invoiceId as string;\n  const db = getSupabaseClient(req.headers['authorization'] as string | undefined);\n\n  if (!invoiceId) {\n    return res.status(400).json({ error: 'invoiceId is mandatory.' });\n  }\n\n  try {\n    let invoice "
+  },
+  {
+    "method": "POST",
+    "path": "/api/invoices/client/:invoiceId/record-payment",
+    "auth": "None (Public)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const invoiceId = req.params.invoiceId as string;\n  const {\n    amount,\n    paymentMode = 'NEFT',\n    transactionReference,\n    paymentDate,\n    notes,\n    recordedBy,\n  } = req.body;\n  const db = getSupabaseClient(req.headers['authorization'] as string |"
+  },
+  {
+    "method": "POST",
+    "path": "/api/payouts/transporter/generate",
+    "auth": "None (Public)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const {\n    tripId,\n    advancePaid = 0,\n    claimDeduction = 0,\n    otherDeductions = 0,\n    generatedBy,\n  } = req.body;\n  const db = getSupabaseClient(req.headers['authorization'] as string | undefined);\n\n  if (!tripId) {\n    return res.status(400).jso"
+  },
+  {
+    "method": "GET",
+    "path": "/api/payouts/transporter/:payoutId",
+    "auth": "None (Public)",
+    "tables": [],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const payoutId = req.params.payoutId as string;\n  const db = getSupabaseClient(req.headers['authorization'] as string | undefined);\n\n  if (!payoutId) {\n    return res.status(400).json({ error: 'payoutId is mandatory.' });\n  }\n\n  try {\n    let payout = mem"
+  },
+  {
+    "method": "POST",
+    "path": "/api/payouts/transporter/:payoutId/record-disbursal",
+    "auth": "None (Public)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const payoutId = req.params.payoutId as string;\n  const {\n    bankReferenceUtr,\n    paymentMethod = 'NEFT',\n    amountDisbursed,\n    disbursedBy,\n  } = req.body;\n  const db = getSupabaseClient(req.headers['authorization'] as string | undefined);\n\n  if (!p"
+  },
+  {
+    "method": "GET",
+    "path": "/api/finance/reconciliation",
+    "auth": "None (Public)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "bodySnippet": ", async (req: Request, res: Response) => {\n  const db = getSupabaseClient(req.headers['authorization'] as string | undefined);\n\n  try {\n    // 1. Gather all invoices\n    let allInvoices: any[] = Array.from(memoryClientInvoices.values());\n    try {\n      const { data: dbInvs } = await db.from('client"
+  }
+]

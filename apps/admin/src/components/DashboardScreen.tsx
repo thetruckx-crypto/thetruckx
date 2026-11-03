@@ -888,7 +888,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 <Users size={20} />
               </div>
               <span className="useful-link-label">Client Management</span>
-              <span className="useful-link-sub">Shippers & KYC</span>
+              <span className="useful-link-sub">Clients & KYC</span>
             </button>
 
             <button className="useful-link-tile orange" onClick={() => onNavigateSection('vendors')}>

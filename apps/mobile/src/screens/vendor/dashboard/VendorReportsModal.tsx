@@ -174,7 +174,7 @@ export const VendorReportsModal: React.FC<VendorReportsModalProps> = ({
                 <View style={styles.winRateRow}>
                   <View>
                     <Text style={styles.winRateTitle}>Commercial Award Conversion</Text>
-                    <Text style={styles.winRateSub}>Ratio of accepted bids across corporate shippers</Text>
+                    <Text style={styles.winRateSub}>Ratio of accepted bids across corporate clients</Text>
                   </View>
                   <Text style={styles.winRatePercent}>{stats.winRate}%</Text>
                 </View>

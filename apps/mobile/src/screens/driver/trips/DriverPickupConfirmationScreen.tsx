@@ -39,6 +39,7 @@ import { driverService } from '../../../services/driverService';
 import { authService } from '../../../services/authService';
 import { documentWorkflowService } from '../../../services/documentWorkflowService';
 import { DriverTripItem } from '../../../types';
+import { formatDisplayId } from '../../../utils/idGenerator';
 
 interface DriverPickupConfirmationScreenProps {
   tripId: string;
@@ -286,6 +287,11 @@ export const DriverPickupConfirmationScreen: React.FC<DriverPickupConfirmationSc
               <View style={styles.badgeRow}>
                 <View style={styles.stagePill}>
                   <Text style={styles.stagePillText}>DISPATCH GATE CONFIRMATION</Text>
+                </View>
+                <View style={[styles.stagePill, { backgroundColor: '#F1F5F9' }]}>
+                  <Text style={[styles.stagePillText, { color: '#0F172A' }]}>
+                    {trip.tripCode || formatDisplayId('TR', trip.startedAt, trip.id)}
+                  </Text>
                 </View>
               </View>
               <Text style={styles.titleText}>

@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase, ensureAdminSession } from "../../utils/supabase";
+import { formatDisplayId } from "../../utils/idGenerator";
 
 interface PaymentRecord {
   id: string;
@@ -27,6 +28,7 @@ interface BookingDetails {
   amount_received?: number;
   payment_status?: string;
   confirmed_at?: string;
+  created_at?: string;
   client_companies?: {
     id?: string;
     company_name?: string;
@@ -139,7 +141,9 @@ export const PaymentHistoryView: React.FC = () => {
     document.body.removeChild(link);
   };
 
-  const displayRef = bookingInfo?.booking_code || (bookingId ? `BOK-${bookingId.substring(0, 8).toUpperCase()}` : "BOK-0000");
+  const displayRef = bookingInfo?.booking_code?.startsWith('TRUCKX-BK-')
+    ? bookingInfo.booking_code
+    : (bookingId ? formatDisplayId('BK', bookingId, bookingInfo?.created_at) : "TRUCKX-BK-00001");
   const clientName = bookingInfo?.client_companies?.company_name || "Enterprise Client";
 
   return (

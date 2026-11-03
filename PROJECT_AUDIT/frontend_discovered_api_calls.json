@@ -1,0 +1,86 @@
+[
+  {
+    "app": "Admin",
+    "file": "BookingsModule.tsx",
+    "fullPath": "apps\\admin\\src\\components\\bookings\\BookingsModule.tsx",
+    "url": "/api/bookings/emergency-direct-create"
+  },
+  {
+    "app": "Admin",
+    "file": "DocumentClearanceModule.tsx",
+    "fullPath": "apps\\admin\\src\\components\\documents\\DocumentClearanceModule.tsx",
+    "url": "/api/notifications/send-push"
+  },
+  {
+    "app": "Admin",
+    "file": "DocumentClearanceModule.tsx",
+    "fullPath": "apps\\admin\\src\\components\\documents\\DocumentClearanceModule.tsx",
+    "url": "/api/notifications/send-push"
+  },
+  {
+    "app": "Admin",
+    "file": "DocumentClearanceModule.tsx",
+    "fullPath": "apps\\admin\\src\\components\\documents\\DocumentClearanceModule.tsx",
+    "url": "/api/notifications/send-push"
+  },
+  {
+    "app": "Admin",
+    "file": "DocumentClearanceModule.tsx",
+    "fullPath": "apps\\admin\\src\\components\\documents\\DocumentClearanceModule.tsx",
+    "url": "/api/notifications/send-push"
+  },
+  {
+    "app": "Admin",
+    "file": "SingleScreenDriverRegistration.test.ts",
+    "fullPath": "apps\\admin\\src\\components\\drivers\\SingleScreenDriverRegistration.test.ts",
+    "url": "/api/driver/submit-registration"
+  },
+  {
+    "app": "Admin",
+    "file": "RequirementsModule.tsx",
+    "fullPath": "apps\\admin\\src\\components\\requirements\\RequirementsModule.tsx",
+    "url": "/api/notifications/send-push"
+  },
+  {
+    "app": "Admin",
+    "file": "RequirementsModule.tsx",
+    "fullPath": "apps\\admin\\src\\components\\requirements\\RequirementsModule.tsx",
+    "url": "/api/notifications/send-push"
+  },
+  {
+    "app": "Admin",
+    "file": "RequirementsModule.tsx",
+    "fullPath": "apps\\admin\\src\\components\\requirements\\RequirementsModule.tsx",
+    "url": "/api/notifications/send-push"
+  },
+  {
+    "app": "Admin",
+    "file": "RequirementsModule.tsx",
+    "fullPath": "apps\\admin\\src\\components\\requirements\\RequirementsModule.tsx",
+    "url": "/api/notifications/send-push"
+  },
+  {
+    "app": "Admin",
+    "file": "DocumentRejectionModal.tsx",
+    "fullPath": "apps\\admin\\src\\components\\vendors\\DocumentRejectionModal.tsx",
+    "url": "/api/notifications/send-push"
+  },
+  {
+    "app": "Admin",
+    "file": "VendorRegistrationSteps3to7.test.ts",
+    "fullPath": "apps\\admin\\src\\components\\vendors\\VendorRegistrationSteps3to7.test.ts",
+    "url": "/api/regional-hubs"
+  },
+  {
+    "app": "Admin",
+    "file": "VendorRegistrationSteps3to7.test.ts",
+    "fullPath": "apps\\admin\\src\\components\\vendors\\VendorRegistrationSteps3to7.test.ts",
+    "url": "/api/regional-hubs"
+  },
+  {
+    "app": "Admin",
+    "file": "documentWorkflowService.ts",
+    "fullPath": "apps\\admin\\src\\services\\documentWorkflowService.ts",
+    "url": "/api/notifications/send-push"
+  }
+]

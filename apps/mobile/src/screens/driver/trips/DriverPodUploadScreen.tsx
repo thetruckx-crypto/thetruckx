@@ -32,6 +32,7 @@ import { driverService } from '../../../services/driverService';
 import { authService } from '../../../services/authService';
 import { documentWorkflowService } from '../../../services/documentWorkflowService';
 import { DriverTripItem } from '../../../types';
+import { formatDisplayId } from '../../../utils/idGenerator';
 
 interface DriverPodUploadScreenProps {
   tripId: string;
@@ -226,7 +227,7 @@ export const DriverPodUploadScreen: React.FC<DriverPodUploadScreenProps> = ({
                 {trip.origin} ➔ {trip.destination}
               </Text>
               <Text style={styles.refSub}>
-                Vehicle: {trip.vehicleNumber} • Booking Ref: #{trip.bookingId}
+                Vehicle: {trip.vehicleNumber} • Trip: {trip.tripCode || formatDisplayId('TR', trip.startedAt, trip.id)} • Booking: {trip.bookingCode || formatDisplayId('BK', trip.startedAt, trip.bookingId)}
               </Text>
             </View>
 

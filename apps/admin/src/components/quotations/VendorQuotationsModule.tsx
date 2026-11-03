@@ -25,9 +25,11 @@ import {
 } from 'lucide-react';
 import { supabase, ensureAdminSession } from '../../utils/supabase';
 import { useToast } from '../../context/ToastContext';
+import { formatDisplayId } from '../../utils/idGenerator';
 
 export interface VendorQuoteItem {
   id: string;
+  quotation_code?: string;
   quoted_rate: number;
   version: number;
   is_locked: boolean;
@@ -515,7 +517,7 @@ export const VendorQuotationsModule: React.FC = () => {
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <span className="mono-code" style={{ color: '#F05A22', fontWeight: 700 }}>
-                          VQT-{quote.id.substring(0, 8).toUpperCase()}
+                          {quote.quotation_code?.startsWith('TRUCKX-QT-') ? quote.quotation_code : formatDisplayId('QT', quote.id, quote.submitted_at)}
                         </span>
                         {quote.version > 1 && (
                           <span style={{ fontSize: '10px', background: '#F1F5F9', color: '#64748B', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>
@@ -689,22 +691,24 @@ export const VendorQuotationsModule: React.FC = () => {
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {/* Financial Highlight Card */}
               <div style={{
-                background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)',
-                color: '#FFFFFF',
+                background: '#FFFFFF',
+                color: '#111827',
                 borderRadius: '10px',
                 padding: '16px 20px',
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
+                border: '1px solid #E5EAF1',
+                boxShadow: '0 1px 3px rgba(17, 24, 39, 0.05)',
               }}>
                 <div>
-                  <div style={{ fontSize: '12px', color: '#94A3B8', textTransform: 'uppercase', fontWeight: 700 }}>
+                  <div style={{ fontSize: '12px', color: '#64748B', textTransform: 'uppercase', fontWeight: 700 }}>
                     Transporter Quoted Rate
                   </div>
-                  <div style={{ fontSize: '26px', fontWeight: 900, color: '#FB923C', marginTop: '2px' }}>
+                  <div style={{ fontSize: '26px', fontWeight: 900, color: '#F4510B', marginTop: '2px' }}>
                     {fmt(selectedQuote.quoted_rate)}
                   </div>
-                  <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '4px' }}>
+                  <div style={{ fontSize: '11px', color: '#64748B', marginTop: '4px' }}>
                     Strictly internal purchase cost • Confidential from client
                   </div>
                 </div>

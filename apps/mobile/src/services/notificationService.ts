@@ -314,6 +314,8 @@ class MobileNotificationService {
     role?: MobileRole;
     mobile?: string;
     fullName?: string;
+    sessionToken?: string;
+    isExplicitLogin?: boolean;
   }): Promise<{
     isFirstTime: boolean;
     title: string;
@@ -382,7 +384,7 @@ class MobileNotificationService {
       }
     } else {
       // CLIENT Role
-      const displayName = params.fullName?.trim() || 'Valued Shipper';
+      const displayName = params.fullName?.trim() || 'Valued Client';
       if (isFirstTime) {
         title = 'Welcome to THE TRUCKX Client Portal! 🚚';
         subtitle = 'Your transport portal is ready. Post requirements and track consignments.';
@@ -407,30 +409,54 @@ class MobileNotificationService {
       createdAt: new Date().toISOString(),
     };
 
-    // Cooldown check for "once add that":
-    // Check if welcome notification was already stored in the last 10 minutes for this user
+    // Check if welcome notification was already shown for this authenticated session:
     let wasAdded = false;
     try {
-      const lastWelcomeTime = await AsyncStorage.getItem(sessionCooldownKey);
-      const now = Date.now();
-      const cooldownMs = 10 * 60 * 1000; // 10 minutes
+      // Resolve active session token
+      let effectiveToken = params.sessionToken;
+      if (!effectiveToken) {
+        try {
+          const currentSession = await authService.getCurrentSession();
+          effectiveToken = currentSession?.token || (currentSession?.userId ? `${currentSession.userId}_${currentSession.createdAt}` : undefined);
+        } catch {}
+      }
 
-      if (!lastWelcomeTime || now - parseInt(lastWelcomeTime, 10) > cooldownMs) {
-        await authService.appendUserCustomNotification(notificationItem, cleanPhone, effectiveRole);
-        await AsyncStorage.setItem(sessionCooldownKey, now.toString());
-        wasAdded = true;
+      const sessionWelcomeKey = effectiveToken ? `@necl_welcome_shown_session_${effectiveToken}` : null;
+      let alreadyShownForSession = false;
+      if (sessionWelcomeKey) {
+        const val = await AsyncStorage.getItem(sessionWelcomeKey);
+        if (val === 'true') {
+          alreadyShownForSession = true;
+        }
+      }
 
-        // Trigger real Android OS system push notification in notification shade
-        await showSystemPushNotification(title, subtitle, {
-          role: effectiveRole,
-          type: 'welcome',
-          timestamp: new Date().toISOString(),
-        });
+      // Do NOT trigger or display again if already shown for this session
+      if (!alreadyShownForSession) {
+        // Also check if cooldown or existing item already present
+        const lastWelcomeTime = await AsyncStorage.getItem(sessionCooldownKey);
+        const now = Date.now();
+        const cooldownMs = 15 * 60 * 1000;
 
-        // Optionally send push notification to device via backend if token is available
-        const token = await this.getStoredToken();
-        if (token) {
-          this.sendPushNotificationDirect(token, title, subtitle).catch(() => {});
+        if (!lastWelcomeTime || now - parseInt(lastWelcomeTime, 10) > cooldownMs) {
+          await authService.appendUserCustomNotification(notificationItem, cleanPhone, effectiveRole);
+          await AsyncStorage.setItem(sessionCooldownKey, now.toString());
+          if (sessionWelcomeKey) {
+            await AsyncStorage.setItem(sessionWelcomeKey, 'true');
+          }
+          wasAdded = true;
+
+          // Trigger real Android OS system push notification in notification shade
+          await showSystemPushNotification(title, subtitle, {
+            role: effectiveRole,
+            type: 'welcome',
+            timestamp: new Date().toISOString(),
+          });
+
+          // Optionally send push notification to device via backend if token is available
+          const token = await this.getStoredToken();
+          if (token) {
+            this.sendPushNotificationDirect(token, title, subtitle).catch(() => {});
+          }
         }
       }
     } catch (e) {
@@ -458,6 +484,8 @@ class MobileNotificationService {
     role?: MobileRole;
     mobile?: string;
     fullName?: string;
+    sessionToken?: string;
+    isExplicitLogin?: boolean;
   }): Promise<{
     granted: boolean;
     token?: string;

@@ -26,6 +26,7 @@ import {
   X,
 } from 'lucide-react-native';
 import { vendorService } from '../../../services/vendorService';
+import { formatDisplayId } from '../../../utils/idGenerator';
 
 interface VendorRequirementDetailsScreenProps {
   requirementId: string;
@@ -135,6 +136,13 @@ export const VendorRequirementDetailsScreen: React.FC<VendorRequirementDetailsSc
   const isQuoted = requirement.vendorStatus === 'QUOTED' || requirement.hasQuoted;
   const isDeclined = requirement.vendorStatus === 'DECLINED';
 
+  const displayReqId =
+    requirement?.requirement_code && requirement.requirement_code.startsWith('TRUCKX-REQ-')
+      ? requirement.requirement_code
+      : (requirement?.requirementCode && requirement.requirementCode.startsWith('TRUCKX-REQ-')
+          ? requirement.requirementCode
+          : formatDisplayId('REQ', requirement?.requirement_code || requirement?.requirementCode || requirement?.id, requirement?.created_at || requirement?.createdAt));
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.scrollContainer} bounces={false}>
@@ -145,7 +153,7 @@ export const VendorRequirementDetailsScreen: React.FC<VendorRequirementDetailsSc
           </TouchableOpacity>
           <View style={styles.headerTextWrap}>
             <Text style={styles.headerTitle}>Requirement Details</Text>
-            <Text style={styles.headerSubtitle} numberOfLines={1}>{requirement.id}</Text>
+            <Text style={styles.headerSubtitle} numberOfLines={1}>{displayReqId}</Text>
           </View>
         </View>
 
@@ -153,14 +161,14 @@ export const VendorRequirementDetailsScreen: React.FC<VendorRequirementDetailsSc
         <View style={styles.contentWrap}>
           <View style={styles.reqHeaderRow}>
             <View>
-              <Text style={styles.reqIdText}>{requirement.id}</Text>
+              <Text style={styles.reqIdText}>{displayReqId}</Text>
               <Text style={styles.reqDateText}>
                 Posted on {new Date(requirement.createdAt || Date.now()).toLocaleDateString('en-GB')}
               </Text>
             </View>
             <View style={styles.verifiedBadge}>
               <ShieldCheck size={13} color="#10B981" />
-              <Text style={styles.verifiedText}>Verified Shipper</Text>
+              <Text style={styles.verifiedText}>Verified Client</Text>
             </View>
           </View>
 
@@ -277,7 +285,7 @@ export const VendorRequirementDetailsScreen: React.FC<VendorRequirementDetailsSc
             )}
           </View>
 
-          {/* Shipper Details */}
+          {/* Client Details */}
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <Building2 size={16} color="#F05A22" />

@@ -40,7 +40,7 @@ import {
 } from 'lucide-react';
 import { supabase, ensureAdminSession } from '../../utils/supabase';
 import { useAuth } from '../../context/AuthContext';
-import { formatDisplayId, generateDbNeclId } from '../../utils/idGenerator';
+import { formatDisplayId, generateDbTruckxId, generateDbNeclId } from '../../utils/idGenerator';
 import { pincodeService } from '../../services/pincodeService';
 import { EditVendorModal } from './EditVendorModal';
 import { apiFetch } from '../../utils/api';
@@ -1637,492 +1637,492 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
         </div>
       ) : (
         <div className="client-table-card">
-        <div className="table-wrapper vendor-table-scroll">
-          <table className="client-table" id="vendor-directory-table">
-            <thead>
-              <tr>
-                <th style={{ width: '44px', minWidth: '44px', textAlign: 'center' }}>
-                  <input
-                    type="checkbox"
-                    className="custom-table-checkbox"
-                    checked={isAllCurrentPageSelected}
-                    onChange={handleSelectAll}
-                    title="Select all on current page"
-                  />
-                </th>
-                {/* Vendor ID & Company */}
-                {visibleColumns.vendorId && (
-                  <th style={{ minWidth: 180 }}>
-                    <button
-                      type="button"
-                      className={`th-sortable-button ${sortField === 'vendor_name' ? 'active-sort' : ''}`}
-                      onClick={() => handleSort('vendor_name')}
-                    >
-                      <span>Vendor ID & Company</span>
-                      {sortField === 'vendor_name' ? (
-                        sortOrder === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />
-                      ) : (
-                        <ArrowUpDown size={12} color="#94A3B8" />
-                      )}
-                    </button>
-                  </th>
-                )}
-                {visibleColumns.vendorType && <th style={{ minWidth: '120px' }}>Vendor Type</th>}
-                {visibleColumns.contactPerson && <th style={{ minWidth: '160px' }}>Contact Person</th>}
-                {visibleColumns.location && (
-                  <th onClick={() => handleSort('location')} style={{ cursor: 'pointer', minWidth: '180px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span>Location</span>
-                      {sortField === 'location' ? (
-                        sortOrder === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />
-                      ) : (
-                        <ArrowUpDown size={13} style={{ color: '#94A3B8' }} />
-                      )}
-                    </div>
-                  </th>
-                )}
-                {visibleColumns.gstin && <th style={{ minWidth: '170px' }}>GSTIN</th>}
-                {visibleColumns.panNumber && <th style={{ minWidth: '140px' }}>PAN Number</th>}
-                {visibleColumns.services && <th style={{ minWidth: '150px' }}>Services</th>}
-                {visibleColumns.verificationStatus && (
-                  <th onClick={() => handleSort('status')} style={{ cursor: 'pointer', minWidth: '130px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span>Verification</span>
-                      {sortField === 'status' ? (
-                        sortOrder === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />
-                      ) : (
-                        <ArrowUpDown size={13} style={{ color: '#94A3B8' }} />
-                      )}
-                    </div>
-                  </th>
-                )}
-                {visibleColumns.accountStatus && <th style={{ minWidth: '120px' }}>Account Status</th>}
-                {visibleColumns.lastActivity && (
-                  <th onClick={() => handleSort('created_at')} style={{ cursor: 'pointer', minWidth: '130px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span>Last Activity</span>
-                      {sortField === 'created_at' ? (
-                        sortOrder === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />
-                      ) : (
-                        <ArrowUpDown size={13} style={{ color: '#94A3B8' }} />
-                      )}
-                    </div>
-                  </th>
-                )}
-                <th style={{ width: '90px', minWidth: '90px', textAlign: 'center' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                Array.from({ length: 6 }).map((_, i) => (
-                  <tr key={`skel-${i}`} className="table-skeleton-row">
-                    <td style={{ textAlign: 'center' }}><div className="table-skeleton-cell" style={{ width: '16px', height: '16px', margin: '0 auto' }} /></td>
-                    {visibleColumns.vendorId && (
-                      <td>
-                        <div className="client-name-cell" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <div
-                            className="client-avatar-squircle vendor-initial-avatar"
-                            style={{ background: '#F1F5F9', borderRadius: 10, width: 36, height: 36 }}
-                          />
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                            <div className="table-skeleton-cell" style={{ width: 120, height: 11 }} />
-                            <div className="table-skeleton-cell" style={{ width: 70, height: 8 }} />
-                          </div>
-                        </div>
-                      </td>
-                    )}
-                    {visibleColumns.vendorType && <td><div className="table-skeleton-cell" style={{ width: '80px', height: '22px', borderRadius: '4px' }} /></td>}
-                    {visibleColumns.contactPerson && (
-                      <td>
-                        <div className="table-skeleton-cell" style={{ width: '90px', height: '13px', marginBottom: '4px' }} />
-                        <div className="table-skeleton-cell" style={{ width: '100px', height: '11px' }} />
-                      </td>
-                    )}
-                    {visibleColumns.location && (
-                      <td>
-                        <div className="table-skeleton-cell" style={{ width: '110px', height: '13px', marginBottom: '4px' }} />
-                        <div className="table-skeleton-cell" style={{ width: '85px', height: '11px' }} />
-                      </td>
-                    )}
-                    {visibleColumns.gstin && <td><div className="table-skeleton-cell" style={{ width: '120px', height: '20px', borderRadius: '4px' }} /></td>}
-                    {visibleColumns.panNumber && <td><div className="table-skeleton-cell" style={{ width: '95px', height: '20px', borderRadius: '4px' }} /></td>}
-                    {visibleColumns.services && <td><div className="table-skeleton-cell" style={{ width: '110px', height: '20px' }} /></td>}
-                    {visibleColumns.verificationStatus && <td><div className="table-skeleton-cell" style={{ width: '90px', height: '22px', borderRadius: '12px' }} /></td>}
-                    {visibleColumns.accountStatus && <td><div className="table-skeleton-cell" style={{ width: '65px', height: '22px', borderRadius: '12px' }} /></td>}
-                    {visibleColumns.lastActivity && (
-                      <td>
-                        <div className="table-skeleton-cell" style={{ width: '80px', height: '13px', marginBottom: '4px' }} />
-                        <div className="table-skeleton-cell" style={{ width: '60px', height: '11px' }} />
-                      </td>
-                    )}
-                    <td style={{ textAlign: 'center' }}>
-                      <div className="table-skeleton-cell" style={{ width: '28px', height: '28px', borderRadius: '50%', margin: '0 auto' }} />
-                    </td>
-                  </tr>
-                ))
-              ) : paginatedVendors.length === 0 ? (
+          <div className="table-wrapper vendor-table-scroll">
+            <table className="client-table" id="vendor-directory-table">
+              <thead>
                 <tr>
-                  <td colSpan={12}>
-                    <div className="table-empty-state">
-                      <div className="empty-state-icon-box">
-                        <Users size={32} />
+                  <th style={{ width: '44px', minWidth: '44px', textAlign: 'center' }}>
+                    <input
+                      type="checkbox"
+                      className="custom-table-checkbox"
+                      checked={isAllCurrentPageSelected}
+                      onChange={handleSelectAll}
+                      title="Select all on current page"
+                    />
+                  </th>
+                  {/* Vendor ID & Company */}
+                  {visibleColumns.vendorId && (
+                    <th style={{ minWidth: 180 }}>
+                      <button
+                        type="button"
+                        className={`th-sortable-button ${sortField === 'vendor_name' ? 'active-sort' : ''}`}
+                        onClick={() => handleSort('vendor_name')}
+                      >
+                        <span>Vendor ID & Company</span>
+                        {sortField === 'vendor_name' ? (
+                          sortOrder === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />
+                        ) : (
+                          <ArrowUpDown size={12} color="#94A3B8" />
+                        )}
+                      </button>
+                    </th>
+                  )}
+                  {visibleColumns.vendorType && <th style={{ minWidth: '120px' }}>Vendor Type</th>}
+                  {visibleColumns.contactPerson && <th style={{ minWidth: '160px' }}>Contact Person</th>}
+                  {visibleColumns.location && (
+                    <th onClick={() => handleSort('location')} style={{ cursor: 'pointer', minWidth: '180px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span>Location</span>
+                        {sortField === 'location' ? (
+                          sortOrder === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />
+                        ) : (
+                          <ArrowUpDown size={13} style={{ color: '#94A3B8' }} />
+                        )}
                       </div>
-                      <h4 className="empty-state-heading">No vendors found</h4>
-                      <p className="empty-state-text">
-                        {hasActiveFilters
-                          ? 'No vendor records match your current filters.'
-                          : 'Your vendor directory is empty. Add your first vendor to start managing your logistics partners.'}
-                      </p>
-                      {hasActiveFilters ? (
-                        <button className="btn-filter-reset" onClick={handleReset} style={{ margin: '0 auto' }}>
-                          <RotateCcw size={14} />
-                          <span>Clear Filters</span>
-                        </button>
-                      ) : (
-                        <button
-                          className="btn-create-orange"
-                          onClick={() => {
-                            if (onNavigateToInvite) {
-                              onNavigateToInvite();
-                            } else {
-                              setShowAddVendorModal(true);
-                            }
-                          }}
-                          style={{ margin: '0 auto' }}
-                        >
-                          <Plus size={15} />
-                          <span>+ Add Vendor</span>
-                        </button>
-                      )}
-                    </div>
-                  </td>
+                    </th>
+                  )}
+                  {visibleColumns.gstin && <th style={{ minWidth: '170px' }}>GSTIN</th>}
+                  {visibleColumns.panNumber && <th style={{ minWidth: '140px' }}>PAN Number</th>}
+                  {visibleColumns.services && <th style={{ minWidth: '150px' }}>Services</th>}
+                  {visibleColumns.verificationStatus && (
+                    <th onClick={() => handleSort('status')} style={{ cursor: 'pointer', minWidth: '130px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span>Verification</span>
+                        {sortField === 'status' ? (
+                          sortOrder === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />
+                        ) : (
+                          <ArrowUpDown size={13} style={{ color: '#94A3B8' }} />
+                        )}
+                      </div>
+                    </th>
+                  )}
+                  {visibleColumns.accountStatus && <th style={{ minWidth: '120px' }}>Account Status</th>}
+                  {visibleColumns.lastActivity && (
+                    <th onClick={() => handleSort('created_at')} style={{ cursor: 'pointer', minWidth: '130px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span>Last Activity</span>
+                        {sortField === 'created_at' ? (
+                          sortOrder === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />
+                        ) : (
+                          <ArrowUpDown size={13} style={{ color: '#94A3B8' }} />
+                        )}
+                      </div>
+                    </th>
+                  )}
+                  <th style={{ width: '90px', minWidth: '90px', textAlign: 'center' }}>Actions</th>
                 </tr>
-              ) : (
-                paginatedVendors.map((vendor, rowIndex) => {
-                  const isApproved = vendor.status === 'APPROVED';
-                  const isPending = vendor.status === 'PENDING';
-                  const isRejected = vendor.status === 'REJECTED';
-                  const isInactive = vendor.status === 'INACTIVE';
-                  const isSelected = selectedRows.has(vendor.id);
-                  const vendorCode = formatVendorCode(vendor.id, vendor.created_at, vendor.vendor_code);
-                  const avatarColor = getAvatarColor(vendor.vendor_name);
-                  const initials = getInitials(vendor.vendor_name);
-
-                  return (
-                    <tr key={vendor.id} className={`client-data-row ${isSelected ? 'row-selected' : ''}`}>
-                      <td style={{ textAlign: 'center' }}>
-                        <input
-                          type="checkbox"
-                          className="custom-table-checkbox"
-                          checked={isSelected}
-                          onChange={() => handleSelectRow(vendor.id)}
-                        />
-                      </td>
-
-                      {/* Vendor ID & Company Information */}
+              </thead>
+              <tbody>
+                {loading ? (
+                  Array.from({ length: 6 }).map((_, i) => (
+                    <tr key={`skel-${i}`} className="table-skeleton-row">
+                      <td style={{ textAlign: 'center' }}><div className="table-skeleton-cell" style={{ width: '16px', height: '16px', margin: '0 auto' }} /></td>
                       {visibleColumns.vendorId && (
                         <td>
                           <div className="client-name-cell" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                             <div
                               className="client-avatar-squircle vendor-initial-avatar"
-                              style={{
-                                background: avatarColor,
-                                color: '#FFFFFF',
-                                fontWeight: 700,
-                                fontSize: 13,
-                                borderRadius: 10,
-                                width: 36,
-                                height: 36,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                flexShrink: 0,
-                              }}
-                              aria-hidden="true"
-                            >
-                              {initials}
-                            </div>
-                            <div style={{ minWidth: 0, overflow: 'hidden' }}>
-                              <div
-                                className="client-name-text"
-                                onClick={() => onNavigateToProfile(vendor.id)}
-                                style={{
-                                  fontWeight: 600,
-                                  color: '#0F172A',
-                                  cursor: 'pointer',
-                                  whiteSpace: 'nowrap',
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  maxWidth: 180,
-                                }}
-                                title={vendor.vendor_name}
-                              >
-                                {vendor.vendor_name}
-                              </div>
-                              <div
-                                className="client-id-text"
-                                style={{
-                                  fontFamily: 'monospace',
-                                  fontSize: 11,
-                                  color: '#64748B',
-                                  whiteSpace: 'nowrap',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: 5,
-                                }}
-                              >
-                                <span>{vendorCode}</span>
-                                <button
-                                  type="button"
-                                  className="vendor-id-copy-btn"
-                                  onClick={(e) => handleCopyVendorId(e, vendorCode)}
-                                  title={copiedId === vendorCode ? 'Copied!' : 'Copy Vendor ID'}
-                                >
-                                  {copiedId === vendorCode ? <Check size={11} color="#16A34A" /> : <Copy size={11} />}
-                                </button>
-                              </div>
+                              style={{ background: '#F1F5F9', borderRadius: 10, width: 36, height: 36 }}
+                            />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              <div className="table-skeleton-cell" style={{ width: 120, height: 11 }} />
+                              <div className="table-skeleton-cell" style={{ width: 70, height: 8 }} />
                             </div>
                           </div>
                         </td>
                       )}
-
-                      {/* 3. Vendor Type */}
-                      {visibleColumns.vendorType && (
-                        <td>
-                          <span
-                            className={
-                              vendor.vendor_type === 'Primary Contact'
-                                ? 'vendor-type-pill-green'
-                                : 'vendor-type-pill'
-                            }
-                          >
-                            {vendor.vendor_type || 'Fleet Owner'}
-                          </span>
-                        </td>
-                      )}
-
-                      {/* 4. Contact Person */}
+                      {visibleColumns.vendorType && <td><div className="table-skeleton-cell" style={{ width: '80px', height: '22px', borderRadius: '4px' }} /></td>}
                       {visibleColumns.contactPerson && (
                         <td>
-                          <div className="vendor-contact-cell">
-                            <div className="vendor-contact-name">{vendor.contact_name}</div>
-                            <div className="vendor-contact-phone">
-                              {vendor.contact_phone ? `+91 ${vendor.contact_phone.replace(/\D/g, '').slice(-10)}` : '—'}
+                          <div className="table-skeleton-cell" style={{ width: '90px', height: '13px', marginBottom: '4px' }} />
+                          <div className="table-skeleton-cell" style={{ width: '100px', height: '11px' }} />
+                        </td>
+                      )}
+                      {visibleColumns.location && (
+                        <td>
+                          <div className="table-skeleton-cell" style={{ width: '110px', height: '13px', marginBottom: '4px' }} />
+                          <div className="table-skeleton-cell" style={{ width: '85px', height: '11px' }} />
+                        </td>
+                      )}
+                      {visibleColumns.gstin && <td><div className="table-skeleton-cell" style={{ width: '120px', height: '20px', borderRadius: '4px' }} /></td>}
+                      {visibleColumns.panNumber && <td><div className="table-skeleton-cell" style={{ width: '95px', height: '20px', borderRadius: '4px' }} /></td>}
+                      {visibleColumns.services && <td><div className="table-skeleton-cell" style={{ width: '110px', height: '20px' }} /></td>}
+                      {visibleColumns.verificationStatus && <td><div className="table-skeleton-cell" style={{ width: '90px', height: '22px', borderRadius: '12px' }} /></td>}
+                      {visibleColumns.accountStatus && <td><div className="table-skeleton-cell" style={{ width: '65px', height: '22px', borderRadius: '12px' }} /></td>}
+                      {visibleColumns.lastActivity && (
+                        <td>
+                          <div className="table-skeleton-cell" style={{ width: '80px', height: '13px', marginBottom: '4px' }} />
+                          <div className="table-skeleton-cell" style={{ width: '60px', height: '11px' }} />
+                        </td>
+                      )}
+                      <td style={{ textAlign: 'center' }}>
+                        <div className="table-skeleton-cell" style={{ width: '28px', height: '28px', borderRadius: '50%', margin: '0 auto' }} />
+                      </td>
+                    </tr>
+                  ))
+                ) : paginatedVendors.length === 0 ? (
+                  <tr>
+                    <td colSpan={12}>
+                      <div className="table-empty-state">
+                        <div className="empty-state-icon-box">
+                          <Users size={32} />
+                        </div>
+                        <h4 className="empty-state-heading">No vendors found</h4>
+                        <p className="empty-state-text">
+                          {hasActiveFilters
+                            ? 'No vendor records match your current filters.'
+                            : 'Your vendor directory is empty. Add your first vendor to start managing your logistics partners.'}
+                        </p>
+                        {hasActiveFilters ? (
+                          <button className="btn-filter-reset" onClick={handleReset} style={{ margin: '0 auto' }}>
+                            <RotateCcw size={14} />
+                            <span>Clear Filters</span>
+                          </button>
+                        ) : (
+                          <button
+                            className="btn-create-orange"
+                            onClick={() => {
+                              if (onNavigateToInvite) {
+                                onNavigateToInvite();
+                              } else {
+                                setShowAddVendorModal(true);
+                              }
+                            }}
+                            style={{ margin: '0 auto' }}
+                          >
+                            <Plus size={15} />
+                            <span>+ Add Vendor</span>
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedVendors.map((vendor, rowIndex) => {
+                    const isApproved = vendor.status === 'APPROVED';
+                    const isPending = vendor.status === 'PENDING';
+                    const isRejected = vendor.status === 'REJECTED';
+                    const isInactive = vendor.status === 'INACTIVE';
+                    const isSelected = selectedRows.has(vendor.id);
+                    const vendorCode = formatVendorCode(vendor.id, vendor.created_at, vendor.vendor_code);
+                    const avatarColor = getAvatarColor(vendor.vendor_name);
+                    const initials = getInitials(vendor.vendor_name);
+
+                    return (
+                      <tr key={vendor.id} className={`client-data-row ${isSelected ? 'row-selected' : ''}`}>
+                        <td style={{ textAlign: 'center' }}>
+                          <input
+                            type="checkbox"
+                            className="custom-table-checkbox"
+                            checked={isSelected}
+                            onChange={() => handleSelectRow(vendor.id)}
+                          />
+                        </td>
+
+                        {/* Vendor ID & Company Information */}
+                        {visibleColumns.vendorId && (
+                          <td>
+                            <div className="client-name-cell" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <div
+                                className="client-avatar-squircle vendor-initial-avatar"
+                                style={{
+                                  background: avatarColor,
+                                  color: '#FFFFFF',
+                                  fontWeight: 700,
+                                  fontSize: 13,
+                                  borderRadius: 10,
+                                  width: 36,
+                                  height: 36,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  flexShrink: 0,
+                                }}
+                                aria-hidden="true"
+                              >
+                                {initials}
+                              </div>
+                              <div style={{ minWidth: 0, overflow: 'hidden' }}>
+                                <div
+                                  className="client-name-text"
+                                  onClick={() => onNavigateToProfile(vendor.id)}
+                                  style={{
+                                    fontWeight: 600,
+                                    color: '#0F172A',
+                                    cursor: 'pointer',
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    maxWidth: 180,
+                                  }}
+                                  title={vendor.vendor_name}
+                                >
+                                  {vendor.vendor_name}
+                                </div>
+                                <div
+                                  className="client-id-text"
+                                  style={{
+                                    fontFamily: 'monospace',
+                                    fontSize: 11,
+                                    color: '#64748B',
+                                    whiteSpace: 'nowrap',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 5,
+                                  }}
+                                >
+                                  <span>{vendorCode}</span>
+                                  <button
+                                    type="button"
+                                    className="vendor-id-copy-btn"
+                                    onClick={(e) => handleCopyVendorId(e, vendorCode)}
+                                    title={copiedId === vendorCode ? 'Copied!' : 'Copy Vendor ID'}
+                                  >
+                                    {copiedId === vendorCode ? <Check size={11} color="#16A34A" /> : <Copy size={11} />}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        )}
+
+                        {/* 3. Vendor Type */}
+                        {visibleColumns.vendorType && (
+                          <td>
+                            <span
+                              className={
+                                vendor.vendor_type === 'Primary Contact'
+                                  ? 'vendor-type-pill-green'
+                                  : 'vendor-type-pill'
+                              }
+                            >
+                              {vendor.vendor_type || 'Fleet Owner'}
+                            </span>
+                          </td>
+                        )}
+
+                        {/* 4. Contact Person */}
+                        {visibleColumns.contactPerson && (
+                          <td>
+                            <div className="vendor-contact-cell">
+                              <div className="vendor-contact-name">{vendor.contact_name}</div>
+                              <div className="vendor-contact-phone">
+                                {vendor.contact_phone ? `+91 ${vendor.contact_phone.replace(/\D/g, '').slice(-10)}` : '—'}
+                              </div>
+                            </div>
+                          </td>
+                        )}
+
+                        {/* 5. Location */}
+                        {visibleColumns.location && (
+                          <td>
+                            {(() => {
+                              const { line1, line2 } = formatLocationLines(vendor.city, vendor.state, vendor.pincode, vendor.address);
+                              return (
+                                <div className="vendor-location-cell">
+                                  <MapPin size={13} className="vendor-location-icon" />
+                                  <div>
+                                    <div className="vendor-location-line1">{line1}</div>
+                                    {line2 && <div className="vendor-location-line2">{line2}</div>}
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </td>
+                        )}
+
+                        {/* 6. GSTIN (Dedicated Column) */}
+                        {visibleColumns.gstin && (
+                          <td>
+                            {vendor.gstin ? (
+                              <span className="mono-code gstin-badge">{vendor.gstin.toUpperCase()}</span>
+                            ) : (
+                              <span style={{ color: '#94A3B8', fontSize: '13px', fontWeight: 500 }}>—</span>
+                            )}
+                          </td>
+                        )}
+
+                        {/* 7. PAN Number (Dedicated Column) */}
+                        {visibleColumns.panNumber && (
+                          <td>
+                            {vendor.pan ? (
+                              <span className="mono-code pan-badge">{vendor.pan.toUpperCase()}</span>
+                            ) : (
+                              <span style={{ color: '#94A3B8', fontSize: '13px', fontWeight: 500 }}>—</span>
+                            )}
+                          </td>
+                        )}
+
+                        {/* 8. Services */}
+                        {visibleColumns.services && (
+                          <td>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                              {(vendor.services || ['FTL', 'Container']).slice(0, 2).map((srv) => (
+                                <span key={srv} className="service-tag-pill">
+                                  {srv}
+                                </span>
+                              ))}
+                              {(vendor.services || []).length > 2 && (
+                                <span
+                                  className="service-tag-pill service-tag-pill-count"
+                                  title={(vendor.services || []).slice(2).join(', ')}
+                                >
+                                  +{(vendor.services || []).length - 2}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                        )}
+
+                        {/* 9. Verification */}
+                        {visibleColumns.verificationStatus && (
+                          <td>
+                            <span
+                              className={
+                                isApproved
+                                  ? 'status-pill-green'
+                                  : isPending
+                                    ? 'status-pill-amber'
+                                    : isRejected
+                                      ? 'status-pill-red'
+                                      : 'status-pill-blue'
+                              }
+                            >
+                              {isApproved ? '✓ Verified' : isPending ? '⏳ Pending' : isRejected ? '✕ Rejected' : 'Under Review'}
+                            </span>
+                          </td>
+                        )}
+
+                        {/* 10. Account Status */}
+                        {visibleColumns.accountStatus && (
+                          <td>
+                            <span className={isInactive || isRejected ? 'badge-account-inactive' : 'badge-account-active'}>
+                              <span className={isInactive || isRejected ? 'status-dot-inactive' : 'status-dot-active'} />
+                              {isInactive || isRejected ? 'Inactive' : 'Active'}
+                            </span>
+                          </td>
+                        )}
+
+                        {/* 11. Last Activity */}
+                        {visibleColumns.lastActivity && (
+                          <td>
+                            {(() => {
+                              const { date, time } = formatLastActivity(vendor.updated_at || vendor.created_at);
+                              return (
+                                <div className="vendor-activity-cell">
+                                  <div className="vendor-activity-date">{date}</div>
+                                  {time && <div className="vendor-activity-time">{time}</div>}
+                                </div>
+                              );
+                            })()}
+                          </td>
+                        )}
+
+                        {/* 12. Actions (Explicit Full View + 3-Dot Actions Menu) */}
+                        <td style={{ width: '90px', minWidth: '90px', textAlign: 'center' }}>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}>
+                            <button
+                              type="button"
+                              className="row-action-btn-circle"
+                              title="Full View"
+                              aria-label={`Full View for ${vendor.vendor_name}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onNavigateToProfile(vendor.id);
+                              }}
+                            >
+                              <Eye size={14} />
+                            </button>
+                            <div className="action-menu-container" style={{ position: 'relative', display: 'inline-block' }}>
+                              <button
+                                type="button"
+                                className={`row-action-btn-circle ${menuAnchor?.id === vendor.id ? 'active' : ''}`}
+                                onClick={(e) => handleToggleActionMenu(vendor, e)}
+                                title="Actions menu"
+                                aria-expanded={menuAnchor?.id === vendor.id}
+                              >
+                                <MoreVertical size={15} />
+                              </button>
                             </div>
                           </div>
                         </td>
-                      )}
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
 
-                      {/* 5. Location */}
-                      {visibleColumns.location && (
-                        <td>
-                          {(() => {
-                            const { line1, line2 } = formatLocationLines(vendor.city, vendor.state, vendor.pincode, vendor.address);
-                            return (
-                              <div className="vendor-location-cell">
-                                <MapPin size={13} className="vendor-location-icon" />
-                                <div>
-                                  <div className="vendor-location-line1">{line1}</div>
-                                  {line2 && <div className="vendor-location-line2">{line2}</div>}
-                                </div>
-                              </div>
-                            );
-                          })()}
-                        </td>
-                      )}
-
-                      {/* 6. GSTIN (Dedicated Column) */}
-                      {visibleColumns.gstin && (
-                        <td>
-                          {vendor.gstin ? (
-                            <span className="mono-code gstin-badge">{vendor.gstin.toUpperCase()}</span>
-                          ) : (
-                            <span style={{ color: '#94A3B8', fontSize: '13px', fontWeight: 500 }}>—</span>
-                          )}
-                        </td>
-                      )}
-
-                      {/* 7. PAN Number (Dedicated Column) */}
-                      {visibleColumns.panNumber && (
-                        <td>
-                          {vendor.pan ? (
-                            <span className="mono-code pan-badge">{vendor.pan.toUpperCase()}</span>
-                          ) : (
-                            <span style={{ color: '#94A3B8', fontSize: '13px', fontWeight: 500 }}>—</span>
-                          )}
-                        </td>
-                      )}
-
-                      {/* 8. Services */}
-                      {visibleColumns.services && (
-                        <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-                            {(vendor.services || ['FTL', 'Container']).slice(0, 2).map((srv) => (
-                              <span key={srv} className="service-tag-pill">
-                                {srv}
-                              </span>
-                            ))}
-                            {(vendor.services || []).length > 2 && (
-                              <span
-                                className="service-tag-pill service-tag-pill-count"
-                                title={(vendor.services || []).slice(2).join(', ')}
-                              >
-                                +{(vendor.services || []).length - 2}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                      )}
-
-                      {/* 9. Verification */}
-                      {visibleColumns.verificationStatus && (
-                        <td>
-                          <span
-                            className={
-                              isApproved
-                                ? 'status-pill-green'
-                                : isPending
-                                ? 'status-pill-amber'
-                                : isRejected
-                                ? 'status-pill-red'
-                                : 'status-pill-blue'
-                            }
-                          >
-                            {isApproved ? '✓ Verified' : isPending ? '⏳ Pending' : isRejected ? '✕ Rejected' : 'Under Review'}
-                          </span>
-                        </td>
-                      )}
-
-                      {/* 10. Account Status */}
-                      {visibleColumns.accountStatus && (
-                        <td>
-                          <span className={isInactive || isRejected ? 'badge-account-inactive' : 'badge-account-active'}>
-                            <span className={isInactive || isRejected ? 'status-dot-inactive' : 'status-dot-active'} />
-                            {isInactive || isRejected ? 'Inactive' : 'Active'}
-                          </span>
-                        </td>
-                      )}
-
-                      {/* 11. Last Activity */}
-                      {visibleColumns.lastActivity && (
-                        <td>
-                          {(() => {
-                            const { date, time } = formatLastActivity(vendor.updated_at || vendor.created_at);
-                            return (
-                              <div className="vendor-activity-cell">
-                                <div className="vendor-activity-date">{date}</div>
-                                {time && <div className="vendor-activity-time">{time}</div>}
-                              </div>
-                            );
-                          })()}
-                        </td>
-                      )}
-
-                      {/* 12. Actions (Explicit Full View + 3-Dot Actions Menu) */}
-                      <td style={{ width: '90px', minWidth: '90px', textAlign: 'center' }}>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}>
-                          <button
-                            type="button"
-                            className="row-action-btn-circle"
-                            title="Full View"
-                            aria-label={`Full View for ${vendor.vendor_name}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onNavigateToProfile(vendor.id);
-                            }}
-                          >
-                            <Eye size={14} />
-                          </button>
-                          <div className="action-menu-container" style={{ position: 'relative', display: 'inline-block' }}>
-                            <button
-                              type="button"
-                              className={`row-action-btn-circle ${menuAnchor?.id === vendor.id ? 'active' : ''}`}
-                              onClick={(e) => handleToggleActionMenu(vendor, e)}
-                              title="Actions menu"
-                              aria-expanded={menuAnchor?.id === vendor.id}
-                            >
-                              <MoreVertical size={15} />
-                            </button>
-                          </div>
-                      </div>
-                    </td>
-                    </tr>
-                  );
-                })
+          {/* 7. Pagination Footer */}
+          <div className="pagination-row">
+            <div className="pagination-info">
+              {sortedVendors.length === 0 ? (
+                'Showing 0 vendors'
+              ) : (
+                <>
+                  Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, sortedVendors.length)} of{' '}
+                  {sortedVendors.length} vendors
+                </>
               )}
-            </tbody>
-          </table>
-        </div>
+            </div>
 
-        {/* 7. Pagination Footer */}
-        <div className="pagination-row">
-          <div className="pagination-info">
-            {sortedVendors.length === 0 ? (
-              'Showing 0 vendors'
-            ) : (
-              <>
-                Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, sortedVendors.length)} of{' '}
-                {sortedVendors.length} vendors
-              </>
-            )}
-          </div>
+            <div className="pagination-controls">
+              <button
+                className="page-nav-btn"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                aria-label="Previous Page"
+              >
+                ‹
+              </button>
 
-          <div className="pagination-controls">
-            <button
-              className="page-nav-btn"
-              disabled={currentPage === 1}
-              onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-              aria-label="Previous Page"
-            >
-              ‹
-            </button>
+              {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                let pNum;
+                if (totalPages <= 5) {
+                  pNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pNum = totalPages - 4 + i;
+                } else {
+                  pNum = currentPage - 2 + i;
+                }
+                return (
+                  <button
+                    key={pNum}
+                    className={`page-num-btn ${currentPage === pNum ? 'active' : ''}`}
+                    onClick={() => setCurrentPage(pNum)}
+                  >
+                    {pNum}
+                  </button>
+                );
+              })}
 
-            {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-              let pNum;
-              if (totalPages <= 5) {
-                pNum = i + 1;
-              } else if (currentPage <= 3) {
-                pNum = i + 1;
-              } else if (currentPage >= totalPages - 2) {
-                pNum = totalPages - 4 + i;
-              } else {
-                pNum = currentPage - 2 + i;
-              }
-              return (
-                <button
-                  key={pNum}
-                  className={`page-num-btn ${currentPage === pNum ? 'active' : ''}`}
-                  onClick={() => setCurrentPage(pNum)}
-                >
-                  {pNum}
-                </button>
-              );
-            })}
+              <button
+                className="page-nav-btn"
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+                aria-label="Next Page"
+              >
+                ›
+              </button>
 
-            <button
-              className="page-nav-btn"
-              disabled={currentPage === totalPages}
-              onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
-              aria-label="Next Page"
-            >
-              ›
-            </button>
-
-            <select
-              className="page-size-select"
-              value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
-                setCurrentPage(1);
-              }}
-            >
-              <option value={10}>10 / page</option>
-              <option value={25}>25 / page</option>
-              <option value={50}>50 / page</option>
-            </select>
+              <select
+                className="page-size-select"
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+              >
+                <option value={10}>10 / page</option>
+                <option value={25}>25 / page</option>
+                <option value={50}>50 / page</option>
+              </select>
+            </div>
           </div>
         </div>
-      </div>
       )}
 
       {/* 8. Add Vendor Modal (In-page Workflow) */}
@@ -2181,8 +2181,8 @@ export const VendorDirectory: React.FC<VendorDirectoryProps> = ({
                   confirmDialog.confirmStyle === 'danger'
                     ? { backgroundColor: '#DC2626' }
                     : confirmDialog.confirmStyle === 'success'
-                    ? { backgroundColor: '#16A34A' }
-                    : { backgroundColor: '#F05A22' }
+                      ? { backgroundColor: '#16A34A' }
+                      : { backgroundColor: '#F05A22' }
                 }
                 onClick={() => {
                   const cb = confirmDialog.onConfirm;
@@ -2775,23 +2775,23 @@ const AddVendorModal: React.FC<AddVendorModalProps> = ({ onClose, onSuccess }) =
         prev.map((v) =>
           v.id === editingVehicleId
             ? {
-                ...v,
-                registrationNumber: cleanReg,
-                category: vehicleForm.category,
-                bodyType: vehicleForm.bodyType,
-                capacity: vehicleForm.capacity,
-                capacityUnit: vehicleForm.capacityUnit,
-                makeModel: vehicleForm.makeModel,
-                driverName: vehicleForm.driverName,
-                driverPhone: vehicleForm.driverPhone,
-                driverLicence: vehicleForm.driverLicence,
-                rcFile: vehicleForm.rcFile,
-                cBookFile: vehicleForm.cBookFile,
-                permitFile: vehicleForm.permitFile,
-                insuranceFile: vehicleForm.insuranceFile,
-                pucFile: vehicleForm.pucFile,
-                driverDlFile: vehicleForm.driverDlFile,
-              }
+              ...v,
+              registrationNumber: cleanReg,
+              category: vehicleForm.category,
+              bodyType: vehicleForm.bodyType,
+              capacity: vehicleForm.capacity,
+              capacityUnit: vehicleForm.capacityUnit,
+              makeModel: vehicleForm.makeModel,
+              driverName: vehicleForm.driverName,
+              driverPhone: vehicleForm.driverPhone,
+              driverLicence: vehicleForm.driverLicence,
+              rcFile: vehicleForm.rcFile,
+              cBookFile: vehicleForm.cBookFile,
+              permitFile: vehicleForm.permitFile,
+              insuranceFile: vehicleForm.insuranceFile,
+              pucFile: vehicleForm.pucFile,
+              driverDlFile: vehicleForm.driverDlFile,
+            }
             : v
         )
       );
@@ -2962,8 +2962,9 @@ const AddVendorModal: React.FC<AddVendorModalProps> = ({ onClose, onSuccess }) =
       const fullAddress = `${formData.addressLine1.trim()}, ${formData.city.trim()}, ${formData.state.trim()} - ${formData.pincode.trim()}`;
       const cleanMobile = formData.mobile.replace(/\D/g, '');
 
-      // 1. Generate atomic NECL Vendor ID
-      const vendorCode = await generateDbNeclId('VD');
+      // 1. Generate atomic TRUCKX Vendor ID and Account ID
+      const vendorCode = await generateDbTruckxId('VE');
+      const accountId = await generateDbTruckxId('AC');
 
       // 2. Insert Vendor Company
       const fleetCount = vehicles.length > 0 ? vehicles.length : (formData.fleetSize ? parseInt(formData.fleetSize, 10) : 0);
@@ -2972,6 +2973,7 @@ const AddVendorModal: React.FC<AddVendorModalProps> = ({ onClose, onSuccess }) =
         .insert([
           {
             vendor_code: vendorCode,
+            account_id: accountId,
             vendor_name: formData.businessName.trim(),
             pan: formData.pan.trim().toUpperCase() || null,
             gstin: formData.gstin.trim().toUpperCase() || null,

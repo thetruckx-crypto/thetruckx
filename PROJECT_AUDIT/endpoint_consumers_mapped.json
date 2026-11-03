@@ -1,0 +1,1341 @@
+[
+  {
+    "id": "EP-001",
+    "method": "POST",
+    "path": "/api/auth/admin-login",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": []
+  },
+  {
+    "id": "EP-002",
+    "method": "POST",
+    "path": "/api/auth/check-registration",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts"
+    ]
+  },
+  {
+    "id": "EP-003",
+    "method": "POST",
+    "path": "/api/auth/register-sync",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts"
+    ]
+  },
+  {
+    "id": "EP-004",
+    "method": "POST",
+    "path": "/api/auth/send-otp",
+    "auth": "None (Public)",
+    "tables": [
+      "otp_verifications"
+    ],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts"
+    ]
+  },
+  {
+    "id": "EP-005",
+    "method": "POST",
+    "path": "/api/auth/verify-otp",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts"
+    ]
+  },
+  {
+    "id": "EP-006",
+    "method": "GET",
+    "path": "/api/auth/registration-status",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts"
+    ]
+  },
+  {
+    "id": "EP-007",
+    "method": "GET",
+    "path": "/api/health",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": []
+  },
+  {
+    "id": "EP-008",
+    "method": "GET",
+    "path": "/api/auth/me",
+    "auth": "authenticateToken (JWT Required)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/notificationService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/bookings/BookingsModule.tsx",
+      "apps/admin/src/components/clients/ClientInstantApprovalReflection.test.ts",
+      "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+      "apps/admin/src/components/drivers/SingleScreenDriverRegistration.test.ts",
+      "apps/admin/src/components/requirements/RequirementsModule.tsx",
+      "apps/admin/src/components/vendors/DocumentRejectionModal.tsx",
+      "apps/admin/src/components/vendors/VendorRegistrationSteps3to7.test.ts",
+      "apps/admin/src/components/vendors/VendorUpdateMissingStepsValidation.test.ts",
+      "apps/admin/src/services/documentWorkflowService.ts"
+    ]
+  },
+  {
+    "id": "EP-009",
+    "method": "GET",
+    "path": "/api/client/dashboard-data",
+    "auth": "authenticateToken (JWT Required)",
+    "tables": [],
+    "consumers": []
+  },
+  {
+    "id": "EP-010",
+    "method": "POST",
+    "path": "/api/client/submit-registration",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/drivers/SingleScreenDriverRegistration.test.ts"
+    ]
+  },
+  {
+    "id": "EP-011",
+    "method": "GET",
+    "path": "/api/client/status/:identifier",
+    "auth": "None (Public)",
+    "tables": [
+      "client_companies"
+    ],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/notificationService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/bookings/BookingsModule.tsx",
+      "apps/admin/src/components/clients/ClientInstantApprovalReflection.test.ts",
+      "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+      "apps/admin/src/components/drivers/SingleScreenDriverRegistration.test.ts",
+      "apps/admin/src/components/requirements/RequirementsModule.tsx",
+      "apps/admin/src/components/vendors/DocumentRejectionModal.tsx",
+      "apps/admin/src/components/vendors/VendorUpdateMissingStepsValidation.test.ts",
+      "apps/admin/src/services/documentWorkflowService.ts"
+    ]
+  },
+  {
+    "id": "EP-012",
+    "method": "POST",
+    "path": "/api/auth/admin-review-client",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [],
+    "consumers": []
+  },
+  {
+    "id": "EP-013",
+    "method": "POST",
+    "path": "/api/client/admin-review",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [],
+    "consumers": []
+  },
+  {
+    "id": "EP-014",
+    "method": "GET",
+    "path": "/api/regional-hubs",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/vendors/VendorRegistrationSteps3to7.test.ts"
+    ]
+  },
+  {
+    "id": "EP-015",
+    "method": "POST",
+    "path": "/api/regional-hubs",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/vendors/VendorRegistrationSteps3to7.test.ts"
+    ]
+  },
+  {
+    "id": "EP-016",
+    "method": "PUT",
+    "path": "/api/regional-hubs/:id",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/vendors/VendorRegistrationSteps3to7.test.ts"
+    ]
+  },
+  {
+    "id": "EP-017",
+    "method": "DELETE",
+    "path": "/api/regional-hubs/:id",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/vendors/VendorRegistrationSteps3to7.test.ts"
+    ]
+  },
+  {
+    "id": "EP-018",
+    "method": "POST",
+    "path": "/api/vendor/submit-registration",
+    "auth": "None (Public)",
+    "tables": [
+      "vendor_users",
+      "documents",
+      "auth_audit_log"
+    ],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/drivers/SingleScreenDriverRegistration.test.ts"
+    ]
+  },
+  {
+    "id": "EP-019",
+    "method": "GET",
+    "path": "/api/vendor/status/:identifier",
+    "auth": "None (Public)",
+    "tables": [
+      "vendor_companies"
+    ],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/notificationService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/bookings/BookingsModule.tsx",
+      "apps/admin/src/components/clients/ClientInstantApprovalReflection.test.ts",
+      "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+      "apps/admin/src/components/drivers/SingleScreenDriverRegistration.test.ts",
+      "apps/admin/src/components/requirements/RequirementsModule.tsx",
+      "apps/admin/src/components/vendors/DocumentRejectionModal.tsx",
+      "apps/admin/src/components/vendors/VendorUpdateMissingStepsValidation.test.ts",
+      "apps/admin/src/services/documentWorkflowService.ts"
+    ]
+  },
+  {
+    "id": "EP-020",
+    "method": "GET",
+    "path": "/api/database/vendors",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/bookings/BookingsModule.tsx",
+      "apps/admin/src/components/drivers/SingleScreenDriverRegistration.test.ts",
+      "apps/admin/src/components/requirements/RequirementsModule.tsx",
+      "apps/admin/src/components/vendors/VendorRegistrationSteps3to7.test.ts"
+    ]
+  },
+  {
+    "id": "EP-021",
+    "method": "GET",
+    "path": "/api/vendors",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/bookings/BookingsModule.tsx",
+      "apps/admin/src/components/drivers/SingleScreenDriverRegistration.test.ts",
+      "apps/admin/src/components/requirements/RequirementsModule.tsx",
+      "apps/admin/src/components/vendors/VendorRegistrationSteps3to7.test.ts"
+    ]
+  },
+  {
+    "id": "EP-022",
+    "method": "GET",
+    "path": "/database/vendors",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/bookings/BookingsModule.tsx",
+      "apps/admin/src/components/drivers/SingleScreenDriverRegistration.test.ts",
+      "apps/admin/src/components/requirements/RequirementsModule.tsx",
+      "apps/admin/src/components/vendors/VendorRegistrationSteps3to7.test.ts"
+    ]
+  },
+  {
+    "id": "EP-023",
+    "method": "POST",
+    "path": "/api/driver/submit-registration",
+    "auth": "None (Public)",
+    "tables": [
+      "drivers",
+      "documents"
+    ],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/drivers/SingleScreenDriverRegistration.test.ts"
+    ]
+  },
+  {
+    "id": "EP-024",
+    "method": "GET",
+    "path": "/api/driver/status/:identifier",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/notificationService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/bookings/BookingsModule.tsx",
+      "apps/admin/src/components/clients/ClientInstantApprovalReflection.test.ts",
+      "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+      "apps/admin/src/components/drivers/SingleScreenDriverRegistration.test.ts",
+      "apps/admin/src/components/requirements/RequirementsModule.tsx",
+      "apps/admin/src/components/vendors/DocumentRejectionModal.tsx",
+      "apps/admin/src/components/vendors/VendorUpdateMissingStepsValidation.test.ts",
+      "apps/admin/src/services/documentWorkflowService.ts"
+    ]
+  },
+  {
+    "id": "EP-025",
+    "method": "GET",
+    "path": "/api/admin/drivers",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/notificationService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/bookings/BookingsModule.tsx",
+      "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+      "apps/admin/src/components/drivers/SingleScreenDriverRegistration.test.ts"
+    ]
+  },
+  {
+    "id": "EP-026",
+    "method": "GET",
+    "path": "/api/drivers",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/notificationService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/bookings/BookingsModule.tsx",
+      "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+      "apps/admin/src/components/drivers/SingleScreenDriverRegistration.test.ts"
+    ]
+  },
+  {
+    "id": "EP-027",
+    "method": "POST",
+    "path": "/api/admin/vendor-approval",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [],
+    "consumers": []
+  },
+  {
+    "id": "EP-028",
+    "method": "POST",
+    "path": "/api/admin/driver-approval",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [
+      "audit_logs"
+    ],
+    "consumers": [
+      "apps/admin/src/components/drivers/SingleScreenDriverRegistration.test.ts"
+    ]
+  },
+  {
+    "id": "EP-029",
+    "method": "GET",
+    "path": "/api/vendor/dashboard-data",
+    "auth": "authenticateToken (JWT Required)",
+    "tables": [],
+    "consumers": []
+  },
+  {
+    "id": "EP-030",
+    "method": "GET",
+    "path": "/api/driver/dashboard-data",
+    "auth": "authenticateToken (JWT Required)",
+    "tables": [],
+    "consumers": []
+  },
+  {
+    "id": "EP-031",
+    "method": "GET",
+    "path": "/api/admin/users",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/drivers/SingleScreenDriverRegistration.test.ts",
+      "apps/admin/src/components/requirements/RequirementsModule.tsx"
+    ]
+  },
+  {
+    "id": "EP-032",
+    "method": "POST",
+    "path": "/api/admin/users",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [
+      "audit_logs"
+    ],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/drivers/SingleScreenDriverRegistration.test.ts",
+      "apps/admin/src/components/requirements/RequirementsModule.tsx"
+    ]
+  },
+  {
+    "id": "EP-033",
+    "method": "PATCH",
+    "path": "/api/admin/users/:id/status",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [
+      "audit_logs"
+    ],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/notificationService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/bookings/BookingsModule.tsx",
+      "apps/admin/src/components/clients/ClientInstantApprovalReflection.test.ts",
+      "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+      "apps/admin/src/components/drivers/SingleScreenDriverRegistration.test.ts",
+      "apps/admin/src/components/requirements/RequirementsModule.tsx",
+      "apps/admin/src/components/vendors/DocumentRejectionModal.tsx",
+      "apps/admin/src/components/vendors/VendorUpdateMissingStepsValidation.test.ts",
+      "apps/admin/src/services/documentWorkflowService.ts"
+    ]
+  },
+  {
+    "id": "EP-034",
+    "method": "GET",
+    "path": "/api/admin/users/:id/permissions",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/drivers/SingleScreenDriverRegistration.test.ts"
+    ]
+  },
+  {
+    "id": "EP-035",
+    "method": "PUT",
+    "path": "/api/admin/users/:id/permissions",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/drivers/SingleScreenDriverRegistration.test.ts"
+    ]
+  },
+  {
+    "id": "EP-036",
+    "method": "GET",
+    "path": "/api/admin/current-user-permissions",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [],
+    "consumers": []
+  },
+  {
+    "id": "EP-037",
+    "method": "POST",
+    "path": "/api/admin/delete-user",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [
+      "client_quotations",
+      "client_quotes",
+      "vendor_quotations",
+      "vendor_requests",
+      "requirements",
+      "client_users",
+      "vendor_driver_links",
+      "vendor_vehicle_links",
+      "documents",
+      "vendor_users",
+      "vendor_companies",
+      "driver_documents",
+      "drivers",
+      "admin_users",
+      "auth_audit_log",
+      "audit_logs"
+    ],
+    "consumers": []
+  },
+  {
+    "id": "EP-038",
+    "method": "GET",
+    "path": "/api/admin/drafts",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [
+      "admin_registration_drafts"
+    ],
+    "consumers": [
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/vendorService.ts"
+    ]
+  },
+  {
+    "id": "EP-039",
+    "method": "GET",
+    "path": "/api/admin/drafts/:id",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/vendorService.ts"
+    ]
+  },
+  {
+    "id": "EP-040",
+    "method": "POST",
+    "path": "/api/admin/drafts",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [
+      "admin_registration_drafts"
+    ],
+    "consumers": [
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/vendorService.ts"
+    ]
+  },
+  {
+    "id": "EP-041",
+    "method": "DELETE",
+    "path": "/api/admin/drafts/:id",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [
+      "admin_registration_drafts"
+    ],
+    "consumers": [
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/vendorService.ts"
+    ]
+  },
+  {
+    "id": "EP-042",
+    "method": "POST",
+    "path": "/api/admin/drafts/:id/complete",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [
+      "admin_registration_drafts"
+    ],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/bookings/BookingsModule.tsx",
+      "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+      "apps/admin/src/components/vendors/DocumentRejectionModal.tsx",
+      "apps/admin/src/components/vendors/VendorRegistrationSteps3to7.test.ts",
+      "apps/admin/src/components/vendors/VendorUpdateMissingStepsValidation.test.ts"
+    ]
+  },
+  {
+    "id": "EP-043",
+    "method": "GET",
+    "path": "/api/admin/audit-logs",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [],
+    "consumers": []
+  },
+  {
+    "id": "EP-044",
+    "method": "GET",
+    "path": "/api/database/status",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/notificationService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/bookings/BookingsModule.tsx",
+      "apps/admin/src/components/clients/ClientInstantApprovalReflection.test.ts",
+      "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+      "apps/admin/src/components/drivers/SingleScreenDriverRegistration.test.ts",
+      "apps/admin/src/components/requirements/RequirementsModule.tsx",
+      "apps/admin/src/components/vendors/DocumentRejectionModal.tsx",
+      "apps/admin/src/components/vendors/VendorUpdateMissingStepsValidation.test.ts",
+      "apps/admin/src/services/documentWorkflowService.ts"
+    ]
+  },
+  {
+    "id": "EP-045",
+    "method": "GET",
+    "path": "/api/database/clients",
+    "auth": "None (Public)",
+    "tables": [
+      "client_companies"
+    ],
+    "consumers": [
+      "apps/mobile/src/services/clientService.ts",
+      "apps/admin/src/components/bookings/BookingsModule.tsx",
+      "apps/admin/src/components/requirements/RequirementsModule.tsx"
+    ]
+  },
+  {
+    "id": "EP-046",
+    "method": "GET",
+    "path": "/api/database/vendors",
+    "auth": "None (Public)",
+    "tables": [
+      "vendor_companies"
+    ],
+    "consumers": [
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/bookings/BookingsModule.tsx",
+      "apps/admin/src/components/drivers/SingleScreenDriverRegistration.test.ts",
+      "apps/admin/src/components/requirements/RequirementsModule.tsx",
+      "apps/admin/src/components/vendors/VendorRegistrationSteps3to7.test.ts"
+    ]
+  },
+  {
+    "id": "EP-047",
+    "method": "GET",
+    "path": "/api/database/vehicles",
+    "auth": "None (Public)",
+    "tables": [
+      "vehicles"
+    ],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/notificationService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/bookings/BookingsModule.tsx",
+      "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+      "apps/admin/src/components/requirements/RequirementsModule.tsx"
+    ]
+  },
+  {
+    "id": "EP-048",
+    "method": "GET",
+    "path": "/api/dashboard/stats",
+    "auth": "None (Public)",
+    "tables": [
+      "requirements",
+      "bookings",
+      "trips"
+    ],
+    "consumers": [
+      "apps/admin/src/components/bookings/BookingsModule.tsx",
+      "apps/admin/src/components/documents/DocumentClearanceModule.tsx"
+    ]
+  },
+  {
+    "id": "EP-049",
+    "method": "GET",
+    "path": "/api/search",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/admin/src/components/bookings/BookingsModule.tsx",
+      "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+      "apps/admin/src/components/drivers/SingleScreenDriverRegistration.test.ts",
+      "apps/admin/src/components/requirements/RequirementsModule.tsx",
+      "apps/admin/src/components/vendors/VendorRegistrationSteps3to7.test.ts"
+    ]
+  },
+  {
+    "id": "EP-050",
+    "method": "POST",
+    "path": "/api/search/recent/clear",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/bookings/BookingsModule.tsx",
+      "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+      "apps/admin/src/components/drivers/SingleScreenDriverRegistration.test.ts",
+      "apps/admin/src/components/requirements/RequirementsModule.tsx",
+      "apps/admin/src/components/vendors/DocumentRejectionModal.tsx",
+      "apps/admin/src/components/vendors/VendorRegistrationSteps3to7.test.ts"
+    ]
+  },
+  {
+    "id": "EP-051",
+    "method": "GET",
+    "path": "/api/notifications",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/notificationService.ts",
+      "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+      "apps/admin/src/components/requirements/RequirementsModule.tsx",
+      "apps/admin/src/components/vendors/DocumentRejectionModal.tsx",
+      "apps/admin/src/services/documentWorkflowService.ts"
+    ]
+  },
+  {
+    "id": "EP-052",
+    "method": "POST",
+    "path": "/api/notifications/:id/read",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/notificationService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/clients/ClientInstantApprovalReflection.test.ts",
+      "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+      "apps/admin/src/components/drivers/SingleScreenDriverRegistration.test.ts",
+      "apps/admin/src/components/requirements/RequirementsModule.tsx",
+      "apps/admin/src/components/vendors/DocumentRejectionModal.tsx",
+      "apps/admin/src/components/vendors/VendorRegistrationSteps3to7.test.ts",
+      "apps/admin/src/components/vendors/VendorUpdateMissingStepsValidation.test.ts"
+    ]
+  },
+  {
+    "id": "EP-053",
+    "method": "POST",
+    "path": "/api/notifications/read-all",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": []
+  },
+  {
+    "id": "EP-054",
+    "method": "POST",
+    "path": "/api/notifications/register-token",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/notificationService.ts"
+    ]
+  },
+  {
+    "id": "EP-055",
+    "method": "POST",
+    "path": "/api/notifications/send-push",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/notificationService.ts",
+      "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+      "apps/admin/src/components/requirements/RequirementsModule.tsx",
+      "apps/admin/src/components/vendors/DocumentRejectionModal.tsx",
+      "apps/admin/src/services/documentWorkflowService.ts"
+    ]
+  },
+  {
+    "id": "EP-056",
+    "method": "POST",
+    "path": "/api/notifications/test-fcm",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": []
+  },
+  {
+    "id": "EP-057",
+    "method": "POST",
+    "path": "/api/notifications/test-vendor",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": []
+  },
+  {
+    "id": "EP-058",
+    "method": "POST",
+    "path": "/api/notifications/test-driver",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": []
+  },
+  {
+    "id": "EP-059",
+    "method": "GET",
+    "path": "/api/notifications/device-tokens",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": []
+  },
+  {
+    "id": "EP-060",
+    "method": "POST",
+    "path": "/api/quick-actions/create-booking",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [],
+    "consumers": [
+      "apps/admin/src/components/bookings/BookingsModule.tsx"
+    ]
+  },
+  {
+    "id": "EP-061",
+    "method": "POST",
+    "path": "/api/pricing/create-client-quote",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "consumers": []
+  },
+  {
+    "id": "EP-062",
+    "method": "GET",
+    "path": "/api/client/quotes/:requirementId",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/notificationService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/requirements/RequirementsModule.tsx"
+    ]
+  },
+  {
+    "id": "EP-063",
+    "method": "GET",
+    "path": "/api/vendor/quotes/:requirementId",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/notificationService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/requirements/RequirementsModule.tsx"
+    ]
+  },
+  {
+    "id": "EP-064",
+    "method": "POST",
+    "path": "/api/vendor/submit-quotation",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/vendorService.ts"
+    ]
+  },
+  {
+    "id": "EP-065",
+    "method": "POST",
+    "path": "/api/pricing/override-margin",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "consumers": []
+  },
+  {
+    "id": "EP-066",
+    "method": "POST",
+    "path": "/api/client/quotes/:quoteId/accept",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/clientService.ts",
+      "apps/admin/src/components/bookings/BookingsModule.tsx",
+      "apps/admin/src/components/requirements/RequirementsModule.tsx"
+    ]
+  },
+  {
+    "id": "EP-067",
+    "method": "POST",
+    "path": "/api/client/quotes/:quoteId/reject",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/bookings/BookingsModule.tsx",
+      "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+      "apps/admin/src/components/drivers/SingleScreenDriverRegistration.test.ts",
+      "apps/admin/src/components/vendors/DocumentRejectionModal.tsx",
+      "apps/admin/src/components/vendors/VendorUpdateMissingStepsValidation.test.ts",
+      "apps/admin/src/services/documentWorkflowService.ts"
+    ]
+  },
+  {
+    "id": "EP-068",
+    "method": "POST",
+    "path": "/api/bookings/emergency-direct-create",
+    "auth": "authenticateAdmin (Admin Only)",
+    "tables": [],
+    "consumers": [
+      "apps/admin/src/components/bookings/BookingsModule.tsx"
+    ]
+  },
+  {
+    "id": "EP-069",
+    "method": "GET",
+    "path": "/api/bookings/:bookingId",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/bookings/BookingsModule.tsx",
+      "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+      "apps/admin/src/components/requirements/RequirementsModule.tsx"
+    ]
+  },
+  {
+    "id": "EP-070",
+    "method": "POST",
+    "path": "/api/trips/generate-from-booking",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": []
+  },
+  {
+    "id": "EP-071",
+    "method": "POST",
+    "path": "/api/trips/:tripId/assign",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/notificationService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/bookings/BookingsModule.tsx",
+      "apps/admin/src/components/requirements/RequirementsModule.tsx"
+    ]
+  },
+  {
+    "id": "EP-072",
+    "method": "GET",
+    "path": "/api/vendor/trips",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/notificationService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/bookings/BookingsModule.tsx",
+      "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+      "apps/admin/src/services/documentWorkflowService.ts"
+    ]
+  },
+  {
+    "id": "EP-073",
+    "method": "GET",
+    "path": "/api/trips/:tripId",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/notificationService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/bookings/BookingsModule.tsx",
+      "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+      "apps/admin/src/services/documentWorkflowService.ts"
+    ]
+  },
+  {
+    "id": "EP-074",
+    "method": "POST",
+    "path": "/api/driver/trips/:tripId/acknowledge-dispatch",
+    "auth": "None (Public)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "consumers": [
+      "apps/mobile/src/services/driverService.ts"
+    ]
+  },
+  {
+    "id": "EP-075",
+    "method": "POST",
+    "path": "/api/trips/:tripId/generate-lr",
+    "auth": "None (Public)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "consumers": [
+      "apps/mobile/src/services/driverService.ts"
+    ]
+  },
+  {
+    "id": "EP-076",
+    "method": "POST",
+    "path": "/api/trips/:tripId/link-ewaybill",
+    "auth": "None (Public)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "consumers": [
+      "apps/mobile/src/services/driverService.ts"
+    ]
+  },
+  {
+    "id": "EP-077",
+    "method": "GET",
+    "path": "/api/trips/:tripId/lr",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/notificationService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/requirements/RequirementsModule.tsx"
+    ]
+  },
+  {
+    "id": "EP-078",
+    "method": "GET",
+    "path": "/api/driver/trips",
+    "auth": "None (Public)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/notificationService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/bookings/BookingsModule.tsx",
+      "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+      "apps/admin/src/services/documentWorkflowService.ts"
+    ]
+  },
+  {
+    "id": "EP-079",
+    "method": "GET",
+    "path": "/api/audit-logs",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": []
+  },
+  {
+    "id": "EP-080",
+    "method": "POST",
+    "path": "/api/trips/:tripId/location-ping",
+    "auth": "None (Public)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "consumers": [
+      "apps/mobile/src/services/driverService.ts"
+    ]
+  },
+  {
+    "id": "EP-081",
+    "method": "POST",
+    "path": "/api/trips/:tripId/milestone",
+    "auth": "None (Public)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/notificationService.ts"
+    ]
+  },
+  {
+    "id": "EP-082",
+    "method": "POST",
+    "path": "/api/trips/:tripId/geofence-check",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/driverService.ts"
+    ]
+  },
+  {
+    "id": "EP-083",
+    "method": "GET",
+    "path": "/api/trips/:tripId/tracking",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/notificationService.ts"
+    ]
+  },
+  {
+    "id": "EP-084",
+    "method": "POST",
+    "path": "/api/trips/:tripId/pod",
+    "auth": "None (Public)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/driverService.ts"
+    ]
+  },
+  {
+    "id": "EP-085",
+    "method": "GET",
+    "path": "/api/trips/:tripId/pod",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/driverService.ts"
+    ]
+  },
+  {
+    "id": "EP-086",
+    "method": "POST",
+    "path": "/api/trips/:tripId/pod/review",
+    "auth": "None (Public)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/bookings/BookingsModule.tsx",
+      "apps/admin/src/components/clients/ClientInstantApprovalReflection.test.ts",
+      "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+      "apps/admin/src/components/drivers/SingleScreenDriverRegistration.test.ts",
+      "apps/admin/src/components/requirements/RequirementsModule.tsx",
+      "apps/admin/src/components/vendors/DocumentRejectionModal.tsx",
+      "apps/admin/src/components/vendors/VendorRegistrationSteps3to7.test.ts",
+      "apps/admin/src/components/vendors/VendorUpdateMissingStepsValidation.test.ts"
+    ]
+  },
+  {
+    "id": "EP-087",
+    "method": "POST",
+    "path": "/api/trips/:tripId/weighbridge",
+    "auth": "None (Public)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/admin/src/components/bookings/BookingsModule.tsx"
+    ]
+  },
+  {
+    "id": "EP-088",
+    "method": "GET",
+    "path": "/api/trips/:tripId/weighbridge",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/admin/src/components/bookings/BookingsModule.tsx"
+    ]
+  },
+  {
+    "id": "EP-089",
+    "method": "POST",
+    "path": "/api/trips/:tripId/claims",
+    "auth": "None (Public)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "consumers": [
+      "apps/mobile/src/services/driverService.ts"
+    ]
+  },
+  {
+    "id": "EP-090",
+    "method": "GET",
+    "path": "/api/trips/:tripId/claims",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/driverService.ts"
+    ]
+  },
+  {
+    "id": "EP-091",
+    "method": "POST",
+    "path": "/api/claims/:claimId/resolve",
+    "auth": "None (Public)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/bookings/BookingsModule.tsx",
+      "apps/admin/src/components/clients/ClientInstantApprovalReflection.test.ts",
+      "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+      "apps/admin/src/components/drivers/SingleScreenDriverRegistration.test.ts",
+      "apps/admin/src/components/vendors/VendorRegistrationSteps3to7.test.ts",
+      "apps/admin/src/components/vendors/VendorUpdateMissingStepsValidation.test.ts",
+      "apps/admin/src/services/documentWorkflowService.ts"
+    ]
+  },
+  {
+    "id": "EP-092",
+    "method": "POST",
+    "path": "/api/invoices/client/generate",
+    "auth": "None (Public)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+      "apps/admin/src/components/requirements/RequirementsModule.tsx"
+    ]
+  },
+  {
+    "id": "EP-093",
+    "method": "GET",
+    "path": "/api/invoices/client/:invoiceId",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/notificationService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/bookings/BookingsModule.tsx",
+      "apps/admin/src/components/clients/ClientInstantApprovalReflection.test.ts",
+      "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+      "apps/admin/src/components/requirements/RequirementsModule.tsx",
+      "apps/admin/src/services/documentWorkflowService.ts"
+    ]
+  },
+  {
+    "id": "EP-094",
+    "method": "POST",
+    "path": "/api/invoices/client/:invoiceId/record-payment",
+    "auth": "None (Public)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "consumers": [
+      "apps/mobile/src/services/clientService.ts"
+    ]
+  },
+  {
+    "id": "EP-095",
+    "method": "POST",
+    "path": "/api/payouts/transporter/generate",
+    "auth": "None (Public)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/clientService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/documents/DocumentClearanceModule.tsx",
+      "apps/admin/src/components/requirements/RequirementsModule.tsx"
+    ]
+  },
+  {
+    "id": "EP-096",
+    "method": "GET",
+    "path": "/api/payouts/transporter/:payoutId",
+    "auth": "None (Public)",
+    "tables": [],
+    "consumers": [
+      "apps/mobile/src/services/authService.ts",
+      "apps/mobile/src/services/driverService.ts",
+      "apps/mobile/src/services/notificationService.ts",
+      "apps/mobile/src/services/vendorService.ts",
+      "apps/admin/src/components/vendors/VendorRegistrationSteps3to7.test.ts"
+    ]
+  },
+  {
+    "id": "EP-097",
+    "method": "POST",
+    "path": "/api/payouts/transporter/:payoutId/record-disbursal",
+    "auth": "None (Public)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "consumers": [
+      "apps/mobile/src/services/vendorService.ts"
+    ]
+  },
+  {
+    "id": "EP-098",
+    "method": "GET",
+    "path": "/api/finance/reconciliation",
+    "auth": "None (Public)",
+    "tables": [
+      "auth_audit_log"
+    ],
+    "consumers": [
+      "apps/mobile/src/services/clientService.ts",
+      "apps/admin/src/components/bookings/BookingsModule.tsx"
+    ]
+  }
+]

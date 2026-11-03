@@ -495,7 +495,7 @@ export const ReportsModule: React.FC = () => {
                   {selectedReport === "requirements" && (
                     <>
                       <th>Requirement ID</th>
-                      <th>Client Shipper</th>
+                      <th>Client Enterprise</th>
                       <th>Route / Corridor</th>
                       <th>Vehicle Type</th>
                       <th>Weight</th>
@@ -596,7 +596,7 @@ export const ReportsModule: React.FC = () => {
                     {selectedReport === "requirements" && (
                       <>
                         <td style={{ fontWeight: 700 }}>{r.requirement_code || r.id}</td>
-                        <td>{r.client_companies?.company_name || "Shipper"}</td>
+                        <td>{r.client_companies?.company_name || "Client Enterprise"}</td>
                         <td>{r.pickup_address?.slice(0, 20)} → {r.destination_address?.slice(0, 20)}</td>
                         <td>{r.vehicle_type}</td>
                         <td>{r.required_capacity_mt || 20} MT</td>

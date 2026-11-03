@@ -20,11 +20,11 @@ import {
   ShieldAlert,
   Inbox,
   ExternalLink,
-  BellRing,
-  Send
+  BellRing
 } from 'lucide-react';
-import { supabase } from '../utils/supabase';
-import { requestWebPushPermission, sendTestWebPushNotification } from '../services/firebase';
+import { supabase, ensureAdminSession } from '../utils/supabase';
+import { requestWebPushPermission } from '../services/firebase';
+import { formatDisplayId } from '../utils/idGenerator';
 import { useToast } from '../context/ToastContext';
 
 export interface NotificationItem {
@@ -99,12 +99,11 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
   const [error, setError] = useState<string | null>(null);
 
   // FCM Web Push Notification state
-  const { success: showSuccess, error: showError, info: showInfo } = useToast();
+  const { success: showSuccess, error: showError } = useToast();
   const [fcmEnabled, setFcmEnabled] = useState<boolean>(() => {
     return typeof window !== 'undefined' && Boolean(localStorage.getItem('necl_web_fcm_token'));
   });
   const [fcmLoading, setFcmLoading] = useState<boolean>(false);
-  const [testSending, setTestSending] = useState<boolean>(false);
 
   const handleEnableWebPush = async () => {
     setFcmLoading(true);
@@ -120,21 +119,6 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
       showError(err.message || 'Error requesting push notification permission');
     } finally {
       setFcmLoading(false);
-    }
-  };
-
-  const handleSendTestPush = async () => {
-    setTestSending(true);
-    try {
-      await sendTestWebPushNotification(
-        'NECL Admin Test Alert',
-        'Firebase Cloud Messaging Web Push is functioning properly!'
-      );
-      showInfo('Test push notification dispatched via Firebase Cloud Messaging.');
-    } catch (err: any) {
-      showError(err.message || 'Failed to dispatch test notification');
-    } finally {
-      setTestSending(false);
     }
   };
 
@@ -159,6 +143,7 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
     setLoading(true);
     setError(null);
     try {
+      await ensureAdminSession();
       const readIds = getReadIds();
 
       const [
@@ -166,13 +151,14 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
         { data: vendors },
         { data: docs },
         { data: reqs },
+        { data: vqs },
         { data: boks },
         { data: trips },
         { data: drivers },
       ] = await Promise.all([
         supabase
           .from('client_companies')
-          .select('id, company_name, client_code, city, state, status, created_at')
+          .select('id, company_name, client_code, registered_address, city, state, status, created_at')
           .order('created_at', { ascending: false })
           .limit(8),
         supabase
@@ -184,28 +170,33 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
           .from('documents')
           .select('id, category, document_type, reference_id, file_name, verification_status, created_at')
           .eq('verification_status', 'PENDING')
-          .order('created_at', { ascending: false })
-          .limit(8),
+          .order('created_at', { ascending: false }),
         supabase
           .from('requirements')
-          .select('id, requirement_code, title, status, pickup_address, destination_address, created_at, client_companies(company_name)')
+          .select('id, requirement_code, material_type, required_capacity_mt, vehicle_type, status, pickup_address, destination_address, created_at, client_companies(company_name)')
           .order('created_at', { ascending: false })
           .limit(8),
         supabase
+          .from('vendor_requests')
+          .select('id, requirement_id, vendor_id, status, created_at, vendor_companies(vendor_name), requirements(material_type)')
+          .eq('status', 'QUOTED')
+          .order('created_at', { ascending: false })
+          .limit(6),
+        supabase
           .from('bookings')
-          .select('id, booking_code, booking_status, payment_status, confirmed_at, client_companies(company_name)')
+          .select('id, booking_code, booking_status, payment_status, grand_total, confirmed_at, client_companies(company_name)')
           .order('confirmed_at', { ascending: false })
           .limit(8),
         supabase
           .from('trips')
-          .select('id, trip_status, started_at, booking_id, vendor_rate, vehicles(registration_number)')
+          .select('id, trip_status, started_at, booking_id, vendor_rate, vehicles(registration_number, vehicle_type)')
           .order('started_at', { ascending: false })
           .limit(6),
         supabase
           .from('drivers')
-          .select('id, full_name, licence_number, licence_expiry_date, verification_status, created_at')
+          .select('id, full_name, mobile, driver_code, licence_number, licence_expiry_date, status, verification_status, created_at')
           .order('created_at', { ascending: false })
-          .limit(6),
+          .limit(8),
       ]);
 
       const items: NotificationItem[] = [];
@@ -214,12 +205,13 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
       (clients || []).forEach((c) => {
         const isPending = c.status === 'PENDING' || c.status === 'PENDING_APPROVAL';
         const notifId = `notif-client-${c.id}`;
+        const code = c.client_code || formatDisplayId('CL', c.id, c.created_at);
         items.push({
           id: notifId,
           category: 'client',
-          title: isPending ? 'New Client Awaiting Verification' : `Client ${c.status}`,
-          refId: c.client_code || 'Client Onboarding',
-          subtitle: `${c.company_name} • ${c.city ? `${c.city}, ${c.state || ''}` : 'Pending details'}`,
+          title: isPending ? 'New Client Awaiting Verification' : `Client ${c.status === 'APPROVED' ? 'Approved' : c.status}`,
+          refId: `${code} • ${c.company_name}`,
+          subtitle: `${c.registered_address || c.city || 'India'} • Corporate profile & KYC submitted`,
           time: formatRelativeTime(c.created_at),
           rawTime: c.created_at,
           isRead: readIds.has(notifId) || !isPending,
@@ -231,12 +223,13 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
       (vendors || []).forEach((v) => {
         const isPending = v.status === 'PENDING' || v.status === 'PENDING_APPROVAL';
         const notifId = `notif-ven-${v.id}`;
+        const code = v.vendor_code || formatDisplayId('VE', v.id, v.created_at);
         items.push({
           id: notifId,
           category: 'vendor',
-          title: isPending ? 'New Vendor Registration' : `Vendor ${v.status}`,
-          refId: v.vendor_code || 'Transporter',
-          subtitle: `${v.vendor_name} • ${v.address || 'Address pending'}`,
+          title: isPending ? 'New Transporter Registration' : `Transporter ${v.status === 'APPROVED' ? 'Verified' : v.status}`,
+          refId: `${code} • ${v.vendor_name}`,
+          subtitle: `${v.address || 'India'} • Transporter fleet & compliance review`,
           time: formatRelativeTime(v.created_at),
           rawTime: v.created_at,
           isRead: readIds.has(notifId) || !isPending,
@@ -244,17 +237,76 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
         });
       });
 
-      // 3. Document verification alerts
+      // 3. Document verification alerts - Smartly aggregated by entity/package to eliminate raw file spam
+      const driverMap = new Map((drivers || []).map((d: any) => [d.id, d]));
+      const vendorMap = new Map((vendors || []).map((v: any) => [v.id, v]));
+      const clientMap = new Map((clients || []).map((c: any) => [c.id, c]));
+
+      const docGroups: Record<string, { category: string; reference_id: string; count: number; types: Set<string>; latestDate: string }> = {};
       (docs || []).forEach((d) => {
-        const notifId = `notif-doc-${d.id}`;
+        const key = `${d.category}_${d.reference_id || 'general'}`;
+        if (!docGroups[key]) {
+          docGroups[key] = {
+            category: d.category || 'GENERAL',
+            reference_id: d.reference_id,
+            count: 0,
+            types: new Set(),
+            latestDate: d.created_at,
+          };
+        }
+        docGroups[key].count++;
+        if (d.document_type) docGroups[key].types.add(d.document_type);
+        if (new Date(d.created_at) > new Date(docGroups[key].latestDate)) {
+          docGroups[key].latestDate = d.created_at;
+        }
+      });
+
+      Object.entries(docGroups).forEach(([key, group]) => {
+        const notifId = `notif-docgroup-${key}`;
+        const typeList = Array.from(group.types).join(', ') || 'KYC Documents';
+        let title = 'KYC Documents Pending Clearance';
+        let refId = `${group.category} Compliance`;
+        let notifCategory: NotificationItem['category'] = 'doc';
+
+        if (group.category === 'DRIVER') {
+          const matchedDriver = group.reference_id ? driverMap.get(group.reference_id) : null;
+          const driverName = matchedDriver?.full_name || 'Driver Application';
+          const driverCode = matchedDriver ? (matchedDriver.driver_code || formatDisplayId('DR', matchedDriver.id, matchedDriver.created_at)) : 'KYC';
+          title = 'Driver Documents Awaiting Clearance';
+          refId = `${driverName} (${driverCode})`;
+          notifCategory = 'driver';
+        } else if (group.category === 'VENDOR') {
+          const matchedVendor = group.reference_id ? vendorMap.get(group.reference_id) : null;
+          const vName = matchedVendor?.vendor_name || 'Transporter Profile';
+          const vCode = matchedVendor ? (matchedVendor.vendor_code || formatDisplayId('VE', matchedVendor.id, matchedVendor.created_at)) : 'Fleet';
+          title = 'Transporter Compliance Clearance';
+          refId = `${vName} (${vCode})`;
+          notifCategory = 'vendor';
+        } else if (group.category === 'CLIENT') {
+          const matchedClient = group.reference_id ? clientMap.get(group.reference_id) : null;
+          const cName = matchedClient?.company_name || 'Enterprise Client';
+          const cCode = matchedClient ? (matchedClient.client_code || formatDisplayId('CL', matchedClient.id, matchedClient.created_at)) : 'Corporate';
+          title = 'Enterprise KYC Clearance';
+          refId = `${cName} (${cCode})`;
+          notifCategory = 'client';
+        } else if (group.category === 'VEHICLE') {
+          title = 'Vehicle Compliance Verification';
+          refId = 'Vehicle Fleet Documents';
+          notifCategory = 'booking';
+        } else if (group.category === 'TRIP' || group.types.has('POD') || group.types.has('POD_LR')) {
+          title = 'Proof of Delivery (POD) Clearance';
+          refId = `Shipment Delivery Doc • ${group.reference_id ? group.reference_id.slice(0, 8).toUpperCase() : 'Trip'}`;
+          notifCategory = 'trip';
+        }
+
         items.push({
           id: notifId,
-          category: 'doc',
-          title: 'Document Pending Verification',
-          refId: d.document_type || 'KYC Document',
-          subtitle: `${d.category} Document • ${d.file_name || 'Uploaded certificate'}`,
-          time: formatRelativeTime(d.created_at),
-          rawTime: d.created_at,
+          category: notifCategory,
+          title,
+          refId,
+          subtitle: `${group.count} compliance file${group.count > 1 ? 's' : ''} uploaded (${typeList}) awaiting clearance`,
+          time: formatRelativeTime(group.latestDate),
+          rawTime: group.latestDate,
           isRead: readIds.has(notifId),
           isImportant: true,
         });
@@ -263,14 +315,25 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
       // 4. Requirements notifications
       (reqs || []).forEach((r) => {
         const clientName = (r as any).client_companies?.company_name || 'Client';
-        const isUnderReview = r.status === 'UNDER_REVIEW' || r.status === 'PENDING';
+        const isUnderReview = r.status === 'UNDER_REVIEW' || r.status === 'PENDING' || r.status === 'RFQ_SENT';
         const notifId = `notif-req-${r.id}`;
+        const code = r.requirement_code || formatDisplayId('REQ', r.id, r.created_at);
+        const origin = (r.pickup_address || 'Origin').split(',')[0].trim();
+        const dest = (r.destination_address || 'Destination').split(',')[0].trim();
+        const weight = r.required_capacity_mt ? ` (${r.required_capacity_mt} MT)` : '';
+        const cargo = r.material_type ? `${r.material_type}${weight}` : 'Freight Cargo';
+
+        let title = `Requirement: ${r.status.replace(/_/g, ' ')}`;
+        if (r.status === 'RFQ_SENT') title = 'Live Sourcing RFQ Active';
+        else if (r.status === 'UNDER_REVIEW') title = 'Requirement Under Review';
+        else if (r.status === 'PENDING') title = 'New Freight Requirement';
+
         items.push({
           id: notifId,
           category: 'requirement',
-          title: `Requirement: ${r.status.replace(/_/g, ' ')}`,
-          refId: r.requirement_code || `REQ-${r.id.slice(0, 8)}`,
-          subtitle: `${clientName} • ${r.pickup_address || 'Origin'} → ${r.destination_address || 'Destination'}`,
+          title,
+          refId: code,
+          subtitle: `${clientName} • ${cargo} • ${origin} → ${dest}`,
           time: formatRelativeTime(r.created_at),
           rawTime: r.created_at,
           isRead: readIds.has(notifId) || !isUnderReview,
@@ -278,17 +341,37 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
         });
       });
 
-      // 5. Bookings notifications
+      // 5. Vendor Quotations received
+      (vqs || []).forEach((vq: any) => {
+        const vendorName = vq.vendor_companies?.vendor_name || 'Transporter';
+        const cargo = vq.requirements?.material_type || 'Cargo';
+        const notifId = `notif-quote-${vq.id}`;
+        items.push({
+          id: notifId,
+          category: 'quote',
+          title: 'Transporter Quotation Submitted',
+          refId: `RFQ Quote #${vq.id.slice(0, 8).toUpperCase()}`,
+          subtitle: `${vendorName} submitted quotation for ${cargo}`,
+          time: formatRelativeTime(vq.created_at),
+          rawTime: vq.created_at,
+          isRead: readIds.has(notifId),
+          isImportant: true,
+        });
+      });
+
+      // 6. Bookings notifications
       (boks || []).forEach((b) => {
         const clientName = (b as any).client_companies?.company_name || 'Client';
         const isPending = b.payment_status === 'PAYMENT_PENDING' || b.booking_status === 'CONFIRMED';
         const notifId = `notif-bok-${b.id}`;
+        const code = b.booking_code || formatDisplayId('BK', b.id, b.confirmed_at);
+        const amount = b.grand_total ? ` • ₹${Number(b.grand_total).toLocaleString('en-IN')}` : '';
         items.push({
           id: notifId,
           category: 'booking',
-          title: `Booking: ${b.booking_status.replace(/_/g, ' ')}`,
-          refId: b.booking_code || `BK-${b.id.slice(0, 8)}`,
-          subtitle: `${clientName} • Payment: ${b.payment_status.replace(/_/g, ' ')}`,
+          title: b.booking_status === 'CONFIRMED' ? 'Booking Confirmed • Assign Fleet' : `Booking ${b.booking_status.replace(/_/g, ' ')}`,
+          refId: code,
+          subtitle: `${clientName}${amount} • Payment: ${(b.payment_status || 'PENDING').replace(/_/g, ' ')}`,
           time: formatRelativeTime(b.confirmed_at),
           rawTime: b.confirmed_at,
           isRead: readIds.has(notifId) || !isPending,
@@ -296,7 +379,7 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
         });
       });
 
-      // 6. Active Trips notifications
+      // 7. Active Trips notifications
       (trips || []).forEach((t) => {
         const vehNo = (t as any).vehicles?.registration_number || 'Carrier Truck';
         const inTransit = t.trip_status === 'IN_TRANSIT';
@@ -304,9 +387,9 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
         items.push({
           id: notifId,
           category: 'trip',
-          title: `Trip ${t.trip_status === 'IN_TRANSIT' ? 'In Transit' : t.trip_status.replace(/_/g, ' ')}`,
+          title: inTransit ? 'Shipment In Transit' : `Trip ${t.trip_status.replace(/_/g, ' ')}`,
           refId: vehNo,
-          subtitle: `Rate: ₹${(t.vendor_rate || 0).toLocaleString('en-IN')} • Live tracking active`,
+          subtitle: `Trip #${t.id.slice(0, 8).toUpperCase()} • Real-time GPS tracking active`,
           time: formatRelativeTime(t.started_at),
           rawTime: t.started_at,
           isRead: readIds.has(notifId) || !inTransit,
@@ -314,27 +397,37 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
         });
       });
 
-      // 7. Drivers notifications
+      // 8. Drivers notifications
       (drivers || []).forEach((d) => {
-        let urgent = false;
-        let subtitle = `Licence: ${d.licence_number || 'N/A'}`;
+        const isPending =
+          d.status === 'PENDING' ||
+          d.status === 'PENDING_APPROVAL' ||
+          d.status === 'SUBMITTED' ||
+          d.status === 'UNDER_REVIEW' ||
+          d.verification_status === 'PENDING' ||
+          (d.status === 'INACTIVE' && d.verification_status !== 'APPROVED');
+        let urgent = isPending;
+        let subtitle = `DL: ${d.licence_number || 'Verification pending'}`;
         if (d.licence_expiry_date) {
           const exp = new Date(d.licence_expiry_date);
           const days = Math.ceil((exp.getTime() - Date.now()) / (1000 * 3600 * 24));
-          urgent = days <= 30;
-          subtitle += ` • Valid till: ${d.licence_expiry_date} (${days > 0 ? `${days}d left` : 'Expired'})`;
+          if (days <= 30) {
+            urgent = true;
+            subtitle += ` • Valid till: ${d.licence_expiry_date} (${days > 0 ? `${days}d left` : 'Expired'})`;
+          }
         }
         const notifId = `notif-drv-${d.id}`;
+        const code = d.driver_code || formatDisplayId('DR', d.id, d.created_at);
         items.push({
           id: notifId,
           category: 'driver',
-          title: urgent ? 'Driver Licence Expiring Soon' : 'Driver Enrolled',
-          refId: d.full_name,
+          title: isPending ? 'New Driver Awaiting Approval' : urgent ? 'Driver Licence Expiring Soon' : 'Commercial Driver Enrolled',
+          refId: `${d.full_name || 'Driver'} (${code})`,
           subtitle,
           time: formatRelativeTime(d.created_at),
           rawTime: d.created_at,
-          isRead: readIds.has(notifId) || !urgent,
-          isImportant: urgent,
+          isRead: readIds.has(notifId) || (!isPending && !urgent),
+          isImportant: isPending || urgent,
         });
       });
 
@@ -363,6 +456,22 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
   useEffect(() => {
     if (isOpen) {
       fetchDbNotifications();
+
+      const channel = supabase
+        .channel('admin_notifications_live_sync')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'drivers' }, () => fetchDbNotifications())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'documents' }, () => fetchDbNotifications())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'requirements' }, () => fetchDbNotifications())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'vendor_requests' }, () => fetchDbNotifications())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => fetchDbNotifications())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'trips' }, () => fetchDbNotifications())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'vendor_companies' }, () => fetchDbNotifications())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'client_companies' }, () => fetchDbNotifications())
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }
   }, [isOpen, fetchDbNotifications]);
 
@@ -463,6 +572,23 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
               {tabCounts.unread > 0 && (
                 <span className="notif-unread-pill">{tabCounts.unread} new</span>
               )}
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  color: '#15803D',
+                  background: '#DCFCE7',
+                  border: '1px solid #BBF7D0',
+                  padding: '2px 8px',
+                  borderRadius: '12px',
+                }}
+              >
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#16A34A', display: 'inline-block' }} />
+                Live Updates
+              </span>
               <button
                 className="topbar-icon-btn"
                 title="Refresh notifications"
@@ -472,95 +598,36 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
                 <RefreshCw size={13} className={loading ? 'spin-animate' : ''} />
               </button>
             </div>
-            <button className="notif-drawer-close-btn" onClick={onClose} title="Close drawer">
-              <X size={18} />
-            </button>
-          </div>
-
-          {/* FCM Push Notification Controls Banner */}
-          <div
-            style={{
-              margin: '10px 0 12px 0',
-              padding: '10px 12px',
-              background: fcmEnabled ? '#F0FDF4' : '#FFF7ED',
-              border: fcmEnabled ? '1px solid #BBF7D0' : '1px solid #FED7AA',
-              borderRadius: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: '8px',
-            }}
-          >
+            
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div
-                style={{
-                  width: '28px',
-                  height: '28px',
-                  borderRadius: '6px',
-                  background: fcmEnabled ? '#DCFCE7' : '#FFEDD5',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <BellRing size={15} color={fcmEnabled ? '#16A34A' : '#EA580C'} />
-              </div>
-              <div>
-                <div style={{ fontSize: '12px', fontWeight: 700, color: fcmEnabled ? '#15803D' : '#C2410C' }}>
-                  {fcmEnabled ? 'FCM Web Push: Active' : 'FCM Web Push: Not Enabled'}
-                </div>
-                <div style={{ fontSize: '11px', color: '#64748B' }}>
-                  {fcmEnabled ? 'Receiving real-time browser alerts' : 'Enable browser alerts for shipments & quotes'}
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              {fcmEnabled ? (
-                <button
-                  type="button"
-                  onClick={handleSendTestPush}
-                  disabled={testSending}
-                  style={{
-                    background: '#16A34A',
-                    color: '#FFFFFF',
-                    border: 'none',
-                    borderRadius: '6px',
-                    padding: '5px 10px',
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    cursor: testSending ? 'not-allowed' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    transition: 'opacity 0.2s',
-                    opacity: testSending ? 0.7 : 1,
-                  }}
-                  title="Dispatch a real test notification to this browser"
-                >
-                  <Send size={11} /> {testSending ? 'Sending…' : 'Test Push'}
-                </button>
-              ) : (
+              {!fcmEnabled && (
                 <button
                   type="button"
                   onClick={handleEnableWebPush}
                   disabled={fcmLoading}
+                  title="Enable browser alerts for shipments & quotes"
                   style={{
-                    background: '#FA5700',
-                    color: '#FFFFFF',
-                    border: 'none',
+                    background: '#FFFFFF',
+                    color: '#EA580C',
+                    border: '1px solid #FED7AA',
                     borderRadius: '6px',
-                    padding: '5px 12px',
+                    padding: '3px 8px',
                     fontSize: '11px',
                     fontWeight: 600,
                     cursor: fcmLoading ? 'not-allowed' : 'pointer',
-                    transition: 'opacity 0.2s',
-                    opacity: fcmLoading ? 0.7 : 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    transition: 'all 0.15s ease',
                   }}
                 >
+                  <BellRing size={12} color="#EA580C" />
                   {fcmLoading ? 'Enabling…' : 'Enable Push'}
                 </button>
               )}
+              <button className="notif-drawer-close-btn" onClick={onClose} title="Close drawer">
+                <X size={18} />
+              </button>
             </div>
           </div>
 

@@ -25,6 +25,7 @@ import {
 } from 'lucide-react-native';
 import { driverService } from '../../../services/driverService';
 import { DriverTripItem } from '../../../types';
+import { formatDisplayId } from '../../../utils/idGenerator';
 
 interface DriverTripProgressScreenProps {
   tripId: string;
@@ -144,7 +145,7 @@ export const DriverTripProgressScreen: React.FC<DriverTripProgressScreenProps> =
                   <Text style={styles.radioText}>GPS TRACKING ACTIVE</Text>
                 </View>
                 <Text style={styles.tripId}>
-                  #{trip.id.replace(/[^a-zA-Z0-9]/g, '').slice(-8).toUpperCase()}
+                  {trip.tripCode || formatDisplayId('TR', trip.startedAt, trip.id)}
                 </Text>
               </View>
 

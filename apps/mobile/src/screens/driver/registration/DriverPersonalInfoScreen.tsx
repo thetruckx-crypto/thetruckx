@@ -22,7 +22,6 @@ import {
   ArrowRight,
   ShieldAlert,
 } from 'lucide-react-native';
-import { ScenicHeroBanner } from '../../../components/ScenicHeroBanner';
 import { BottomGoldWings } from '../../../components/BottomGoldWings';
 import { driverService } from '../../../services/driverService';
 import { pincodeService } from '../../../services/pincodeService';
@@ -146,16 +145,16 @@ export const DriverPersonalInfoScreen: React.FC<DriverPersonalInfoScreenProps> =
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ScrollView contentContainerStyle={styles.scrollContainer} bounces={false}>
-          {/* Top Banner */}
-          <View style={styles.topWrap}>
-            <ScenicHeroBanner height={170} />
-            <TouchableOpacity style={styles.backBtn} onPress={onBack} accessibilityLabel="Back">
-              <ChevronLeft size={22} color="#172B4D" />
-            </TouchableOpacity>
-            
-          </View>
+        {/* Header Bar */}
+        <View style={styles.headerBar}>
+          <TouchableOpacity style={styles.headerBackBtn} onPress={onBack} accessibilityLabel="Back">
+            <ChevronLeft size={22} color="#0F172A" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Personal Information</Text>
+          <View style={styles.headerRightPlaceholder} />
+        </View>
 
+        <ScrollView contentContainerStyle={styles.scrollContainer} bounces={false}>
           <View style={styles.contentWrap}>
             {/* Step Progress Pill */}
             <View style={styles.stepIndicatorRow}>
@@ -376,27 +375,31 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingBottom: 40,
   },
-  topWrap: {
-    position: 'relative',
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
   },
-  backBtn: {
-    position: 'absolute',
-    top: 16,
-    left: 16,
+  headerBackBtn: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 10,
   },
-  logoWrap: {
-    position: 'absolute',
-    bottom: 8,
-    alignSelf: 'center',
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  headerRightPlaceholder: {
+    width: 38,
   },
   contentWrap: {
     paddingHorizontal: 20,

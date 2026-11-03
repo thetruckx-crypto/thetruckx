@@ -46,9 +46,10 @@ interface BookingsModuleProps {
   onNavigateToCreateFromQuote?: (quoteId: string) => void;
 }
 
-function formatBookingReference(id: string, createdAt: string) {
+function formatBookingReference(id: string, createdAt: string, bookingCode?: string) {
+  if (bookingCode && bookingCode.startsWith("TRUCKX-BK-")) return bookingCode;
   if (!id) return formatDisplayId("BK", null, createdAt);
-  if (id.startsWith("NECL-BKG-") || id.startsWith("NECL-BK-")) return id;
+  if (id.startsWith("TRUCKX-BK-")) return id;
   return formatDisplayId("BK", id, createdAt);
 }
 
@@ -380,7 +381,7 @@ export const BookingsModule: React.FC<BookingsModuleProps> = ({
           confirmed_at: b.confirmed_at,
           created_at: bookingDate,
           updated_at: b.updated_at || bookingDate,
-          booking_reference: formatBookingReference(b.id, b.confirmed_at || b.created_at),
+          booking_reference: formatBookingReference(b.id, b.confirmed_at || b.created_at, b.booking_code),
           client_company_name: client?.company_name || "ABC Logistics",
           route_summary: routeSummary,
           trip_count: tripCount,
@@ -470,7 +471,7 @@ export const BookingsModule: React.FC<BookingsModuleProps> = ({
               payment_status: bData.payment_status || "PAYMENT_PENDING",
               created_at: bData.confirmed_at || new Date().toISOString(),
               updated_at: bData.confirmed_at || new Date().toISOString(),
-              booking_reference: formatBookingReference(bData.id, bData.confirmed_at),
+              booking_reference: formatBookingReference(bData.id, bData.confirmed_at, bData.booking_code),
               client_company_name: clientName
             };
             openBookingDetail(directBooking);

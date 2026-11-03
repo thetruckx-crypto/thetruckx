@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { supabase, ensureAdminSession } from '../../utils/supabase';
 import { pincodeService } from '../../services/pincodeService';
-import { generateDbNeclId } from '../../utils/idGenerator';
+import { generateDbTruckxId, generateDbNeclId } from '../../utils/idGenerator';
 
 interface CreateRequirementProps {
   onBack: () => void;
@@ -187,8 +187,8 @@ export const CreateRequirement: React.FC<CreateRequirementProps> = ({
     try {
       await ensureAdminSession();
 
-      // Generate standardized Requirement ID
-      const reqId = await generateDbNeclId('REQ');
+      // Generate canonical TRUCKX Requirement ID
+      const reqId = await generateDbTruckxId('REQ');
 
       const pickupFull = pickupCity && pickupState
         ? `${pickupAddress.trim()}, ${pickupCity}, ${pickupState} ${pickupPincode}`
@@ -265,15 +265,16 @@ export const CreateRequirement: React.FC<CreateRequirementProps> = ({
       {/* Header Banner */}
       <div
         style={{
-          background: 'linear-gradient(135deg, #0B192C 0%, #172B4D 100%)',
+          background: '#FFFFFF',
           borderRadius: '16px',
           padding: '24px 28px',
-          color: '#FFFFFF',
+          color: '#111827',
           marginBottom: '24px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          boxShadow: '0 4px 20px rgba(11, 25, 44, 0.15)',
+          boxShadow: '0 1px 3px rgba(17, 24, 39, 0.05)',
+          border: '1px solid #E5EAF1',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
@@ -282,21 +283,21 @@ export const CreateRequirement: React.FC<CreateRequirementProps> = ({
               width: '48px',
               height: '48px',
               borderRadius: '12px',
-              background: 'rgba(240, 90, 34, 0.2)',
-              border: '1px solid rgba(240, 90, 34, 0.4)',
+              background: '#FFF3EC',
+              border: '1px solid #FFE8DF',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <Package size={26} color="#F05A22" />
+            <Package size={26} color="#F4510B" />
           </div>
           <div>
-            <h1 style={{ fontSize: '22px', fontWeight: 800, margin: '0 0 4px 0', letterSpacing: '-0.01em' }}>
+            <h1 style={{ fontSize: '22px', fontWeight: 800, margin: '0 0 4px 0', letterSpacing: '-0.01em', color: '#111827' }}>
               Create Transport Requirement (RFQ)
             </h1>
-            <p style={{ fontSize: '13.5px', color: '#94A3B8', margin: 0 }}>
-              Specify shipper consignment, pickup and delivery freight corridors, and vehicle capacity.
+            <p style={{ fontSize: '13.5px', color: '#64748B', margin: 0 }}>
+              Specify client consignment, pickup and delivery freight corridors, and vehicle capacity.
             </p>
           </div>
         </div>
@@ -305,9 +306,9 @@ export const CreateRequirement: React.FC<CreateRequirementProps> = ({
           type="button"
           onClick={onBack}
           style={{
-            background: 'rgba(255, 255, 255, 0.1)',
-            color: '#FFFFFF',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
+            background: '#FFFFFF',
+            color: '#475569',
+            border: '1px solid #D9E1EC',
             padding: '8px 16px',
             borderRadius: '8px',
             fontSize: '13px',
@@ -365,13 +366,13 @@ export const CreateRequirement: React.FC<CreateRequirementProps> = ({
       {/* Form Container */}
       <form onSubmit={handleSubmit}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          
+
           {/* Section 1: Client Selection */}
           <div className="client-table-card" style={{ padding: '24px', borderRadius: '14px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '18px', borderBottom: '1px solid #F1F5F9', paddingBottom: '12px' }}>
               <Building2 size={20} color="#F05A22" />
               <h2 style={{ fontSize: '16px', fontWeight: 700, color: '#0F172A', margin: 0 }}>
-                1. Client Shipper Account
+                1. Client Enterprise Account
               </h2>
             </div>
 
@@ -387,10 +388,11 @@ export const CreateRequirement: React.FC<CreateRequirementProps> = ({
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
-                    Select Shipper Client *
+                  <label htmlFor="req-field-client" style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
+                    Select Client Enterprise *
                   </label>
                   <select
+                    id="req-field-client"
                     value={selectedClientId}
                     onChange={(e) => setSelectedClientId(e.target.value)}
                     required
@@ -403,7 +405,6 @@ export const CreateRequirement: React.FC<CreateRequirementProps> = ({
                       fontSize: '14px',
                       color: '#0F172A',
                       background: '#FFFFFF',
-                      outline: 'none',
                     }}
                   >
                     {clients.map((c) => (
@@ -430,7 +431,7 @@ export const CreateRequirement: React.FC<CreateRequirementProps> = ({
                   >
                     <span style={{ fontWeight: 700, color: '#0F172A', fontSize: '13px' }}>{selectedClient.company_name}</span>
                     <span>Location: {selectedClient.city || 'Guwahati'}, {selectedClient.state || 'Assam'}</span>
-                    <span>Contact: {selectedClient.company_phone || 'Verified Enterprise Shipper'}</span>
+                    <span>Contact: {selectedClient.company_phone || 'Verified Client Enterprise'}</span>
                   </div>
                 )}
               </div>
@@ -439,7 +440,7 @@ export const CreateRequirement: React.FC<CreateRequirementProps> = ({
 
           {/* Section 2 & 3: Route Locations (Pickup & Destination) */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '20px' }}>
-            
+
             {/* Pickup Location */}
             <div className="client-table-card" style={{ padding: '24px', borderRadius: '14px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '18px', borderBottom: '1px solid #F1F5F9', paddingBottom: '12px' }}>
@@ -451,11 +452,12 @@ export const CreateRequirement: React.FC<CreateRequirementProps> = ({
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
+                  <label htmlFor="req-field-pickup-pincode" style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
                     Pickup Pincode *
                   </label>
                   <div style={{ position: 'relative' }}>
                     <input
+                      id="req-field-pickup-pincode"
                       type="text"
                       maxLength={6}
                       value={pickupPincode}
@@ -469,7 +471,6 @@ export const CreateRequirement: React.FC<CreateRequirementProps> = ({
                         borderRadius: '8px',
                         border: '1px solid #CBD5E1',
                         fontSize: '14px',
-                        outline: 'none',
                       }}
                     />
                     {loadingPickupPin && (
@@ -484,10 +485,11 @@ export const CreateRequirement: React.FC<CreateRequirementProps> = ({
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
+                  <label htmlFor="req-field-pickup-address" style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
                     Pickup Address / Warehouse Details *
                   </label>
                   <textarea
+                    id="req-field-pickup-address"
                     rows={2}
                     value={pickupAddress}
                     onChange={(e) => setPickupAddress(e.target.value)}
@@ -499,7 +501,6 @@ export const CreateRequirement: React.FC<CreateRequirementProps> = ({
                       borderRadius: '8px',
                       border: '1px solid #CBD5E1',
                       fontSize: '13.5px',
-                      outline: 'none',
                       resize: 'none',
                     }}
                   />
@@ -518,11 +519,12 @@ export const CreateRequirement: React.FC<CreateRequirementProps> = ({
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
+                  <label htmlFor="req-field-delivery-pincode" style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
                     Delivery Pincode *
                   </label>
                   <div style={{ position: 'relative' }}>
                     <input
+                      id="req-field-delivery-pincode"
                       type="text"
                       maxLength={6}
                       value={deliveryPincode}
@@ -536,7 +538,6 @@ export const CreateRequirement: React.FC<CreateRequirementProps> = ({
                         borderRadius: '8px',
                         border: '1px solid #CBD5E1',
                         fontSize: '14px',
-                        outline: 'none',
                       }}
                     />
                     {loadingDeliveryPin && (
@@ -551,10 +552,11 @@ export const CreateRequirement: React.FC<CreateRequirementProps> = ({
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
+                  <label htmlFor="req-field-delivery-address" style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
                     Destination Address / Consignee Hub *
                   </label>
                   <textarea
+                    id="req-field-delivery-address"
                     rows={2}
                     value={deliveryAddress}
                     onChange={(e) => setDeliveryAddress(e.target.value)}
@@ -566,7 +568,6 @@ export const CreateRequirement: React.FC<CreateRequirementProps> = ({
                       borderRadius: '8px',
                       border: '1px solid #CBD5E1',
                       fontSize: '13.5px',
-                      outline: 'none',
                       resize: 'none',
                     }}
                   />
@@ -587,10 +588,11 @@ export const CreateRequirement: React.FC<CreateRequirementProps> = ({
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginBottom: '16px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
+                <label htmlFor="req-field-material-type" style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
                   Material / Commodity Type *
                 </label>
                 <input
+                  id="req-field-material-type"
                   type="text"
                   value={materialType}
                   onChange={(e) => setMaterialType(e.target.value)}
@@ -603,16 +605,16 @@ export const CreateRequirement: React.FC<CreateRequirementProps> = ({
                     borderRadius: '8px',
                     border: '1px solid #CBD5E1',
                     fontSize: '14px',
-                    outline: 'none',
                   }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
+                <label htmlFor="req-field-vehicle-type" style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
                   Required Vehicle Type *
                 </label>
                 <select
+                  id="req-field-vehicle-type"
                   value={vehicleType}
                   onChange={(e) => setVehicleType(e.target.value)}
                   style={{
@@ -623,7 +625,6 @@ export const CreateRequirement: React.FC<CreateRequirementProps> = ({
                     border: '1px solid #CBD5E1',
                     fontSize: '14px',
                     background: '#FFFFFF',
-                    outline: 'none',
                   }}
                 >
                   <option value="32FT_MXL">32 FT Multi-Axle Container (14-22 MT)</option>
@@ -637,11 +638,12 @@ export const CreateRequirement: React.FC<CreateRequirementProps> = ({
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
+                <label htmlFor="req-field-cargo-weight" style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
                   Consignment Weight *
                 </label>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <input
+                    id="req-field-cargo-weight"
                     type="number"
                     step="0.01"
                     min="0.1"
@@ -655,11 +657,12 @@ export const CreateRequirement: React.FC<CreateRequirementProps> = ({
                       borderRadius: '8px',
                       border: '1px solid #CBD5E1',
                       fontSize: '14px',
-                      outline: 'none',
                     }}
                   />
                   <select
+                    id="req-field-weight-unit"
                     value={weightUnit}
+                    aria-label="Weight Unit"
                     onChange={(e) => setWeightUnit(e.target.value as 'MT' | 'kg')}
                     style={{
                       width: '80px',
@@ -678,10 +681,11 @@ export const CreateRequirement: React.FC<CreateRequirementProps> = ({
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
+                <label htmlFor="req-field-total-vehicles" style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
                   Number of Vehicles *
                 </label>
                 <input
+                  id="req-field-total-vehicles"
                   type="number"
                   min="1"
                   max="50"
@@ -695,7 +699,6 @@ export const CreateRequirement: React.FC<CreateRequirementProps> = ({
                     borderRadius: '8px',
                     border: '1px solid #CBD5E1',
                     fontSize: '14px',
-                    outline: 'none',
                   }}
                 />
               </div>
@@ -746,10 +749,11 @@ export const CreateRequirement: React.FC<CreateRequirementProps> = ({
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginBottom: '16px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
+                <label htmlFor="req-field-loading-datetime" style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
                   Target Loading Date & Time *
                 </label>
                 <input
+                  id="req-field-loading-datetime"
                   type="datetime-local"
                   value={loadingDatetime}
                   onChange={(e) => setLoadingDatetime(e.target.value)}
@@ -761,16 +765,16 @@ export const CreateRequirement: React.FC<CreateRequirementProps> = ({
                     borderRadius: '8px',
                     border: '1px solid #CBD5E1',
                     fontSize: '13.5px',
-                    outline: 'none',
                   }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
+                <label htmlFor="req-field-target-budget" style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
                   Target Freight Budget (Optional, ₹)
                 </label>
                 <input
+                  id="req-field-target-budget"
                   type="number"
                   placeholder="e.g. 85000"
                   value={targetBudget}
@@ -782,17 +786,17 @@ export const CreateRequirement: React.FC<CreateRequirementProps> = ({
                     borderRadius: '8px',
                     border: '1px solid #CBD5E1',
                     fontSize: '14px',
-                    outline: 'none',
                   }}
                 />
               </div>
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
+              <label htmlFor="req-field-special-instructions" style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
                 Special Handling Instructions / Notes
               </label>
               <textarea
+                id="req-field-special-instructions"
                 rows={2}
                 value={specialInstructions}
                 onChange={(e) => setSpecialInstructions(e.target.value)}
@@ -803,7 +807,6 @@ export const CreateRequirement: React.FC<CreateRequirementProps> = ({
                   borderRadius: '8px',
                   border: '1px solid #CBD5E1',
                   fontSize: '13.5px',
-                  outline: 'none',
                   resize: 'none',
                 }}
               />

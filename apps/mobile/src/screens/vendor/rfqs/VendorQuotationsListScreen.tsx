@@ -150,6 +150,11 @@ export const VendorQuotationsListScreen: React.FC<VendorQuotationsListScreenProp
                     <View style={styles.cardTop}>
                       <View style={styles.idWrap}>
                         <Text style={styles.idText}>{q.id}</Text>
+                        {q.requirementId && (
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B', marginTop: 2 }}>
+                            REQ: <Text style={{ color: '#F15A24' }}>{q.requirementId}</Text>
+                          </Text>
+                        )}
                       </View>
 
                       <View

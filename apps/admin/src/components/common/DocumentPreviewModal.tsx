@@ -261,6 +261,16 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
     }
   }, [isOpen, resolveFileUrl]);
 
+  // Keyboard accessibility: Dismiss modal on Escape key
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   // Zoom handlers
@@ -328,6 +338,9 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
       }}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="doc-preview-modal-title"
         style={{
           background: "#FFFFFF",
           borderRadius: 16,
@@ -392,7 +405,7 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
             </div>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <h3 style={{ fontSize: 16, fontWeight: 800, color: "#0F172A", margin: 0 }}>
+                <h3 id="doc-preview-modal-title" style={{ fontSize: 16, fontWeight: 800, color: "#0F172A", margin: 0 }}>
                   {documentTitle}
                 </h3>
                 {isVerified ? (
@@ -655,13 +668,13 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
               onClick={handleOpenNewTab}
               disabled={!resolvedUrl || isMissingInStorage}
               style={{
-                background: "#0B1933",
-                border: "1px solid #0B1933",
+                background: "#FFFFFF",
+                border: "1px solid #D9E1EC",
                 borderRadius: 6,
                 padding: "6px 12px",
                 fontSize: 12,
                 fontWeight: 600,
-                color: "#FFFFFF",
+                color: "#111827",
                 cursor: resolvedUrl && !isMissingInStorage ? "pointer" : "not-allowed",
                 display: "inline-flex",
                 alignItems: "center",

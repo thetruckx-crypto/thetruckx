@@ -10,9 +10,9 @@ export const BottomGoldWings: React.FC = () => {
       <Svg width={width} height={36} viewBox={`0 0 ${width} 36`}>
         <Defs>
           <LinearGradient id="wingGrad" x1="0" y1="0" x2="1" y2="0">
-            <Stop offset="0" stopColor="#FF6B35" stopOpacity="0" />
-            <Stop offset="0.5" stopColor="#FF6B35" stopOpacity="0.45" />
-            <Stop offset="1" stopColor="#FF6B35" stopOpacity="0" />
+            <Stop offset="0" stopColor="#F4510B" stopOpacity="0" />
+            <Stop offset="0.5" stopColor="#F4510B" stopOpacity="0.35" />
+            <Stop offset="1" stopColor="#F4510B" stopOpacity="0" />
           </LinearGradient>
         </Defs>
         <Path

@@ -13,6 +13,7 @@ import {
   buildGoogleMapsDirectionsUrl,
 } from '../utils/googleMapsUtil';
 import { documentWorkflowService } from './documentWorkflowService';
+import { formatDisplayId, generateDbTruckxId } from '../utils/idGenerator';
 import { uploadDocumentToStorage, getSecureDocumentSignedUrl } from '../utils/mobileStorageHelper';
 
 const DRIVER_DRAFT_KEY = '@necl_driver_registration_draft';
@@ -292,10 +293,11 @@ export const driverService = {
   async submitDriverRegistration(
     formData: DriverRegistrationFormData,
     mobile: string
-  ): Promise<{ success: boolean; driverId: string; applicationNumber: string }> {
+  ): Promise<{ success: boolean; driverId: string; applicationNumber: string; driverCode?: string; accountId?: string }> {
     const cleanPhone = (mobile || formData.phone || '').replace(/[^0-9]/g, '').slice(-10);
-    const generatedAppNo = `DRV-${Date.now().toString().slice(-6)}`;
+    let canonicalAppNo = '';
     let driverId = '';
+    let accountId = '';
 
     try {
       // 1. Try Backend API Registration for high reliability & admin privileges
@@ -314,6 +316,8 @@ export const driverService = {
         const resData = await apiRes.json();
         if (apiRes.ok && resData.success) {
           driverId = resData.driverId;
+          canonicalAppNo = resData.driverCode || resData.applicationNumber;
+          accountId = resData.accountId || '';
         } else if (resData.roleConflict) {
           throw new Error(resData.message || 'Mobile number already registered under another role');
         }
@@ -330,11 +334,18 @@ export const driverService = {
         // Direct database operation fallback
         const { data: existing } = await supabase
           .from('drivers')
-          .select('id')
+          .select('id, driver_code, account_id')
           .or(`mobile.eq.${cleanPhone},mobile.eq.+91${cleanPhone}`)
           .maybeSingle();
 
         driverId = existing?.id;
+        canonicalAppNo = existing?.driver_code && existing.driver_code.startsWith('TRUCKX-DR-')
+          ? existing.driver_code
+          : await generateDbTruckxId('DR');
+
+        accountId = existing?.account_id && existing.account_id.startsWith('TRUCKX-AC-')
+          ? existing.account_id
+          : await generateDbTruckxId('AC');
 
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         const vendorId =
@@ -349,6 +360,8 @@ export const driverService = {
           : defaultExpiryDate;
 
         const driverPayload = {
+          driver_code: canonicalAppNo,
+          account_id: accountId,
           primary_vendor_id: vendorId,
           full_name: formData.fullName.trim(),
           mobile: cleanPhone,
@@ -377,6 +390,8 @@ export const driverService = {
           }
           driverId = inserted.id;
         }
+      } else if (!canonicalAppNo) {
+        canonicalAppNo = formatDisplayId('DR', driverId);
       }
 
       // 2. Persist Single-Screen Driver Documents in documents table
@@ -554,14 +569,16 @@ export const driverService = {
       return {
         success: true,
         driverId: driverId!,
-        applicationNumber: generatedAppNo,
+        driverCode: canonicalAppNo,
+        applicationNumber: canonicalAppNo,
+        accountId,
       };
     } catch (err: any) {
       console.warn('Driver submission error:', err);
       return {
         success: false,
         driverId: '',
-        applicationNumber: generatedAppNo,
+        applicationNumber: canonicalAppNo || 'TRUCKX-DR-PENDING',
       };
     }
   },
@@ -569,13 +586,20 @@ export const driverService = {
   // ─── 4. Query Driver Profile & Verification Status ────────────────────────
   async getDriverProfile(driverId?: string, mobile?: string): Promise<any | null> {
     try {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       let query = supabase.from('drivers').select('*');
 
-      if (driverId && driverId.includes('-')) {
+      // Prefer exact UUID match when available — ensures cross-account isolation
+      if (driverId && isUuid.test(driverId)) {
         query = query.eq('id', driverId);
+      } else if (driverId && mobile) {
+        const cleanPhone = mobile.replace(/[^0-9]/g, '').slice(-10);
+        query = query.or(`id.eq.${driverId},driver_code.eq.${driverId},application_number.eq.${driverId},mobile.eq.${cleanPhone},mobile.eq.+91${cleanPhone},phone.eq.${cleanPhone},phone.eq.+91${cleanPhone}`);
+      } else if (driverId) {
+        query = query.or(`id.eq.${driverId},driver_code.eq.${driverId},application_number.eq.${driverId}`);
       } else if (mobile) {
         const cleanPhone = mobile.replace(/[^0-9]/g, '').slice(-10);
-        query = query.or(`mobile.eq.${cleanPhone},mobile.eq.+91${cleanPhone}`);
+        query = query.or(`mobile.eq.${cleanPhone},mobile.eq.+91${cleanPhone},phone.eq.${cleanPhone},phone.eq.+91${cleanPhone}`);
       } else {
         return null;
       }
@@ -601,8 +625,17 @@ export const driverService = {
           .eq('category', 'DRIVER')
           .eq('reference_id', data.id);
 
+        const driverCode = data.driver_code?.startsWith('TRUCKX-DR-')
+          ? data.driver_code
+          : formatDisplayId('DR', data.created_at, data.id);
+        const accountId = data.account_id?.startsWith('TRUCKX-AC-')
+          ? data.account_id
+          : formatDisplayId('AC', data.created_at, data.id);
+
         return {
           id: data.id,
+          driverCode,
+          accountId,
           fullName: data.full_name || data.name,
           mobile: data.mobile || data.phone,
           email: data.email,
@@ -780,7 +813,7 @@ export const driverService = {
               material: t.materialType || 'General Cargo',
               capacityMt: Number(t.capacityMt || 0),
               loadingDatetime: t.loadingDatetime,
-              clientName: t.clientName || 'Shipper',
+              clientName: t.clientName || 'Client Enterprise',
               vendorName: t.transporterName || 'Transporter',
               vehicleNumber: t.vehicle?.registrationNumber || 'N/A',
               vehicleType: t.vehicle?.vehicleType || 'Commercial Vehicle',
@@ -958,9 +991,30 @@ export const driverService = {
     const originCity = pickup ? pickup.split(',')[0].trim() : 'Pickup';
     const destCity = dest ? dest.split(',')[0].trim() : 'Destination';
 
+    const tripCode = t.trip_code?.startsWith('TRUCKX-TR-')
+      ? t.trip_code
+      : (t.trip_number?.startsWith('TRUCKX-TR-')
+        ? t.trip_number
+        : formatDisplayId('TR', t.started_at || t.created_at, t.id));
+
+    const bookingCode = t.bookings?.booking_code?.startsWith('TRUCKX-BK-')
+      ? t.bookings.booking_code
+      : (t.bookings?.booking_number?.startsWith('TRUCKX-BK-')
+        ? t.bookings.booking_number
+        : (t.booking_id ? formatDisplayId('BK', t.bookings?.created_at || t.created_at, t.booking_id) : ''));
+
+    const reqId = t.bookings?.requirements?.id;
+    const reqCode = t.bookings?.requirements?.requirement_code?.startsWith('TRUCKX-REQ-')
+      ? t.bookings.requirements.requirement_code
+      : (reqId ? formatDisplayId('REQ', t.bookings?.requirements?.created_at || t.created_at, reqId) : '');
+
     return {
       id: t.id,
+      tripCode,
       bookingId: t.booking_id,
+      bookingCode,
+      reqId,
+      reqCode,
       tripStatus: t.trip_status || 'ASSIGNED',
       origin: originCity,
       destination: destCity,
@@ -975,11 +1029,11 @@ export const driverService = {
       material: t.bookings?.requirements?.material_type || 'General Cargo',
       capacityMt: Number(t.bookings?.requirements?.required_capacity_mt) || 0,
       loadingDatetime: t.bookings?.requirements?.loading_datetime,
-      clientName: t.bookings?.requirements?.client_companies?.company_name || 'Shipper',
+      clientName: t.bookings?.requirements?.client_companies?.company_name || 'Client Enterprise',
       vendorName: t.vendor_companies?.vendor_name || 'Transporter',
       vehicleNumber: t.vehicles?.registration_number || 'N/A',
       vehicleType: t.vehicles?.vehicle_type || 'Vehicle',
-      lrNumber: t.lr_number || undefined,
+      lrNumber: t.lr_number || tripCode,
       ewaybillNumber: t.ewaybill_number || undefined,
       rate: Number(t.vendor_rate) || 0,
       startedAt: t.started_at,
@@ -1482,7 +1536,8 @@ export const driverService = {
   // ─── 15. Electronic Proof of Delivery (e-POD) ──────────────────────────────
   async submitEpod(tripId: string, payload: any): Promise<any> {
     try {
-      const resp = await fetch(`${getBackendApiUrl()}/api/trips/${tripId}/pod`, {
+      const apiBase = getBackendApiUrl().replace(/\/api\/?$/, '');
+      const resp = await fetch(`${apiBase}/api/trips/${tripId}/pod`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -1495,7 +1550,8 @@ export const driverService = {
 
   async getEpod(tripId: string): Promise<any> {
     try {
-      const resp = await fetch(`${getBackendApiUrl()}/api/trips/${tripId}/pod`);
+      const apiBase = getBackendApiUrl().replace(/\/api\/?$/, '');
+      const resp = await fetch(`${apiBase}/api/trips/${tripId}/pod`);
       return await resp.json();
     } catch (err: any) {
       return { success: false, error: err.message || 'Failed to fetch e-POD' };
@@ -1505,7 +1561,8 @@ export const driverService = {
   // ─── 16. Weighbridge Clearance & Tolerance ────────────────────────────────
   async recordWeighbridge(tripId: string, payload: any): Promise<any> {
     try {
-      const resp = await fetch(`${getBackendApiUrl()}/api/trips/${tripId}/weighbridge`, {
+      const apiBase = getBackendApiUrl().replace(/\/api\/?$/, '');
+      const resp = await fetch(`${apiBase}/api/trips/${tripId}/weighbridge`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -1518,7 +1575,8 @@ export const driverService = {
 
   async getWeighbridge(tripId: string): Promise<any> {
     try {
-      const resp = await fetch(`${getBackendApiUrl()}/api/trips/${tripId}/weighbridge`);
+      const apiBase = getBackendApiUrl().replace(/\/api\/?$/, '');
+      const resp = await fetch(`${apiBase}/api/trips/${tripId}/weighbridge`);
       return await resp.json();
     } catch (err: any) {
       return { success: false, error: err.message || 'Failed to fetch weighbridge records' };
@@ -1528,7 +1586,8 @@ export const driverService = {
   // ─── 17. Damage & Shortage Claims ─────────────────────────────────────────
   async fileDamageClaim(tripId: string, payload: any): Promise<any> {
     try {
-      const resp = await fetch(`${getBackendApiUrl()}/api/trips/${tripId}/claims`, {
+      const apiBase = getBackendApiUrl().replace(/\/api\/?$/, '');
+      const resp = await fetch(`${apiBase}/api/trips/${tripId}/claims`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -1541,7 +1600,8 @@ export const driverService = {
 
   async getTripClaims(tripId: string): Promise<any> {
     try {
-      const resp = await fetch(`${getBackendApiUrl()}/api/trips/${tripId}/claims`);
+      const apiBase = getBackendApiUrl().replace(/\/api\/?$/, '');
+      const resp = await fetch(`${apiBase}/api/trips/${tripId}/claims`);
       return await resp.json();
     } catch (err: any) {
       return { success: false, error: err.message || 'Failed to fetch claims' };

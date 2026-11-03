@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  Platform,
 } from 'react-native';
 import {
   ArrowLeft,
@@ -28,6 +29,7 @@ import {
   Check,
 } from 'lucide-react-native';
 import { clientService } from '../../../services/clientService';
+import { formatDisplayId } from '../../../utils/idGenerator';
 
 interface QuotationsListScreenProps {
   requirementId: string;
@@ -49,6 +51,11 @@ export const QuotationsListScreen: React.FC<QuotationsListScreenProps> = ({
   const [quotations, setQuotations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedQuoteId, setExpandedQuoteId] = useState<string | null>(null);
+
+  const canonicalReqId =
+    requirementId?.startsWith('TRUCKX-REQ-')
+      ? requirementId
+      : formatDisplayId('REQ', requirementId);
 
   useEffect(() => {
     clientService.fetchQuotationsForRequirement(requirementId).then((res: any[]) => {
@@ -83,7 +90,7 @@ export const QuotationsListScreen: React.FC<QuotationsListScreenProps> = ({
         <View>
           <Text style={styles.screenTitle}>Received Quotations</Text>
           <Text style={styles.screenSub}>
-            Quotes for Requirement {requirementId}
+            Quotes for Requirement {canonicalReqId}
           </Text>
         </View>
         <View style={styles.badgeCount}>
@@ -124,31 +131,46 @@ export const QuotationsListScreen: React.FC<QuotationsListScreenProps> = ({
               </TouchableOpacity>
             )}
 
-            {quotations.map((q, idx) => (
-              <View key={q.id || idx} style={styles.quoteCard}>
-                {/* Card Top: Vendor & Rating */}
-                <View style={styles.vendorRow}>
-                  <View style={{ flex: 1 }}>
-                    <View style={styles.vendorNameRow}>
-                      <Text style={styles.vendorName}>{q.vendorName}</Text>
-                      <ShieldCheck size={16} color="#10B981" />
-                    </View>
-                    <View style={styles.ratingRow}>
-                      <Star size={13} color="#F59E0B" fill="#F59E0B" />
-                      <Text style={styles.ratingText}>{q.rating || '4.8'}</Text>
-                      <Text style={styles.tripsText}>• {q.completedTrips || 120} Trips</Text>
-                    </View>
+            {quotations.map((q, idx) => {
+              const quoteCode = q.quote_code && q.quote_code.startsWith('TRUCKX-QT-')
+                ? q.quote_code
+                : formatDisplayId('QT', q.quote_code || q.id, q.created_at);
+
+              const vendorCode = q.vendor_code && q.vendor_code.startsWith('TRUCKX-VE-')
+                ? q.vendor_code
+                : formatDisplayId('VE', q.vendor_id || q.vendorId, q.created_at);
+
+              return (
+                <View key={q.id || idx} style={styles.quoteCard}>
+                  {/* Canonical Identification Header */}
+                  <View style={styles.canonicalIdHeader}>
+                    <Text style={styles.canonicalQuoteId} selectable>{quoteCode}</Text>
+                    <Text style={styles.canonicalVendorId} selectable>Carrier: {vendorCode}</Text>
                   </View>
 
-                  {/* Rate Display */}
-                  <View style={styles.rateBox}>
-                    <Text style={styles.rateCurrency}>INR</Text>
-                    <Text style={styles.rateAmount}>
-                      ₹{(q.rate || 32000).toLocaleString('en-IN')}
-                    </Text>
-                    <Text style={styles.rateTag}>All-Inclusive</Text>
+                  {/* Card Top: Vendor & Rating */}
+                  <View style={styles.vendorRow}>
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.vendorNameRow}>
+                        <Text style={styles.vendorName}>{q.vendorName}</Text>
+                        <ShieldCheck size={16} color="#10B981" />
+                      </View>
+                      <View style={styles.ratingRow}>
+                        <Star size={13} color="#F59E0B" fill="#F59E0B" />
+                        <Text style={styles.ratingText}>{q.rating || '4.8'}</Text>
+                        <Text style={styles.tripsText}>• {q.completedTrips || 120} Trips</Text>
+                      </View>
+                    </View>
+
+                    {/* Rate Display */}
+                    <View style={styles.rateBox}>
+                      <Text style={styles.rateCurrency}>INR</Text>
+                      <Text style={styles.rateAmount}>
+                        ₹{(q.rate || 32000).toLocaleString('en-IN')}
+                      </Text>
+                      <Text style={styles.rateTag}>All-Inclusive</Text>
+                    </View>
                   </View>
-                </View>
 
                 {/* Specs Pill Row */}
                 <View style={styles.specsWrap}>
@@ -249,7 +271,7 @@ export const QuotationsListScreen: React.FC<QuotationsListScreenProps> = ({
                   </TouchableOpacity>
                 </View>
               </View>
-            ))}
+            ); })}
           </>
         )}
       </ScrollView>
@@ -398,6 +420,26 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 6,
     elevation: 2,
+  },
+  canonicalIdHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 8,
+    marginBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  canonicalQuoteId: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0F172A',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  canonicalVendorId: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#64748B',
   },
   vendorRow: {
     flexDirection: 'row',

@@ -11,6 +11,7 @@ import {
   Alert,
   Clipboard,
   Share,
+  Platform,
 } from 'react-native';
 import {
   ArrowLeft,
@@ -28,10 +29,17 @@ import {
   ChevronRight,
   GitCommit,
   AlertTriangle,
+  Radio,
+  Scale,
+  ShieldCheck,
+  CheckSquare,
+  Navigation,
+  ExternalLink,
 } from 'lucide-react-native';
 import { clientService } from '../../../services/clientService';
 import { supabase } from '../../../supabase';
 import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
+import { formatDisplayId } from '../../../utils/idGenerator';
 
 interface ShipmentTrackingScreenProps {
   trackingId: string;
@@ -80,16 +88,19 @@ export const ShipmentTrackingScreen: React.FC<ShipmentTrackingScreenProps> = ({
     let isMounted = true;
     loadData();
 
-    // Realtime Supabase changes subscription
+    // Realtime Supabase changes subscription for trips & weighments
+    const cleanChan = (trackingId || '').replace(/[^a-zA-Z0-9]/g, '');
     const channel = supabase
-      .channel(`tracking_${trackingId.replace(/[^a-zA-Z0-9]/g, '')}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'trips' },
-        () => {
-          if (isMounted) loadData();
-        }
-      )
+      .channel(`tracking_screen_${cleanChan}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'trips' }, () => {
+        if (isMounted) loadData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'trip_location_logs' }, () => {
+        if (isMounted) loadData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'trip_pod_submissions' }, () => {
+        if (isMounted) loadData();
+      })
       .subscribe();
 
     return () => {
@@ -103,37 +114,39 @@ export const ShipmentTrackingScreen: React.FC<ShipmentTrackingScreenProps> = ({
     loadData();
   };
 
-  // Consignment ID
-  const displayConsignmentId =
-    tripData?.lr_number ||
-    (trackingId && trackingId.startsWith('NEC') ? trackingId : `NECTRK-${trackingId.slice(-6).toUpperCase()}`);
+  // Identifiers
+  const displayTripId = tripData?.trip_code || formatDisplayId('TRP', tripData?.id || trackingId, tripData?.created_at);
+  const displayBookingId =
+    tripData?.bookings?.booking_code ||
+    (tripData?.booking_id ? formatDisplayId('BK', tripData.booking_id, tripData.created_at) : '—');
+  const lrNumber = tripData?.lr_number || null;
+  const ewaybillNumber = tripData?.ewaybill_number || null;
 
-  // Corridor Locations from authentic database records
-  const originCity =
-    tripData?.pickup_city ||
-    tripData?.bookings?.requirements?.pickup_city ||
-    (tripData?.bookings?.requirements?.pickup_address
-      ? tripData.bookings.requirements.pickup_address.split(',')[0].trim()
-      : 'Origin Hub');
-  const originPin = tripData?.bookings?.requirements?.pickup_pincode || '—';
+  // Corridor Locations
+  const reqObj = tripData?.bookings?.requirements || {};
+  const originCity = tripData?.pickup_city || reqObj.pickup_city || 'Origin Depot';
+  const originAddress = reqObj.pickup_address || tripData?.pickup_address || 'Origin Hub, North Eastern Corridor';
+  const originPin = reqObj.pickup_pincode || '—';
 
-  const destCity =
-    tripData?.destination_city ||
-    tripData?.bookings?.requirements?.destination_city ||
-    (tripData?.bookings?.requirements?.destination_address
-      ? tripData.bookings.requirements.destination_address.split(',')[0].trim()
-      : 'Destination Hub');
-  const destPin = tripData?.bookings?.requirements?.destination_pincode || '—';
+  const destCity = tripData?.destination_city || reqObj.destination_city || 'Destination Yard';
+  const destAddress = reqObj.destination_address || tripData?.destination_address || 'Delivery Terminal';
+  const destPin = reqObj.destination_pincode || '—';
 
-  // Driver & Vehicle Allocation Details
+  // Vendor / Carrier Details
+  const vendorName =
+    tripData?.vendors?.company_name ||
+    tripData?.vendors?.name ||
+    'TRUCKS Certified Fleet Partner';
+
+  // Driver & Vehicle Details
   const driverName = tripData?.drivers?.name || tripData?.drivers?.full_name;
   const driverPhone = tripData?.drivers?.phone || tripData?.drivers?.mobile;
   const vehicleReg = tripData?.vehicles?.registration_number;
   const vehicleType =
     tripData?.vehicles?.vehicle_type ||
-    tripData?.bookings?.requirements?.vehicle_type ||
-    tripData?.bookings?.requirements?.vehicle_type_required ||
-    'Commercial Fleet Unit';
+    reqObj.vehicle_type ||
+    reqObj.vehicle_type_required ||
+    'Commercial Freight Unit';
 
   const isDriverAssigned = !!(driverName && driverName !== 'Driver Allocation Pending');
   const isVehicleAssigned = !!(vehicleReg && vehicleReg !== 'Pending Assignment' && vehicleReg !== 'Vehicle Allocation Pending');
@@ -141,36 +154,54 @@ export const ShipmentTrackingScreen: React.FC<ShipmentTrackingScreenProps> = ({
   const rawTripStatus = (tripData?.trip_status || tripData?.status || 'BOOKED').toUpperCase();
 
   // Status badge header
-  let statusBadgeTitle = 'Lorry Assigned';
-  let statusBadgeSub = 'En route to Pickup';
+  let statusBadgeTitle = 'Booking Confirmed';
+  let statusBadgeSub = 'Awaiting Vehicle Placement';
+  let statusColor = '#2563EB';
+  let statusBg = '#EFF6FF';
+
   if (rawTripStatus === 'DELIVERED' || rawTripStatus === 'COMPLETED') {
     statusBadgeTitle = 'Delivered';
-    statusBadgeSub = 'POD Verified';
+    statusBadgeSub = 'Consignee Sign-off Verified';
+    statusColor = '#059669';
+    statusBg = '#ECFDF5';
+  } else if (rawTripStatus === 'AT_DESTINATION' || rawTripStatus === 'UNLOADING') {
+    statusBadgeTitle = 'At Destination Yard';
+    statusBadgeSub = 'Unloading & Weighment in Progress';
+    statusColor = '#7C3AED';
+    statusBg = '#F5F3FF';
   } else if (rawTripStatus === 'IN_TRANSIT') {
     statusBadgeTitle = 'In Transit';
-    statusBadgeSub = 'On Highway Corridor';
+    statusBadgeSub = 'On Highway Freight Corridor';
+    statusColor = '#F15A24';
+    statusBg = '#FFF5ED';
   } else if (rawTripStatus === 'LOADED') {
     statusBadgeTitle = 'Cargo Loaded';
     statusBadgeSub = 'Dispatched from Hub';
+    statusColor = '#F15A24';
+    statusBg = '#FFF5ED';
   } else if (rawTripStatus === 'AT_LOADING') {
     statusBadgeTitle = 'At Loading Gate';
-    statusBadgeSub = 'Placement Verified';
+    statusBadgeSub = 'Placement Verified at Origin';
+    statusColor = '#D97706';
+    statusBg = '#FFFBEB';
+  } else if (isDriverAssigned || isVehicleAssigned || rawTripStatus === 'LORRY_ASSIGNED') {
+    statusBadgeTitle = 'Lorry Assigned';
+    statusBadgeSub = 'En Route to Origin Hub';
+    statusColor = '#2563EB';
+    statusBg = '#EFF6FF';
+  } else if (rawTripStatus === 'CANCELLED') {
+    statusBadgeTitle = 'Cancelled';
+    statusBadgeSub = 'Consignment Cancelled';
+    statusColor = '#DC2626';
+    statusBg = '#FEF2F2';
   }
 
-  // ── 7 Explicit Consignment Milestones ──
-  // Milestone order:
-  // 1. Booking Confirmed
-  // 2. Vehicle & Driver Assigned
-  // 3. Placed at Loading Gate
-  // 4. Cargo Loaded & Dispatched
-  // 5. In Transit
-  // 6. Reached Destination Hub
-  // 7. Delivered & POD Sign-off
+  // ── Milestone State Evaluator ──
   const getMilestoneState = (stepIndex: number): MilestoneStatus => {
     if (rawTripStatus === 'DELIVERED' || rawTripStatus === 'COMPLETED') {
       return 'COMPLETED';
     }
-    if (rawTripStatus === 'AT_DESTINATION') {
+    if (rawTripStatus === 'AT_DESTINATION' || rawTripStatus === 'UNLOADING') {
       if (stepIndex <= 6) return 'COMPLETED';
       return 'CURRENT';
     }
@@ -194,7 +225,6 @@ export const ShipmentTrackingScreen: React.FC<ShipmentTrackingScreenProps> = ({
       if (stepIndex === 2) return 'CURRENT';
       return 'PENDING';
     }
-    // Default Booking Confirmed
     if (stepIndex === 1) return 'COMPLETED';
     return 'PENDING';
   };
@@ -208,57 +238,99 @@ export const ShipmentTrackingScreen: React.FC<ShipmentTrackingScreenProps> = ({
         minute: '2-digit',
         hour12: true,
       })
-    : '16 Oct 2026, 10:32 AM';
+    : 'Confirmed';
 
   const milestones: MilestoneItem[] = [
     {
       id: 1,
       title: 'Booking Confirmed',
-      desc: 'Freight requirement approved by carrier',
+      desc: 'Freight requirement accepted & booking generated',
       timestamp: bookingDateText,
       status: getMilestoneState(1),
     },
     {
       id: 2,
       title: 'Vehicle & Driver Assigned',
-      desc: isDriverAssigned ? `${driverName} · ${vehicleReg || vehicleType}` : 'Pending Assignment',
+      desc: isDriverAssigned
+        ? `${driverName} • ${vehicleReg || vehicleType}`
+        : 'Carrier allocating verified vehicle unit',
+      timestamp: tripData?.assigned_at ? new Date(tripData.assigned_at).toLocaleString('en-GB') : undefined,
       status: getMilestoneState(2),
     },
     {
       id: 3,
       title: 'Placed at Loading Gate',
-      desc: 'Vehicle reporting at origin hub',
+      desc: 'Vehicle reported and docked at origin hub',
       status: getMilestoneState(3),
     },
     {
       id: 4,
       title: 'Cargo Loaded & Dispatched',
-      desc: 'E-way bill & dispatch checklist verified',
+      desc: ewaybillNumber
+        ? `Loaded • E-Way Bill ${ewaybillNumber}`
+        : 'Cargo loading checklist verified',
+      timestamp: tripData?.dispatched_at ? new Date(tripData.dispatched_at).toLocaleString('en-GB') : undefined,
       status: getMilestoneState(4),
     },
     {
       id: 5,
       title: 'In Transit',
-      desc: 'En route via NH-16 freight corridor',
+      desc: tripData?.distance_remaining_km
+        ? `En route • ${tripData.distance_remaining_km} km remaining`
+        : 'Consignment moving along highway corridor',
       status: getMilestoneState(5),
     },
     {
       id: 6,
-      title: 'Reached Destination Hub',
-      desc: 'Reporting at unloading terminal',
+      title: 'Reached Destination Yard',
+      desc: 'Vehicle arrived at delivery warehouse for unloading',
       status: getMilestoneState(6),
     },
     {
       id: 7,
-      title: 'Delivered & POD Sign-off',
-      desc: 'Consignee sign-off & digital POD clearance',
+      title: 'Delivered & POD Clearance',
+      desc: tripData?.pod_approved
+        ? 'Digital Proof of Delivery verified by operations'
+        : 'Consignee verification & digital sign-off',
+      timestamp: tripData?.completed_at ? new Date(tripData.completed_at).toLocaleString('en-GB') : undefined,
       status: getMilestoneState(7),
     },
   ];
 
-  const handleCopyId = () => {
-    Clipboard.setString(displayConsignmentId);
-    Alert.alert('Copied', `Consignment ID ${displayConsignmentId} copied to clipboard.`);
+  // GPS Telemetry Data (Genuine database coordinates ONLY)
+  const hasGps = !!(tripData?.last_latitude && tripData?.last_longitude);
+  const gpsLat = tripData?.last_latitude;
+  const gpsLon = tripData?.last_longitude;
+  const gpsSpeed = tripData?.last_speed != null ? `${Number(tripData.last_speed).toFixed(0)} km/h` : '0 km/h';
+  const lastPingTime = tripData?.last_ping_at
+    ? new Date(tripData.last_ping_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+    : null;
+
+  // Estimated Arrival Time (Authentic DB data only)
+  const estimatedArrival = tripData?.estimated_arrival_at
+    ? new Date(tripData.estimated_arrival_at).toLocaleString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : null;
+
+  // Loading & Unloading recorded weighments
+  const weighments: any[] = tripData?.weighments || [];
+  const loadingWeighment = weighments.find((w) => w.stage === 'LOADING');
+  const unloadingWeighment = weighments.find((w) => w.stage === 'UNLOADING');
+
+  // Proof of Delivery Status
+  const podSubmissions: any[] = tripData?.pod_submissions || [];
+  const latestPod = podSubmissions[0];
+  const isPodApproved = tripData?.pod_approved || latestPod?.review_status === 'APPROVED';
+  const isPodPendingReview = latestPod && latestPod.review_status === 'PENDING';
+
+  const handleCopy = (text: string, label: string) => {
+    Clipboard.setString(text);
+    Alert.alert('Copied', `${label} ${text} copied to clipboard.`);
   };
 
   const handleCallDriver = () => {
@@ -267,34 +339,33 @@ export const ShipmentTrackingScreen: React.FC<ShipmentTrackingScreenProps> = ({
       return;
     }
     const clean = driverPhone.replace(/[^0-9+]/g, '');
-    Linking.openURL(`tel:${clean}`).catch(() => {
-      Alert.alert('Phone Call', `Unable to open dialer for ${clean}`);
-    });
+    Platform.OS === 'web'
+      ? window.open(`tel:${clean}`)
+      : Linking.openURL(`tel:${clean}`).catch(() => {
+          Alert.alert('Phone Call', `Unable to dial ${clean}`);
+        });
   };
 
   const handleShareTracking = async () => {
-    const trackingMsg = `Track TRUCKS Consignment:\nID: ${displayConsignmentId}\nRoute: ${originCity} → ${destCity}\nStatus: ${statusBadgeTitle} (${statusBadgeSub})\nPortal: https://trucks.in/track?id=${displayConsignmentId}`;
+    const msg = `TRUCKS Consignment Tracking:\nTrip ID: ${displayTripId}\nBooking: ${displayBookingId}\nRoute: ${originCity} → ${destCity}\nStatus: ${statusBadgeTitle}\nETA: ${estimatedArrival || 'Highway transit in progress'}`;
     try {
-      await Share.share({
-        title: `TRUCKS Tracking: ${displayConsignmentId}`,
-        message: trackingMsg,
-      });
+      await Share.share({ title: `Consignment: ${displayTripId}`, message: msg });
     } catch {
-      Clipboard.setString(trackingMsg);
-      Alert.alert('Link Copied', 'Tracking summary copied to clipboard.');
+      Clipboard.setString(msg);
+      Alert.alert('Copied', 'Tracking summary copied to clipboard.');
     }
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* ── Top Header Bar ── */}
+      {/* ── Top Bar ── */}
       <View style={styles.topBar}>
         <TouchableOpacity
           style={styles.backBtn}
           onPress={onBack}
-          accessibilityLabel="Back to Shipments"
+          accessibilityLabel="Back"
         >
-          <ArrowLeft size={20} color="#0B1730" />
+          <ArrowLeft size={20} color="#0C1A34" />
         </TouchableOpacity>
 
         <BrandLogoHeader size="sm" showSubtitle={false} />
@@ -303,309 +374,489 @@ export const ShipmentTrackingScreen: React.FC<ShipmentTrackingScreenProps> = ({
           style={styles.helpBtn}
           onPress={() => {
             if (onHelp) onHelp();
-            else Alert.alert('TRUCKS Support', 'Toll-free 24/7 Consignment Support: 1800-TRUCKS-LOGISTICS');
+            else Alert.alert('Support Desk', '24/7 Operations Control Tower: 1800-258-4567');
           }}
-          accessibilityLabel="Help & Support"
+          accessibilityLabel="Operations Help"
         >
-          <Headphones size={16} color="#0B1730" />
-          <Text style={styles.helpBtnText}>Help</Text>
+          <Headphones size={15} color="#0C1A34" />
+          <Text style={styles.helpBtnText}>Support</Text>
         </TouchableOpacity>
       </View>
 
       {loading ? (
-        <View style={styles.centerStatusContainer}>
+        <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color="#F15A24" />
-          <Text style={styles.loadingStatusText}>Fetching live shipment tracking details...</Text>
+          <Text style={styles.centerLoadingText}>Fetching live shipment tracking & telemetry...</Text>
         </View>
       ) : !tripData ? (
-        <View style={styles.centerStatusContainer}>
-          <View style={styles.errorIconWrap}>
-            <AlertTriangle size={36} color="#DC2626" />
-          </View>
-          <Text style={styles.errorStatusTitle}>Shipment Not Found</Text>
-          <Text style={styles.errorStatusSub}>
-            No tracking information is available for LR / Consignment Number "{trackingId}".
+        <View style={styles.centerContainer}>
+          <AlertTriangle size={36} color="#DC2626" />
+          <Text style={styles.errorTitle}>Shipment Not Found</Text>
+          <Text style={styles.errorSubtitle}>
+            No tracking records found for "{trackingId}". Please verify the booking or consignment number.
           </Text>
-          <Text style={styles.errorStatusHint}>
-            Please verify the consignment number or contact dispatch support.
-          </Text>
-          <View style={styles.errorActionsRow}>
-            <TouchableOpacity style={styles.errorRetryBtn} onPress={handleRefresh} activeOpacity={0.8}>
-              <RotateCw size={15} color="#FFFFFF" />
-              <Text style={styles.errorRetryBtnText}>Retry Lookup</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.errorBackBtn} onPress={onBack} activeOpacity={0.8}>
-              <Text style={styles.errorBackBtnText}>Go Back</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity style={styles.retryBtn} onPress={handleRefresh} activeOpacity={0.8}>
+            <RotateCw size={15} color="#FFFFFF" />
+            <Text style={styles.retryBtnText}>Retry Lookup</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* ── Consignment Tracking Header Block ── */}
-        <View style={styles.headerBlock}>
-          <View style={styles.headerLeftCol}>
-            <Text style={styles.pageLabel}>CONSIGNMENT TRACKING</Text>
-            <View style={styles.consignmentIdRow}>
-              <Text style={styles.consignmentIdText}>{displayConsignmentId}</Text>
-              <TouchableOpacity onPress={handleCopyId} accessibilityLabel="Copy Consignment ID">
-                <Copy size={16} color="#64748B" />
-              </TouchableOpacity>
+          {/* ── 1. Reference Identifiers Card (Trip ID + Booking ID) ── */}
+          <View style={styles.refCard}>
+            <View style={styles.refRow}>
+              <View style={styles.refItem}>
+                <Text style={styles.refItemLabel}>TRIP / TRACKING ID</Text>
+                <TouchableOpacity
+                  style={styles.refCopyRow}
+                  onPress={() => handleCopy(displayTripId, 'Trip ID')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.refItemValue}>{displayTripId}</Text>
+                  <Copy size={13} color="#F15A24" />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.refDividerVertical} />
+
+              <View style={styles.refItem}>
+                <Text style={styles.refItemLabel}>BOOKING REFERENCE</Text>
+                <TouchableOpacity
+                  style={styles.refCopyRow}
+                  onPress={() => handleCopy(displayBookingId, 'Booking ID')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.refItemValue}>{displayBookingId}</Text>
+                  <Copy size={13} color="#64748B" />
+                </TouchableOpacity>
+              </View>
             </View>
-            <View style={styles.liveTrackingPill}>
-              <View style={styles.liveGreenDot} />
-              <Text style={styles.liveTrackingText}>Live Tracking Active</Text>
-            </View>
-          </View>
 
-          {/* Top Right Status Card */}
-          <View style={styles.topStatusCard}>
-            <View style={styles.statusTruckIconBox}>
-              <Truck size={18} color="#F15A24" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.statusCardTitle}>{statusBadgeTitle}</Text>
-              <Text style={styles.statusCardSub}>{statusBadgeSub}</Text>
-            </View>
-            <ChevronRight size={14} color="#F15A24" />
-          </View>
-        </View>
-
-        {/* ── Origin & Destination Navy Card (Reference Screenshot 3 Match) ── */}
-        <View style={styles.navyRouteCard}>
-          {/* Origin */}
-          <View style={styles.navyLocBlock}>
-            <View style={styles.navyLocIconOrigin}>
-              <MapPin size={16} color="#FFFFFF" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.navyLocLabel}>ORIGIN</Text>
-              <Text style={styles.navyLocCity}>{originCity}</Text>
-              <Text style={styles.navyLocPin}>PIN {originPin}</Text>
-            </View>
-          </View>
-
-          {/* Vertical Divider */}
-          <View style={styles.navyVerticalDivider} />
-
-          {/* Destination */}
-          <View style={styles.navyLocBlock}>
-            <View style={styles.navyLocIconDest}>
-              <MapPin size={16} color="#FFFFFF" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.navyLocLabel}>DESTINATION</Text>
-              <Text style={styles.navyLocCity}>{destCity}</Text>
-              <Text style={styles.navyLocPin}>PIN {destPin}</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* ── Driver Allocation Card (Reference Screenshot 3 Match) ── */}
-        <View style={styles.driverCard}>
-          <View style={styles.driverAvatarBox}>
-            <User size={24} color="#F15A24" />
-          </View>
-
-          <View style={styles.driverInfoCol}>
-            <Text style={styles.driverNameText}>
-              {isDriverAssigned ? driverName : 'Driver Allocation Pending'}
-            </Text>
-            <Text style={styles.driverVehicleText}>
-              Vehicle: {isVehicleAssigned ? vehicleReg : `${vehicleType} (To be assigned)`}
-            </Text>
-            <Text style={styles.driverNoticeText}>
-              {isDriverAssigned
-                ? 'Driver verified by TRUCKS operations.'
-                : 'Driver details will be updated soon.'}
-            </Text>
-          </View>
-
-          {/* Contact Driver Action Button */}
-          <TouchableOpacity
-            style={[styles.contactDriverBtn, !driverPhone && styles.contactDriverBtnDisabled]}
-            onPress={handleCallDriver}
-            disabled={!driverPhone}
-            activeOpacity={0.8}
-          >
-            <Phone size={14} color={driverPhone ? '#FFFFFF' : '#94A3B8'} />
-            <View>
-              <Text style={[styles.contactDriverBtnTitle, !driverPhone && styles.contactDriverTextDisabled]}>
-                Contact Driver
-              </Text>
-              <Text style={[styles.contactDriverBtnSub, !driverPhone && styles.contactDriverSubDisabled]}>
-                {driverPhone || 'Phone Pending'}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-
-        {/* ── Consignment Milestones (Reference Screenshot 3 Match) ── */}
-        <View style={styles.milestonesSectionCard}>
-          <View style={styles.milestonesHeader}>
-            <View style={styles.milestoneHeaderIconBox}>
-              <GitCommit size={18} color="#F15A24" strokeWidth={2.4} />
-            </View>
-            <Text style={styles.milestonesHeaderTitle}>Consignment Milestones</Text>
-          </View>
-
-          <View style={styles.milestonesList}>
-            {milestones.map((m, index) => {
-              const isLast = index === milestones.length - 1;
-              const isCompleted = m.status === 'COMPLETED';
-              const isCurrent = m.status === 'CURRENT';
-
-              return (
-                <View key={m.id} style={styles.milestoneRow}>
-                  {/* Timeline Node Column */}
-                  <View style={styles.timelineCol}>
-                    {isCompleted ? (
-                      <View style={styles.nodeCompleted}>
-                        <CheckCircle2 size={16} color="#FFFFFF" />
-                      </View>
-                    ) : isCurrent ? (
-                      <View style={styles.nodeCurrent}>
-                        <View style={styles.nodeCurrentInner} />
-                      </View>
-                    ) : (
-                      <View style={styles.nodePending} />
-                    )}
-
-                    {!isLast && (
-                      <View
-                        style={[
-                          styles.timelineVerticalLine,
-                          isCompleted && styles.timelineLineCompleted,
-                          isCurrent && styles.timelineLineCurrent,
-                        ]}
-                      />
-                    )}
+            {/* Optional LR & E-Way Bill Bar */}
+            {(lrNumber || ewaybillNumber) && (
+              <View style={styles.docketBar}>
+                {lrNumber && (
+                  <View style={styles.docketItem}>
+                    <Text style={styles.docketLabel}>LR No:</Text>
+                    <Text style={styles.docketVal}>{lrNumber}</Text>
                   </View>
+                )}
+                {ewaybillNumber && (
+                  <View style={styles.docketItem}>
+                    <Text style={styles.docketLabel}>E-Way Bill:</Text>
+                    <Text style={styles.docketVal}>{ewaybillNumber}</Text>
+                  </View>
+                )}
+              </View>
+            )}
 
-                  {/* Milestone Content Column */}
-                  <View style={styles.milestoneContentCol}>
-                    <View style={styles.milestoneTitleRow}>
-                      <Text
-                        style={[
-                          styles.milestoneTitle,
-                          isCompleted && styles.milestoneTitleCompleted,
-                          isCurrent && styles.milestoneTitleCurrent,
-                        ]}
-                      >
-                        {m.title}
-                      </Text>
+            {/* Overall Status Banner */}
+            <View style={[styles.statusBanner, { backgroundColor: statusBg }]}>
+              <View style={[styles.statusIconBox, { backgroundColor: statusColor }]}>
+                <Truck size={16} color="#FFFFFF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.statusTitle, { color: statusColor }]}>{statusBadgeTitle}</Text>
+                <Text style={styles.statusSub}>{statusBadgeSub}</Text>
+              </View>
+              <View style={styles.verifiedBadge}>
+                <ShieldCheck size={12} color="#16A34A" />
+                <Text style={styles.verifiedText}>Verified</Text>
+              </View>
+            </View>
+          </View>
 
-                      {/* Status Pill */}
+          {/* ── 2. Full Corridor Route Card ── */}
+          <View style={styles.routeCard}>
+            <View style={styles.routeSectionHeader}>
+              <Text style={styles.cardHeaderTitle}>Corridor & Route</Text>
+              {tripData?.total_distance_km ? (
+                <Text style={styles.distanceBadge}>{tripData.total_distance_km} KM</Text>
+              ) : null}
+            </View>
+
+            {/* Pickup */}
+            <View style={styles.routeStop}>
+              <View style={styles.originIconCircle}>
+                <MapPin size={15} color="#16A34A" />
+              </View>
+              <View style={styles.routeTextWrap}>
+                <Text style={styles.routeStopLabel}>PICKUP LOCATION</Text>
+                <Text style={styles.routeCityTitle}>{originCity} {originPin !== '—' ? `• ${originPin}` : ''}</Text>
+                <Text style={styles.routeAddressText}>{originAddress}</Text>
+              </View>
+            </View>
+
+            <View style={styles.routeConnector} />
+
+            {/* Destination */}
+            <View style={styles.routeStop}>
+              <View style={styles.destIconCircle}>
+                <MapPin size={15} color="#DC2626" />
+              </View>
+              <View style={styles.routeTextWrap}>
+                <Text style={styles.routeStopLabel}>DELIVERY DESTINATION</Text>
+                <Text style={styles.routeCityTitle}>{destCity} {destPin !== '—' ? `• ${destPin}` : ''}</Text>
+                <Text style={styles.routeAddressText}>{destAddress}</Text>
+              </View>
+            </View>
+
+            {/* ETA Row if Available */}
+            <View style={styles.etaRow}>
+              <Clock size={14} color="#D97706" />
+              <Text style={styles.etaLabel}>Estimated Arrival:</Text>
+              <Text style={styles.etaValue}>
+                {estimatedArrival || 'Dynamic ETA will calculate once highway corridor transit starts.'}
+              </Text>
+            </View>
+          </View>
+
+          {/* ── 3. Carrier, Vehicle & Driver Details Card ── */}
+          <View style={styles.allocationCard}>
+            <Text style={styles.cardHeaderTitle}>Transport & Fleet Allocation</Text>
+
+            {/* Carrier Name */}
+            <View style={styles.allocRow}>
+              <ShieldCheck size={16} color="#F15A24" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.allocLabel}>Assigned Carrier / Vendor</Text>
+                <Text style={styles.allocValue}>{vendorName}</Text>
+              </View>
+              <View style={styles.fleetVerifiedPill}>
+                <Text style={styles.fleetVerifiedText}>Verified Fleet</Text>
+              </View>
+            </View>
+
+            <View style={styles.cardDivider} />
+
+            {/* Vehicle Details */}
+            <View style={styles.allocRow}>
+              <Truck size={16} color="#2563EB" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.allocLabel}>Assigned Vehicle Unit</Text>
+                <Text style={styles.allocValue}>
+                  {isVehicleAssigned ? vehicleReg : `${vehicleType} (Allocation Pending)`}
+                </Text>
+                {tripData?.vehicles?.model ? (
+                  <Text style={styles.allocSub}>{tripData.vehicles.model} • {vehicleType}</Text>
+                ) : null}
+              </View>
+            </View>
+
+            <View style={styles.cardDivider} />
+
+            {/* Driver Details */}
+            <View style={styles.allocRow}>
+              <User size={16} color="#16A34A" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.allocLabel}>Assigned Driver</Text>
+                <Text style={styles.allocValue}>
+                  {isDriverAssigned ? driverName : 'Driver Assignment in Progress'}
+                </Text>
+                <Text style={styles.allocSub}>
+                  {isDriverAssigned ? 'Verified KYC & Commercial Driving License' : 'Driver roster pending'}
+                </Text>
+              </View>
+
+              {driverPhone ? (
+                <TouchableOpacity
+                  style={styles.callBtn}
+                  onPress={handleCallDriver}
+                  accessibilityLabel="Call Driver"
+                >
+                  <Phone size={13} color="#FFFFFF" />
+                  <Text style={styles.callBtnText}>Call</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          </View>
+
+          {/* ── 4. Live GPS Telemetry Status Card (Real DB Telemetry Only) ── */}
+          <View style={styles.telemetryCard}>
+            <View style={styles.telemetryHeaderRow}>
+              <View style={styles.telemetryIconBox}>
+                <Radio size={16} color={hasGps ? '#16A34A' : '#94A3B8'} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardHeaderTitle}>Live GPS Telemetry</Text>
+                <Text style={styles.telemetrySubtitle}>
+                  {hasGps
+                    ? `Hardware stream active • Speed: ${gpsSpeed}`
+                    : 'Awaiting highway checkpost or hardware telemetry ping'}
+                </Text>
+              </View>
+              {hasGps && (
+                <View style={styles.liveGreenPill}>
+                  <View style={styles.liveDot} />
+                  <Text style={styles.liveGreenText}>Live Feed</Text>
+                </View>
+              )}
+            </View>
+
+            {hasGps ? (
+              <View style={styles.telemetryDataGrid}>
+                <View style={styles.telemetryCell}>
+                  <Text style={styles.telemetryLabel}>COORDINATES</Text>
+                  <Text style={styles.telemetryVal}>{Number(gpsLat).toFixed(4)}°, {Number(gpsLon).toFixed(4)}°</Text>
+                </View>
+                <View style={styles.telemetryCell}>
+                  <Text style={styles.telemetryLabel}>SPEED</Text>
+                  <Text style={styles.telemetryVal}>{gpsSpeed}</Text>
+                </View>
+                <View style={styles.telemetryCell}>
+                  <Text style={styles.telemetryLabel}>LAST PING</Text>
+                  <Text style={styles.telemetryVal}>{lastPingTime || 'Just now'}</Text>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.noGpsNotice}>
+                <Text style={styles.noGpsNoticeText}>
+                  Hardware telemetry is pending or unit is between checkpost towers along North Eastern terrain. Location updates automatically upon next telemetry broadcast.
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* ── 5. Recorded Loading & Unloading Weighbridge Details ── */}
+          <View style={styles.weighmentCard}>
+            <View style={styles.weighmentHeader}>
+              <Scale size={16} color="#7C3AED" />
+              <Text style={styles.cardHeaderTitle}>Loading & Unloading Details</Text>
+            </View>
+
+            {/* Loading Stage */}
+            <View style={styles.stageBlock}>
+              <View style={styles.stageTitleRow}>
+                <Text style={styles.stageTitleText}>1. Loading Gate & Dispatch</Text>
+                <Text style={[styles.stageStatusBadge, loadingWeighment ? styles.badgeGreen : styles.badgeMuted]}>
+                  {loadingWeighment ? 'Weighment Completed' : rawTripStatus === 'AT_LOADING' ? 'At Loading Bay' : 'Pending'}
+                </Text>
+              </View>
+              {loadingWeighment ? (
+                <View style={styles.weighmentDetailsRow}>
+                  <Text style={styles.weighmentDetailItem}>
+                    Gross: <Text style={styles.bold}>{loadingWeighment.gross_weight_mt} MT</Text>
+                  </Text>
+                  <Text style={styles.weighmentDetailItem}>
+                    Net: <Text style={styles.bold}>{loadingWeighment.net_weight_mt} MT</Text>
+                  </Text>
+                  {loadingWeighment.slip_number && (
+                    <Text style={styles.weighmentDetailItem}>Slip #{loadingWeighment.slip_number}</Text>
+                  )}
+                </View>
+              ) : (
+                <Text style={styles.stageSubText}>
+                  Loading gate placement and gross cargo weighment record will appear here upon completion.
+                </Text>
+              )}
+            </View>
+
+            <View style={styles.cardDivider} />
+
+            {/* Unloading Stage */}
+            <View style={styles.stageBlock}>
+              <View style={styles.stageTitleRow}>
+                <Text style={styles.stageTitleText}>2. Unloading & Consignee Gate</Text>
+                <Text style={[styles.stageStatusBadge, unloadingWeighment ? styles.badgeGreen : styles.badgeMuted]}>
+                  {unloadingWeighment ? 'Unload Cleared' : rawTripStatus === 'AT_DESTINATION' ? 'Reporting at Yard' : 'Pending'}
+                </Text>
+              </View>
+              {unloadingWeighment ? (
+                <View style={styles.weighmentDetailsRow}>
+                  <Text style={styles.weighmentDetailItem}>
+                    Net Received: <Text style={styles.bold}>{unloadingWeighment.net_weight_mt} MT</Text>
+                  </Text>
+                  {unloadingWeighment.variance_mt != null && (
+                    <Text style={styles.weighmentDetailItem}>
+                      Variance: {unloadingWeighment.variance_mt} MT
+                    </Text>
+                  )}
+                </View>
+              ) : (
+                <Text style={styles.stageSubText}>
+                  Unloading tare verification and final discharge inspection record will log here upon arrival.
+                </Text>
+              )}
+            </View>
+          </View>
+
+          {/* ── 6. Proof of Delivery (POD) Confirmation ── */}
+          <View style={styles.podCard}>
+            <View style={styles.podHeaderRow}>
+              <CheckSquare size={16} color="#059669" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardHeaderTitle}>Proof of Delivery (POD)</Text>
+                <Text style={styles.podStatusSub}>
+                  {isPodApproved
+                    ? 'Verified & Approved by Operations Desk'
+                    : isPodPendingReview
+                      ? 'Consignee sign-off submitted — Control Tower reviewing'
+                      : rawTripStatus === 'DELIVERED'
+                        ? 'Consignment delivered — Awaiting digital POD upload'
+                        : 'POD clearance will be enabled upon destination delivery.'}
+                </Text>
+              </View>
+
+              <View
+                style={[
+                  styles.podBadge,
+                  isPodApproved ? styles.podBadgeApproved : isPodPendingReview ? styles.podBadgeReview : styles.podBadgePending,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.podBadgeText,
+                    isPodApproved ? styles.podTextApproved : isPodPendingReview ? styles.podTextReview : styles.podTextPending,
+                  ]}
+                >
+                  {isPodApproved ? 'Approved' : isPodPendingReview ? 'Review' : 'Pending'}
+                </Text>
+              </View>
+            </View>
+
+            {(isPodApproved || isPodPendingReview || latestPod?.pod_document_url) && (
+              <TouchableOpacity
+                style={styles.viewPodBtn}
+                onPress={() => onViewPod(tripData?.id || trackingId)}
+                activeOpacity={0.85}
+              >
+                <FileText size={15} color="#FFFFFF" />
+                <Text style={styles.viewPodBtnText}>View Signed Acknowledgement / POD</Text>
+                <ExternalLink size={14} color="#FFFFFF" />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* ── 7. Consignment Operational Milestones ── */}
+          <View style={styles.milestonesCard}>
+            <View style={styles.milestonesHeader}>
+              <GitCommit size={18} color="#F15A24" strokeWidth={2.4} />
+              <Text style={styles.cardHeaderTitle}>Consignment Milestones</Text>
+            </View>
+
+            <View style={styles.milestonesList}>
+              {milestones.map((m, index) => {
+                const isLast = index === milestones.length - 1;
+                const isCompleted = m.status === 'COMPLETED';
+                const isCurrent = m.status === 'CURRENT';
+
+                return (
+                  <View key={m.id} style={styles.milestoneRow}>
+                    <View style={styles.timelineCol}>
                       {isCompleted ? (
-                        <View style={styles.pillGreen}>
-                          <Text style={styles.pillTextGreen}>Completed</Text>
+                        <View style={styles.nodeCompleted}>
+                          <CheckCircle2 size={15} color="#FFFFFF" />
                         </View>
                       ) : isCurrent ? (
-                        <View style={styles.pillOrange}>
-                          <Text style={styles.pillTextOrange}>Current</Text>
+                        <View style={styles.nodeCurrent}>
+                          <View style={styles.nodeCurrentInner} />
                         </View>
                       ) : (
-                        <View style={styles.pillGrey}>
-                          <Text style={styles.pillTextGrey}>Pending</Text>
-                        </View>
+                        <View style={styles.nodePending} />
+                      )}
+
+                      {!isLast && (
+                        <View
+                          style={[
+                            styles.timelineVerticalLine,
+                            isCompleted && styles.timelineLineCompleted,
+                            isCurrent && styles.timelineLineCurrent,
+                          ]}
+                        />
                       )}
                     </View>
 
-                    <Text style={styles.milestoneDesc}>{m.desc}</Text>
-                    {m.timestamp ? (
-                      <Text style={styles.milestoneTime}>{m.timestamp}</Text>
-                    ) : null}
+                    <View style={styles.milestoneContentCol}>
+                      <View style={styles.milestoneTitleRow}>
+                        <Text
+                          style={[
+                            styles.milestoneTitle,
+                            isCompleted && styles.milestoneTitleCompleted,
+                            isCurrent && styles.milestoneTitleCurrent,
+                          ]}
+                        >
+                          {m.title}
+                        </Text>
+
+                        {isCompleted ? (
+                          <View style={styles.pillGreen}>
+                            <Text style={styles.pillTextGreen}>Completed</Text>
+                          </View>
+                        ) : isCurrent ? (
+                          <View style={styles.pillOrange}>
+                            <Text style={styles.pillTextOrange}>Current</Text>
+                          </View>
+                        ) : (
+                          <View style={styles.pillGrey}>
+                            <Text style={styles.pillTextGrey}>Pending</Text>
+                          </View>
+                        )}
+                      </View>
+
+                      <Text style={styles.milestoneDesc}>{m.desc}</Text>
+                      {m.timestamp ? <Text style={styles.milestoneTime}>{m.timestamp}</Text> : null}
+                    </View>
                   </View>
-                </View>
-              );
-            })}
+                );
+              })}
+            </View>
           </View>
-        </View>
 
-        {/* ── Bottom Quick Actions (4 accessible cards) ── */}
-        <View style={styles.quickActionsGrid}>
-          {/* 1. Refresh */}
-          <TouchableOpacity
-            style={styles.quickActionCard}
-            onPress={handleRefresh}
-            disabled={refreshing}
-            activeOpacity={0.8}
-          >
-            <View style={styles.quickIconOrange}>
-              {refreshing ? (
-                <ActivityIndicator size="small" color="#F15A24" />
-              ) : (
-                <RotateCw size={18} color="#F15A24" />
-              )}
-            </View>
-            <Text style={styles.quickActionTitle}>Refresh</Text>
-            <Text style={styles.quickActionSub}>Get latest status</Text>
-          </TouchableOpacity>
+          {/* ── 8. Bottom Action Grid ── */}
+          <View style={styles.actionsGrid}>
+            <TouchableOpacity style={styles.actionCard} onPress={handleRefresh} activeOpacity={0.8}>
+              <RotateCw size={18} color="#F15A24" />
+              <Text style={styles.actionTitle}>Refresh Status</Text>
+              <Text style={styles.actionSub}>Latest telemetry</Text>
+            </TouchableOpacity>
 
-          {/* 2. View Details */}
-          <TouchableOpacity
-            style={styles.quickActionCard}
-            onPress={() => {
-              if (onViewDetails) onViewDetails(tripData?.booking_id || trackingId);
-              else Alert.alert('Consignment Info', `Booking Ref: ${tripData?.booking_id || trackingId}\nMaterial: ${tripData?.bookings?.requirements?.material_type || 'General Cargo'}`);
-            }}
-            activeOpacity={0.8}
-          >
-            <View style={styles.quickIconBlue}>
+            <TouchableOpacity
+              style={styles.actionCard}
+              onPress={() => {
+                if (onViewDetails) onViewDetails(tripData?.booking_id || tripData?.id);
+                else Alert.alert('Consignment Info', `Booking Ref: ${displayBookingId}`);
+              }}
+              activeOpacity={0.8}
+            >
               <FileText size={18} color="#2563EB" />
-            </View>
-            <Text style={styles.quickActionTitle}>View Details</Text>
-            <Text style={styles.quickActionSub}>Consignment info</Text>
-          </TouchableOpacity>
+              <Text style={styles.actionTitle}>Booking Details</Text>
+              <Text style={styles.actionSub}>Requirement specs</Text>
+            </TouchableOpacity>
 
-          {/* 3. Share Tracking */}
-          <TouchableOpacity
-            style={styles.quickActionCard}
-            onPress={handleShareTracking}
-            activeOpacity={0.8}
-          >
-            <View style={styles.quickIconGreen}>
-              <Share2 size={18} color="#169B75" />
-            </View>
-            <Text style={styles.quickActionTitle}>Share Tracking</Text>
-            <Text style={styles.quickActionSub}>Send to others</Text>
-          </TouchableOpacity>
+            <TouchableOpacity style={styles.actionCard} onPress={handleShareTracking} activeOpacity={0.8}>
+              <Share2 size={18} color="#16A34A" />
+              <Text style={styles.actionTitle}>Share Tracking</Text>
+              <Text style={styles.actionSub}>WhatsApp / SMS</Text>
+            </TouchableOpacity>
 
-          {/* 4. Need Help? */}
-          <TouchableOpacity
-            style={styles.quickActionCard}
-            onPress={() => {
-              if (onHelp) onHelp();
-              else Alert.alert('TRUCKS Support', 'Toll-free 24/7 Consignment Support: 1800-TRUCKS-LOGISTICS');
-            }}
-            activeOpacity={0.8}
-          >
-            <View style={styles.quickIconPurple}>
-              <Headphones size={18} color="#9333EA" />
-            </View>
-            <Text style={styles.quickActionTitle}>Need Help?</Text>
-            <Text style={styles.quickActionSub}>Contact support</Text>
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity
+              style={styles.actionCard}
+              onPress={() => {
+                if (onHelp) onHelp();
+                else Alert.alert('Support Desk', '24/7 Operations Control Tower: 1800-258-4567');
+              }}
+              activeOpacity={0.8}
+            >
+              <Headphones size={18} color="#7C3AED" />
+              <Text style={styles.actionTitle}>Help Desk</Text>
+              <Text style={styles.actionSub}>24/7 Operations</Text>
+            </TouchableOpacity>
+          </View>
 
-        <View style={{ height: 30 }} />
-      </ScrollView>
+          <View style={{ height: 40 }} />
+        </ScrollView>
       )}
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  topBarTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#172B4D',
-  },
   safeArea: {
     flex: 1,
-    backgroundColor: '#F5F7FA',
+    backgroundColor: '#F8FAFC',
   },
   topBar: {
     flexDirection: 'row',
@@ -618,8 +869,8 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E2E8F0',
   },
   backBtn: {
-    width: 38,
-    height: 38,
+    width: 36,
+    height: 36,
     borderRadius: 8,
     backgroundColor: '#F1F5F9',
     alignItems: 'center',
@@ -639,287 +890,548 @@ const styles = StyleSheet.create({
   helpBtnText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#0B1730',
+    color: '#0C1A34',
   },
   scrollContent: {
     padding: 14,
   },
-
-  /* Consignment Header Block */
-  headerBlock: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-    gap: 10,
+  centerContainer: {
+    paddingVertical: 80,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  headerLeftCol: {
-    flex: 1,
-  },
-  pageLabel: {
-    fontSize: 10.5,
-    fontWeight: '800',
+  centerLoadingText: {
+    fontSize: 13,
     color: '#64748B',
-    letterSpacing: 0.6,
+    marginTop: 12,
+    fontWeight: '500',
   },
-  consignmentIdRow: {
+  errorTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#DC2626',
+    marginTop: 8,
+  },
+  errorSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 16,
+  },
+  retryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 2,
-    marginBottom: 6,
+    backgroundColor: '#F15A24',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
   },
-  consignmentIdText: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#0B1730',
-    letterSpacing: -0.2,
+  retryBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
-  liveTrackingPill: {
+  refCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+    marginBottom: 12,
+    elevation: 1,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+  },
+  refRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  refItem: {
+    flex: 1,
+  },
+  refItemLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#94A3B8',
+    letterSpacing: 0.4,
+  },
+  refCopyRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: '#ECFDF5',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
+    marginTop: 3,
   },
-  liveGreenDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#10B981',
-  },
-  liveTrackingText: {
-    fontSize: 10.5,
+  refItemValue: {
+    fontSize: 13.5,
     fontWeight: '800',
-    color: '#047857',
+    color: '#0C1A34',
   },
-
-  /* Top Right Status Card */
-  topStatusCard: {
-    flex: 1,
-    backgroundColor: '#FFF7ED',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#FED7AA',
-    padding: 10,
+  refDividerVertical: {
+    width: 1,
+    height: 32,
+    backgroundColor: '#E2E8F0',
+    marginHorizontal: 12,
+  },
+  docketBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 14,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginTop: 10,
   },
-  statusTruckIconBox: {
+  docketItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  docketLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  docketVal: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  statusBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 12,
+  },
+  statusIconBox: {
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  statusCardTitle: {
-    fontSize: 12,
+  statusTitle: {
+    fontSize: 13.5,
     fontWeight: '800',
-    color: '#C2410C',
   },
-  statusCardSub: {
-    fontSize: 10,
-    color: '#EA580C',
+  statusSub: {
+    fontSize: 11,
+    color: '#64748B',
     marginTop: 1,
   },
-
-  /* Navy Route Card (Screenshot 3 Match) */
-  navyRouteCard: {
-    backgroundColor: '#0B1730',
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  verifiedText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#16A34A',
+  },
+  cardHeaderTitle: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#0C1A34',
+  },
+  routeCard: {
+    backgroundColor: '#FFFFFF',
     borderRadius: 14,
-    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+    marginBottom: 12,
+  },
+  routeSectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 12,
-    shadowColor: '#0B1730',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 4,
   },
-  navyLocBlock: {
+  distanceBadge: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#F15A24',
+    backgroundColor: '#FFF5ED',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  routeStop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  originIconCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#F0FDF4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  destIconCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#FEF2F2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  routeTextWrap: {
     flex: 1,
+  },
+  routeStopLabel: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#94A3B8',
+    letterSpacing: 0.4,
+  },
+  routeCityTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0C1A34',
+    marginTop: 1,
+  },
+  routeAddressText: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 16,
+    marginTop: 1,
+  },
+  routeConnector: {
+    width: 2,
+    height: 16,
+    backgroundColor: '#E2E8F0',
+    marginLeft: 12,
+    marginVertical: 2,
+  },
+  etaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFFBEB',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginTop: 12,
+  },
+  etaLabel: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  etaValue: {
+    fontSize: 11.5,
+    color: '#78350F',
+    flex: 1,
+  },
+  allocationCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+    marginBottom: 12,
+  },
+  allocRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 10,
+  },
+  allocLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#94A3B8',
+  },
+  allocValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginTop: 1,
+  },
+  allocSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  fleetVerifiedPill: {
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  fleetVerifiedText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#16A34A',
+  },
+  callBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F15A24',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  callBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  cardDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 10,
+  },
+  telemetryCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+    marginBottom: 12,
+  },
+  telemetryHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
   },
-  navyLocIconOrigin: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#F15A24',
+  telemetryIconBox: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  navyLocIconDest: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#10B981',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  navyLocLabel: {
-    fontSize: 9.5,
-    fontWeight: '800',
-    color: '#94A3B8',
-    letterSpacing: 0.5,
-  },
-  navyLocCity: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    marginTop: 1,
-  },
-  navyLocPin: {
+  telemetrySubtitle: {
     fontSize: 11,
-    color: '#CBD5E1',
-    marginTop: 1,
-  },
-  navyVerticalDivider: {
-    width: 1,
-    height: 36,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    marginHorizontal: 12,
-  },
-
-  /* Driver Allocation Card (Screenshot 3 Match) */
-  driverCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  driverAvatarBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#FFF7ED',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#FED7AA',
-  },
-  driverInfoCol: {
-    flex: 1,
-  },
-  driverNameText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#0B1730',
-  },
-  driverVehicleText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#475569',
-    marginTop: 1,
-  },
-  driverNoticeText: {
-    fontSize: 10,
     color: '#64748B',
     marginTop: 1,
   },
-  contactDriverBtn: {
-    backgroundColor: '#0B1730',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 9,
+  liveGreenPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
-  contactDriverBtnDisabled: {
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#16A34A',
   },
-  contactDriverBtnTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#FFFFFF',
+  liveGreenText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#16A34A',
   },
-  contactDriverTextDisabled: {
+  telemetryDataGrid: {
+    flexDirection: 'row',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 12,
+  },
+  telemetryCell: {
+    flex: 1,
+  },
+  telemetryLabel: {
+    fontSize: 9.5,
+    fontWeight: '700',
     color: '#94A3B8',
   },
-  contactDriverBtnSub: {
-    fontSize: 9,
-    color: '#CBD5E1',
+  telemetryVal: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0C1A34',
+    marginTop: 2,
   },
-  contactDriverSubDisabled: {
-    color: '#94A3B8',
+  noGpsNotice: {
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
   },
-
-  /* Consignment Milestones Card */
-  milestonesSectionCard: {
+  noGpsNoticeText: {
+    fontSize: 11.5,
+    color: '#64748B',
+    lineHeight: 16,
+  },
+  weighmentCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
-    padding: 16,
-    marginBottom: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
+    padding: 14,
+    marginBottom: 12,
+  },
+  weighmentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  stageBlock: {
+    paddingVertical: 4,
+  },
+  stageTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  stageTitleText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  stageStatusBadge: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  badgeGreen: {
+    backgroundColor: '#ECFDF5',
+    color: '#059669',
+  },
+  badgeMuted: {
+    backgroundColor: '#F1F5F9',
+    color: '#64748B',
+  },
+  weighmentDetailsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 4,
+  },
+  weighmentDetailItem: {
+    fontSize: 11.5,
+    color: '#475569',
+  },
+  bold: {
+    fontWeight: '700',
+    color: '#0C1A34',
+  },
+  stageSubText: {
+    fontSize: 11,
+    color: '#94A3B8',
+    lineHeight: 15,
+  },
+  podCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+    marginBottom: 12,
+  },
+  podHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  podStatusSub: {
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  podBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  podBadgeApproved: {
+    backgroundColor: '#ECFDF5',
+  },
+  podBadgeReview: {
+    backgroundColor: '#FFFBEB',
+  },
+  podBadgePending: {
+    backgroundColor: '#F1F5F9',
+  },
+  podBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+  },
+  podTextApproved: {
+    color: '#059669',
+  },
+  podTextReview: {
+    color: '#D97706',
+  },
+  podTextPending: {
+    color: '#64748B',
+  },
+  viewPodBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#059669',
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginTop: 12,
+  },
+  viewPodBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  milestonesCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+    marginBottom: 12,
   },
   milestonesHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
     marginBottom: 14,
-  },
-  milestoneHeaderIconBox: {
-    width: 28,
-    height: 28,
-    borderRadius: 7,
-    backgroundColor: '#FFF7ED',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  milestonesHeaderTitle: {
-    fontSize: 14.5,
-    fontWeight: '800',
-    color: '#0B1730',
   },
   milestonesList: {
     paddingLeft: 4,
   },
   milestoneRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    minHeight: 52,
   },
   timelineCol: {
     alignItems: 'center',
-    width: 26,
+    width: 24,
     marginRight: 10,
   },
   nodeCompleted: {
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: '#10B981',
+    backgroundColor: '#16A34A',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -927,7 +1439,7 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: '#FFF7ED',
+    backgroundColor: '#FFF5ED',
     borderWidth: 2,
     borderColor: '#F15A24',
     alignItems: 'center',
@@ -940,41 +1452,41 @@ const styles = StyleSheet.create({
     backgroundColor: '#F15A24',
   },
   nodePending: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
     backgroundColor: '#E2E8F0',
-    marginVertical: 2,
+    marginTop: 4,
   },
   timelineVerticalLine: {
     width: 2,
-    height: 38,
+    flex: 1,
     backgroundColor: '#E2E8F0',
     marginVertical: 2,
   },
   timelineLineCompleted: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#16A34A',
   },
   timelineLineCurrent: {
-    backgroundColor: '#F15A24',
+    backgroundColor: '#FDBA74',
   },
   milestoneContentCol: {
     flex: 1,
-    paddingBottom: 16,
+    paddingBottom: 12,
   },
   milestoneTitleRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
   milestoneTitle: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 12.5,
+    fontWeight: '600',
     color: '#64748B',
   },
   milestoneTitleCompleted: {
-    color: '#0B1730',
-    fontWeight: '800',
+    color: '#0C1A34',
+    fontWeight: '700',
   },
   milestoneTitleCurrent: {
     color: '#F15A24',
@@ -983,204 +1495,68 @@ const styles = StyleSheet.create({
   milestoneDesc: {
     fontSize: 11,
     color: '#64748B',
-    marginTop: 2,
+    marginTop: 1,
   },
   milestoneTime: {
-    fontSize: 10.5,
-    fontWeight: '600',
-    color: '#475569',
-    marginTop: 3,
+    fontSize: 10,
+    color: '#94A3B8',
+    marginTop: 2,
   },
   pillGreen: {
     backgroundColor: '#ECFDF5',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   pillTextGreen: {
     fontSize: 10,
-    fontWeight: '800',
+    fontWeight: '700',
     color: '#059669',
   },
   pillOrange: {
-    backgroundColor: '#FFF7ED',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#FED7AA',
+    backgroundColor: '#FFF5ED',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   pillTextOrange: {
     fontSize: 10,
-    fontWeight: '800',
-    color: '#EA580C',
+    fontWeight: '700',
+    color: '#F15A24',
   },
   pillGrey: {
     backgroundColor: '#F1F5F9',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   pillTextGrey: {
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#94A3B8',
   },
-
-  /* Quick Actions Grid (Screenshot 3 Match) */
-  quickActionsGrid: {
+  actionsGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 6,
-    marginBottom: 10,
+    flexWrap: 'wrap',
+    gap: 10,
   },
-  quickActionCard: {
-    flex: 1,
+  actionCard: {
+    width: '48%',
     backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 6,
-    alignItems: 'center',
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 2,
-    elevation: 1,
+    padding: 12,
   },
-  quickIconOrange: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#FFF7ED',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
+  actionTitle: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#0C1A34',
+    marginTop: 6,
   },
-  quickIconBlue: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#EFF6FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
-  quickIconGreen: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#ECFDF5',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
-  quickIconPurple: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#F3E8FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
-  quickActionTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#0B1730',
-    textAlign: 'center',
-  },
-  quickActionSub: {
-    fontSize: 9,
+  actionSub: {
+    fontSize: 10.5,
     color: '#64748B',
-    textAlign: 'center',
     marginTop: 1,
-  },
-
-  /* Center Status & Error States */
-  centerStatusContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 40,
-  },
-  loadingStatusText: {
-    marginTop: 16,
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#475569',
-    textAlign: 'center',
-  },
-  errorIconWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  errorStatusTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#0B1730',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  errorStatusSub: {
-    fontSize: 14,
-    color: '#475569',
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 4,
-  },
-  errorStatusHint: {
-    fontSize: 12,
-    color: '#94A3B8',
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  errorActionsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'center',
-  },
-  errorRetryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#F15A24',
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 8,
-    elevation: 2,
-    shadowColor: '#F15A24',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-  },
-  errorRetryBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  errorBackBtn: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-  },
-  errorBackBtnText: {
-    color: '#334155',
-    fontSize: 13,
-    fontWeight: '700',
   },
 });

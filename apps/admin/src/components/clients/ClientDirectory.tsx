@@ -1037,51 +1037,83 @@ export const ClientDirectory: React.FC<ClientDirectoryProps> = ({
 
     setActionLoading(true);
     try {
-      // 1. Notify Backend API
-      try {
-        await apiFetch("/client/admin-review", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            companyId: client.id,
-            mobile: client.primary_contact_phone?.replace(/[^0-9]/g, "").slice(-10),
-            decision: "APPROVED",
-            reviewerName: adminProfile?.name || "NECL Admin Compliance Desk",
-          }),
-        });
-      } catch (apiErr) {
-        console.warn("Backend API dispatch notice:", apiErr);
-      }
+      const phone = client.primary_contact_phone?.replace(/[^0-9]/g, "").slice(-10);
+      const reviewer = adminProfile?.name || "NECL Admin Compliance Desk";
+      const nowIso = new Date().toISOString();
 
-      // 2. Direct Supabase Update via RPC and direct queries
-      try {
-        await supabase.rpc("admin_review_client_registration", {
-          p_company_id: client.id,
-          p_decision: "APPROVED",
-          p_reviewer_name: adminProfile?.name || "NECL Admin Compliance Desk",
-        });
-      } catch (rpcErr) {
-        console.warn("RPC admin_review_client_registration notice:", rpcErr);
-      }
+      // 1. Direct Supabase Update via RPC and direct queries in parallel
+      const rpcPromise = supabase.rpc("admin_review_client_registration", {
+        p_company_id: client.id,
+        p_decision: "APPROVED",
+        p_reviewer_name: reviewer,
+      });
 
-      const { error: upErr } = await supabase
+      const companyUpdatePromise = supabase
         .from("client_companies")
         .update({
           status: "APPROVED",
-          approved_at: new Date().toISOString(),
-          approved_by: adminProfile?.name || "NECL Admin Compliance Desk",
+          approved_at: nowIso,
+          approved_by: reviewer,
           rejection_reason: null,
           correction_notes: null,
-          updated_at: new Date().toISOString(),
+          updated_at: nowIso,
         })
         .eq("id", client.id);
 
-      if (upErr) throw upErr;
+      const userUpdateFilter = phone
+        ? `client_id.eq.${client.id},client_company_id.eq.${client.id},mobile.eq.${phone}`
+        : `client_id.eq.${client.id},client_company_id.eq.${client.id}`;
 
-      await supabase
+      const userUpdatePromise = supabase
         .from("client_users")
-        .update({ status: "APPROVED" })
-        .or(`client_id.eq.${client.id},client_company_id.eq.${client.id}`);
+        .update({
+          status: "APPROVED",
+          updated_at: nowIso,
+        })
+        .or(userUpdateFilter);
+
+      const [rpcRes, upRes, userRes] = await Promise.all([
+        rpcPromise,
+        companyUpdatePromise,
+        userUpdatePromise,
+      ]);
+
+      if (upRes && (upRes as any).error) throw (upRes as any).error;
+
+      // 2. Broadcast Instant Approval Notification via Supabase Realtime channel
+      try {
+        const bcChannel = supabase.channel("client-approvals-realtime");
+        await bcChannel.subscribe();
+        await bcChannel.send({
+          type: "broadcast",
+          event: "CLIENT_APPROVED",
+          payload: {
+            companyId: client.id,
+            clientCode: client.client_code,
+            mobile: phone,
+            status: "APPROVED",
+            timestamp: Date.now(),
+          },
+        });
+        supabase.removeChannel(bcChannel);
+      } catch (bcErr) {
+        console.warn("Realtime broadcast notice:", bcErr);
+      }
+
+      // 3. Notify Backend API in background (non-blocking)
+      apiFetch("/client/admin-review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        timeoutMs: 1500,
+        body: JSON.stringify({
+          companyId: client.id,
+          mobile: phone,
+          decision: "APPROVED",
+          reviewerName: reviewer,
+        }),
+      }).catch((apiErr) => {
+        console.warn("Backend API dispatch notice:", apiErr);
+      });
 
       setToastMessage(`Client "${client.company_name}" APPROVED! Dashboard access granted.`);
       setTimeout(() => setToastMessage(null), 4000);
@@ -2252,7 +2284,7 @@ export const ClientDirectory: React.FC<ClientDirectoryProps> = ({
               </th>
 
               {/* Actions */}
-              <th style={{ width: 84, minWidth: 84, textAlign: "center", paddingRight: 12 }}>Actions</th>
+              <th style={{ width: 48, minWidth: 48, textAlign: "center", paddingRight: 12 }}>Actions</th>
             </tr>
           </thead>
 
@@ -2566,33 +2598,18 @@ export const ClientDirectory: React.FC<ClientDirectoryProps> = ({
                       })()}
                     </td>
 
-                    {/* 8. Actions: Explicit View Details + 3-Dot Menu */}
-                    <td onClick={(e) => e.stopPropagation()} style={{ width: 84, minWidth: 84, textAlign: "center", paddingRight: 12 }}>
-                      <div style={{ display: "inline-flex", alignItems: "center", gap: 6, justifyContent: "center" }}>
-                        <button
-                          type="button"
-                          className="row-action-btn-circle"
-                          title="View Details"
-                          aria-label={`View Details for ${client.company_name}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedClientId(client.id);
-                            setIsDrawerOpen(true);
-                          }}
-                        >
-                          <Eye size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          className={`row-action-btn-circle ${menuAnchor?.id === client.id ? "active" : ""}`}
-                          title="Actions menu"
-                          onClick={(e) => handleToggleActionMenu(client, e)}
-                          aria-label="Row actions"
-                          aria-expanded={menuAnchor?.id === client.id}
-                        >
-                          <MoreVertical size={15} />
-                        </button>
-                      </div>
+                    {/* 8. Actions: Standardized Single 3-Dot Action Menu */}
+                    <td onClick={(e) => e.stopPropagation()} style={{ width: 48, minWidth: 48, textAlign: "center", paddingRight: 12 }}>
+                      <button
+                        type="button"
+                        className={`row-action-btn-circle ${menuAnchor?.id === client.id ? "active" : ""}`}
+                        title="Actions menu"
+                        onClick={(e) => handleToggleActionMenu(client, e)}
+                        aria-label={`Actions for ${client.company_name}`}
+                        aria-expanded={menuAnchor?.id === client.id}
+                      >
+                        <MoreVertical size={15} />
+                      </button>
                     </td>
                   </tr>
                 );
@@ -3037,9 +3054,9 @@ export const ClientDirectory: React.FC<ClientDirectoryProps> = ({
                             <button
                               type="button"
                               style={{
-                                background: "#0F172A",
-                                color: "#FFFFFF",
-                                border: "none",
+                                background: "#FFFFFF",
+                                color: "#111827",
+                                border: "1px solid #D9E1EC",
                                 borderRadius: 6,
                                 padding: "5px 10px",
                                 fontSize: 12,
@@ -3790,9 +3807,9 @@ export const ClientDirectory: React.FC<ClientDirectoryProps> = ({
                               <button
                                 type="button"
                                 style={{
-                                  border: "none",
-                                  background: "#0F172A",
-                                  color: "#FFFFFF",
+                                  border: "1px solid #D9E1EC",
+                                  background: "#FFFFFF",
+                                  color: "#111827",
                                   padding: "6px 12px",
                                   borderRadius: 6,
                                   fontSize: 12,

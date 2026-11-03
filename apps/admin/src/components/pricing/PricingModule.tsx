@@ -1882,7 +1882,7 @@ export const PricingModule: React.FC<PricingModuleProps> = ({
           type="button"
           onClick={() => setCurrentPage(1)}
           style={{
-            backgroundColor: '#0F172A',
+            backgroundColor: '#F4510B',
             color: '#FFFFFF',
             border: 'none',
             padding: '9px 18px',
@@ -3244,36 +3244,38 @@ export const PricingModule: React.FC<PricingModuleProps> = ({
                     style={{
                       padding: '18px 20px',
                       borderRadius: '12px',
-                      background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)',
-                      color: '#FFFFFF'
+                      background: '#FFFFFF',
+                      border: '1px solid #E5EAF1',
+                      boxShadow: '0 2px 8px rgba(17, 24, 39, 0.05)',
+                      color: '#111827'
                     }}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: '#94A3B8' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: '#475569' }}>
                       <span>Carrier Cost:</span>
-                      <span style={{ color: '#FFFFFF', fontWeight: 600 }}>{formatCurrency(vendorCostBase)}</span>
+                      <span style={{ color: '#111827', fontWeight: 600 }}>{formatCurrency(vendorCostBase)}</span>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: '#94A3B8' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: '#475569' }}>
                       <span>Commercial Margin:</span>
                       <span style={{ color: '#10B981', fontWeight: 700 }}>+{formatCurrency(calculatedMarginVal)} ({effectiveMarginPct}%)</span>
                     </div>
                     {chargeTotal > 0 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: '#94A3B8' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: '#475569' }}>
                         <span>Add-on Charges:</span>
-                        <span style={{ color: '#FFFFFF', fontWeight: 600 }}>+{formatCurrency(chargeTotal)}</span>
+                        <span style={{ color: '#111827', fontWeight: 600 }}>+{formatCurrency(chargeTotal)}</span>
                       </div>
                     )}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: '#94A3B8' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '13px', color: '#475569' }}>
                       <span>Subtotal (Taxable):</span>
-                      <span style={{ color: '#FFFFFF', fontWeight: 600 }}>{formatCurrency(taxableSubtotal)}</span>
+                      <span style={{ color: '#111827', fontWeight: 600 }}>{formatCurrency(taxableSubtotal)}</span>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', fontSize: '13px', color: '#94A3B8' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', fontSize: '13px', color: '#475569' }}>
                       <span>GST ({gstApplicable ? gstRate : 0}%):</span>
-                      <span style={{ color: '#FFFFFF', fontWeight: 600 }}>+{formatCurrency(computedGstAmount)}</span>
+                      <span style={{ color: '#111827', fontWeight: 600 }}>+{formatCurrency(computedGstAmount)}</span>
                     </div>
-                    <div style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.2)', marginBottom: '12px' }} />
+                    <div style={{ height: '1px', backgroundColor: '#E8EDF3', marginBottom: '12px' }} />
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: '15px', fontWeight: 700 }}>Total Final Client Quote:</span>
-                      <span style={{ fontSize: '24px', fontWeight: 900, color: '#FB923C' }}>
+                      <span style={{ fontSize: '15px', fontWeight: 700, color: '#111827' }}>Total Final Client Quote:</span>
+                      <span style={{ fontSize: '24px', fontWeight: 900, color: '#F4510B' }}>
                         {formatCurrency(clientGrandTotal)}
                       </span>
                     </div>
@@ -3569,7 +3571,7 @@ export const PricingModule: React.FC<PricingModuleProps> = ({
                         padding: '9px 18px',
                         borderRadius: '8px',
                         border: 'none',
-                        backgroundColor: '#0F172A',
+                        backgroundColor: '#F4510B',
                         color: '#FFFFFF',
                         fontWeight: 700,
                         fontSize: '13px',
@@ -3745,9 +3747,9 @@ export const PricingModule: React.FC<PricingModuleProps> = ({
                 style={{
                   padding: '9px 20px',
                   borderRadius: '8px',
-                  border: 'none',
-                  backgroundColor: '#0F172A',
-                  color: '#FFFFFF',
+                  border: '1px solid #D9E1EC',
+                  backgroundColor: '#FFFFFF',
+                  color: '#111827',
                   fontWeight: 700,
                   fontSize: '13px',
                   cursor: 'pointer'
@@ -3960,7 +3962,7 @@ export const PricingModule: React.FC<PricingModuleProps> = ({
               <button
                 type="button"
                 onClick={() => setIsActivityHistoryOpen(false)}
-                style={{ padding: '9px 20px', borderRadius: '8px', border: 'none', backgroundColor: '#0F172A', color: '#FFFFFF', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
+                style={{ padding: '9px 20px', borderRadius: '8px', border: '1px solid #D9E1EC', backgroundColor: '#FFFFFF', color: '#111827', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
               >
                 Close
               </button>

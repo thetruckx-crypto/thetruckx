@@ -1,0 +1,2093 @@
+[
+  {
+    "id": "EP-001",
+    "method": "POST",
+    "path": "/api/auth/admin-login",
+    "lineNo": 719,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      400,
+      401,
+      403,
+      500
+    ],
+    "bodyFields": [
+      "email",
+      "password",
+      "otp"
+    ],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-002",
+    "method": "POST",
+    "path": "/api/auth/check-registration",
+    "lineNo": 805,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      400
+    ],
+    "bodyFields": [
+      "mobile",
+      "role"
+    ],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-003",
+    "method": "POST",
+    "path": "/api/auth/register-sync",
+    "lineNo": 816,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      400,
+      409
+    ],
+    "bodyFields": [
+      "fullName",
+      "mobile",
+      "role",
+      "email",
+      "companyName",
+      "status"
+    ],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-004",
+    "method": "POST",
+    "path": "/api/auth/send-otp",
+    "lineNo": 860,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [
+      "supabase.otp_verifications.insert"
+    ],
+    "statusCodes": [
+      200,
+      400,
+      403,
+      409
+    ],
+    "bodyFields": [
+      "mobile",
+      "role",
+      "purpose"
+    ],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-005",
+    "method": "POST",
+    "path": "/api/auth/verify-otp",
+    "lineNo": 968,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      400,
+      401
+    ],
+    "bodyFields": [
+      "mobile",
+      "role",
+      "code",
+      "otp",
+      "purpose"
+    ],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-006",
+    "method": "GET",
+    "path": "/api/auth/registration-status",
+    "lineNo": 1087,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      400
+    ],
+    "bodyFields": [],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-007",
+    "method": "GET",
+    "path": "/api/health",
+    "lineNo": 1118,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200
+    ],
+    "bodyFields": [],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-008",
+    "method": "GET",
+    "path": "/api/auth/me",
+    "lineNo": 1123,
+    "middleware": "authenticateToken",
+    "authRequirement": "Authenticated User (Bearer JWT)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      401,
+      403
+    ],
+    "bodyFields": [],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-009",
+    "method": "GET",
+    "path": "/api/client/dashboard-data",
+    "lineNo": 1144,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      401,
+      403
+    ],
+    "bodyFields": [],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-010",
+    "method": "POST",
+    "path": "/api/client/submit-registration",
+    "lineNo": 1183,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      400,
+      409,
+      500
+    ],
+    "bodyFields": [
+      "fullName",
+      "mobile",
+      "companyPhone",
+      "email",
+      "designation",
+      "department",
+      "companyName",
+      "businessType",
+      "gstin",
+      "pan",
+      "registeredAddress",
+      "city",
+      "state",
+      "pincode",
+      "documents"
+    ],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-011",
+    "method": "GET",
+    "path": "/api/client/status/:identifier",
+    "lineNo": 1402,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [
+      "supabase.client_companies.select"
+    ],
+    "statusCodes": [
+      200,
+      400,
+      404,
+      500
+    ],
+    "bodyFields": [
+      "mobile",
+      "companyId",
+      "decision",
+      "reviewerName",
+      "reason",
+      "notes"
+    ],
+    "pathParams": [
+      "identifier"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-012",
+    "method": "POST",
+    "path": "/api/auth/admin-review-client",
+    "lineNo": 1592,
+    "middleware": "authenticateAdmin",
+    "authRequirement": "Admin Role Required",
+    "dbOperations": [],
+    "statusCodes": [],
+    "bodyFields": [],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-013",
+    "method": "POST",
+    "path": "/api/client/admin-review",
+    "lineNo": 1593,
+    "middleware": "authenticateAdmin",
+    "authRequirement": "Admin Role Required",
+    "dbOperations": [],
+    "statusCodes": [],
+    "bodyFields": [],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-014",
+    "method": "GET",
+    "path": "/api/regional-hubs",
+    "lineNo": 1620,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200
+    ],
+    "bodyFields": [],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-015",
+    "method": "POST",
+    "path": "/api/regional-hubs",
+    "lineNo": 1646,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      201,
+      400
+    ],
+    "bodyFields": [
+      "name",
+      "city",
+      "state",
+      "region"
+    ],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-016",
+    "method": "PUT",
+    "path": "/api/regional-hubs/:id",
+    "lineNo": 1724,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      400
+    ],
+    "bodyFields": [
+      "name",
+      "city",
+      "state",
+      "region",
+      "status"
+    ],
+    "pathParams": [
+      "id"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-017",
+    "method": "DELETE",
+    "path": "/api/regional-hubs/:id",
+    "lineNo": 1769,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      400
+    ],
+    "bodyFields": [],
+    "pathParams": [
+      "id"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-018",
+    "method": "POST",
+    "path": "/api/vendor/submit-registration",
+    "lineNo": 1803,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [
+      "supabase.vendor_users.insert",
+      "supabase.documents.insert",
+      "supabase.auth_audit_log.insert"
+    ],
+    "statusCodes": [
+      200,
+      400,
+      409,
+      500
+    ],
+    "bodyFields": [
+      "transporterName",
+      "contactPerson",
+      "mobile",
+      "email",
+      "pan",
+      "gstin",
+      "registeredAddress",
+      "city",
+      "state",
+      "pincode",
+      "operatingHubs",
+      "manualOperatingLocations",
+      "totalFleetCount",
+      "fleetStrength",
+      "vehicleConfigs",
+      "truckCategories",
+      "servicesOffered",
+      "documents",
+      "fleetDocuments"
+    ],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-019",
+    "method": "GET",
+    "path": "/api/vendor/status/:identifier",
+    "lineNo": 2203,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [
+      "supabase.vendor_companies.select"
+    ],
+    "statusCodes": [
+      200,
+      404,
+      500
+    ],
+    "bodyFields": [],
+    "pathParams": [
+      "identifier"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-020",
+    "method": "GET",
+    "path": "/api/database/vendors",
+    "lineNo": 2426,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [],
+    "bodyFields": [],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-021",
+    "method": "GET",
+    "path": "/api/vendors",
+    "lineNo": 2427,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [],
+    "bodyFields": [],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-022",
+    "method": "GET",
+    "path": "/database/vendors",
+    "lineNo": 2428,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [],
+    "bodyFields": [],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-023",
+    "method": "POST",
+    "path": "/api/driver/submit-registration",
+    "lineNo": 2433,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [
+      "supabase.drivers.update",
+      "supabase.documents.insert"
+    ],
+    "statusCodes": [
+      200,
+      400,
+      409,
+      500
+    ],
+    "bodyFields": [
+      "fullName",
+      "mobile",
+      "dateOfBirth",
+      "dob",
+      "licenceNumber",
+      "licenceExpiryDate",
+      "primaryVendorId",
+      "dlFrontUri",
+      "dlBackUri",
+      "aadhaarFrontUri",
+      "aadhaarBackUri",
+      "documents"
+    ],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-024",
+    "method": "GET",
+    "path": "/api/driver/status/:identifier",
+    "lineNo": 2666,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      404,
+      500
+    ],
+    "bodyFields": [],
+    "pathParams": [
+      "identifier"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-025",
+    "method": "GET",
+    "path": "/api/admin/drivers",
+    "lineNo": 2719,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      500
+    ],
+    "bodyFields": [],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-026",
+    "method": "GET",
+    "path": "/api/drivers",
+    "lineNo": 2751,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      500
+    ],
+    "bodyFields": [],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-027",
+    "method": "POST",
+    "path": "/api/admin/vendor-approval",
+    "lineNo": 2769,
+    "middleware": "authenticateAdmin",
+    "authRequirement": "Admin Role Required",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      400,
+      500
+    ],
+    "bodyFields": [
+      "vendorId",
+      "decision",
+      "reviewerName"
+    ],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-028",
+    "method": "POST",
+    "path": "/api/admin/driver-approval",
+    "lineNo": 2825,
+    "middleware": "authenticateAdmin",
+    "authRequirement": "Admin Role Required",
+    "dbOperations": [
+      "supabase.audit_logs.insert"
+    ],
+    "statusCodes": [
+      200,
+      400,
+      500
+    ],
+    "bodyFields": [
+      "driverId",
+      "decision",
+      "reviewerName",
+      "reason"
+    ],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-029",
+    "method": "GET",
+    "path": "/api/vendor/dashboard-data",
+    "lineNo": 2897,
+    "middleware": "authenticateToken",
+    "authRequirement": "Authenticated User (Bearer JWT)",
+    "dbOperations": [],
+    "statusCodes": [
+      200
+    ],
+    "bodyFields": [],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-030",
+    "method": "GET",
+    "path": "/api/driver/dashboard-data",
+    "lineNo": 2901,
+    "middleware": "authenticateToken",
+    "authRequirement": "Authenticated User (Bearer JWT)",
+    "dbOperations": [],
+    "statusCodes": [
+      200
+    ],
+    "bodyFields": [],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-031",
+    "method": "GET",
+    "path": "/api/admin/users",
+    "lineNo": 2910,
+    "middleware": "authenticateAdmin",
+    "authRequirement": "Admin Role Required",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      500
+    ],
+    "bodyFields": [],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-032",
+    "method": "POST",
+    "path": "/api/admin/users",
+    "lineNo": 2932,
+    "middleware": "authenticateAdmin",
+    "authRequirement": "Admin Role Required",
+    "dbOperations": [
+      "supabase.audit_logs.insert"
+    ],
+    "statusCodes": [
+      201,
+      400,
+      409,
+      500
+    ],
+    "bodyFields": [
+      "name",
+      "email",
+      "permissions"
+    ],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-033",
+    "method": "PATCH",
+    "path": "/api/admin/users/:id/status",
+    "lineNo": 2999,
+    "middleware": "authenticateAdmin",
+    "authRequirement": "Admin Role Required",
+    "dbOperations": [
+      "supabase.audit_logs.insert"
+    ],
+    "statusCodes": [
+      200,
+      400,
+      404,
+      500
+    ],
+    "bodyFields": [
+      "is_active",
+      "reason"
+    ],
+    "pathParams": [
+      "id"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-034",
+    "method": "GET",
+    "path": "/api/admin/users/:id/permissions",
+    "lineNo": 3058,
+    "middleware": "authenticateAdmin",
+    "authRequirement": "Admin Role Required",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      404,
+      500
+    ],
+    "bodyFields": [],
+    "pathParams": [
+      "id"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-035",
+    "method": "PUT",
+    "path": "/api/admin/users/:id/permissions",
+    "lineNo": 3082,
+    "middleware": "authenticateAdmin",
+    "authRequirement": "Admin Role Required",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      400,
+      404,
+      500
+    ],
+    "bodyFields": [
+      "permissions"
+    ],
+    "pathParams": [
+      "id"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-036",
+    "method": "GET",
+    "path": "/api/admin/current-user-permissions",
+    "lineNo": 3128,
+    "middleware": "authenticateAdmin",
+    "authRequirement": "Admin Role Required",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      401
+    ],
+    "bodyFields": [],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-037",
+    "method": "POST",
+    "path": "/api/admin/delete-user",
+    "lineNo": 3143,
+    "middleware": "authenticateAdmin",
+    "authRequirement": "Admin Role Required",
+    "dbOperations": [
+      "supabase.client_quotations.delete",
+      "supabase.client_quotes.delete",
+      "supabase.vendor_quotations.delete",
+      "supabase.vendor_requests.delete",
+      "supabase.requirements.delete",
+      "supabase.client_users.delete",
+      "supabase.vendor_driver_links.delete",
+      "supabase.vendor_vehicle_links.delete",
+      "supabase.documents.delete",
+      "supabase.vendor_users.delete",
+      "supabase.vendor_companies.delete",
+      "supabase.driver_documents.delete",
+      "supabase.drivers.delete",
+      "supabase.admin_users.delete",
+      "supabase.auth_audit_log.insert",
+      "supabase.audit_logs.insert"
+    ],
+    "statusCodes": [
+      200,
+      400,
+      500
+    ],
+    "bodyFields": [
+      "userId",
+      "role",
+      "mobile",
+      "companyId",
+      "reason"
+    ],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-038",
+    "method": "GET",
+    "path": "/api/admin/drafts",
+    "lineNo": 3384,
+    "middleware": "authenticateAdmin",
+    "authRequirement": "Admin Role Required",
+    "dbOperations": [
+      "supabase.admin_registration_drafts.select"
+    ],
+    "statusCodes": [
+      200
+    ],
+    "bodyFields": [],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-039",
+    "method": "GET",
+    "path": "/api/admin/drafts/:id",
+    "lineNo": 3444,
+    "middleware": "authenticateAdmin",
+    "authRequirement": "Admin Role Required",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      404
+    ],
+    "bodyFields": [],
+    "pathParams": [
+      "id"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-040",
+    "method": "POST",
+    "path": "/api/admin/drafts",
+    "lineNo": 3485,
+    "middleware": "authenticateAdmin",
+    "authRequirement": "Admin Role Required",
+    "dbOperations": [
+      "supabase.admin_registration_drafts.upsert"
+    ],
+    "statusCodes": [
+      200,
+      400
+    ],
+    "bodyFields": [],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-041",
+    "method": "DELETE",
+    "path": "/api/admin/drafts/:id",
+    "lineNo": 3613,
+    "middleware": "authenticateAdmin",
+    "authRequirement": "Admin Role Required",
+    "dbOperations": [
+      "supabase.admin_registration_drafts.delete"
+    ],
+    "statusCodes": [
+      200
+    ],
+    "bodyFields": [],
+    "pathParams": [
+      "id"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-042",
+    "method": "POST",
+    "path": "/api/admin/drafts/:id/complete",
+    "lineNo": 3633,
+    "middleware": "authenticateAdmin",
+    "authRequirement": "Admin Role Required",
+    "dbOperations": [
+      "supabase.admin_registration_drafts.delete"
+    ],
+    "statusCodes": [
+      200
+    ],
+    "bodyFields": [],
+    "pathParams": [
+      "id"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-043",
+    "method": "GET",
+    "path": "/api/admin/audit-logs",
+    "lineNo": 3655,
+    "middleware": "authenticateAdmin",
+    "authRequirement": "Admin Role Required",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      500
+    ],
+    "bodyFields": [],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-044",
+    "method": "GET",
+    "path": "/api/database/status",
+    "lineNo": 3672,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      500
+    ],
+    "bodyFields": [],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-045",
+    "method": "GET",
+    "path": "/api/database/clients",
+    "lineNo": 3715,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [
+      "supabase.client_companies.select"
+    ],
+    "statusCodes": [
+      200,
+      500
+    ],
+    "bodyFields": [],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-046",
+    "method": "GET",
+    "path": "/api/database/vendors",
+    "lineNo": 3721,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [
+      "supabase.vendor_companies.select"
+    ],
+    "statusCodes": [
+      200,
+      500
+    ],
+    "bodyFields": [],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-047",
+    "method": "GET",
+    "path": "/api/database/vehicles",
+    "lineNo": 3727,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [
+      "supabase.vehicles.select"
+    ],
+    "statusCodes": [
+      200,
+      500
+    ],
+    "bodyFields": [],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-048",
+    "method": "GET",
+    "path": "/api/dashboard/stats",
+    "lineNo": 3737,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [
+      "supabase.requirements.select",
+      "supabase.bookings.select",
+      "supabase.trips.select"
+    ],
+    "statusCodes": [
+      200,
+      500
+    ],
+    "bodyFields": [],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-049",
+    "method": "GET",
+    "path": "/api/search",
+    "lineNo": 3800,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      500
+    ],
+    "bodyFields": [],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-050",
+    "method": "POST",
+    "path": "/api/search/recent/clear",
+    "lineNo": 3903,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200
+    ],
+    "bodyFields": [],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-051",
+    "method": "GET",
+    "path": "/api/notifications",
+    "lineNo": 3909,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      500
+    ],
+    "bodyFields": [],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-052",
+    "method": "POST",
+    "path": "/api/notifications/:id/read",
+    "lineNo": 3939,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200
+    ],
+    "bodyFields": [],
+    "pathParams": [
+      "id"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-053",
+    "method": "POST",
+    "path": "/api/notifications/read-all",
+    "lineNo": 3944,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200
+    ],
+    "bodyFields": [],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-054",
+    "method": "POST",
+    "path": "/api/notifications/register-token",
+    "lineNo": 3949,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      400
+    ],
+    "bodyFields": [
+      "pushToken",
+      "userId",
+      "role",
+      "platform"
+    ],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-055",
+    "method": "POST",
+    "path": "/api/notifications/send-push",
+    "lineNo": 3966,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      400,
+      404
+    ],
+    "bodyFields": [
+      "to",
+      "userId",
+      "role",
+      "title",
+      "body",
+      "data"
+    ],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-056",
+    "method": "POST",
+    "path": "/api/notifications/test-fcm",
+    "lineNo": 4000,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200
+    ],
+    "bodyFields": [
+      "targetRole",
+      "role",
+      "targetUserId",
+      "title",
+      "body",
+      "icon"
+    ],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-057",
+    "method": "POST",
+    "path": "/api/notifications/test-vendor",
+    "lineNo": 4060,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200
+    ],
+    "bodyFields": [
+      "title",
+      "body",
+      "targetUserId"
+    ],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-058",
+    "method": "POST",
+    "path": "/api/notifications/test-driver",
+    "lineNo": 4094,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200
+    ],
+    "bodyFields": [
+      "title",
+      "body",
+      "targetUserId"
+    ],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-059",
+    "method": "GET",
+    "path": "/api/notifications/device-tokens",
+    "lineNo": 4128,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200
+    ],
+    "bodyFields": [],
+    "pathParams": [],
+    "queryFields": [
+      "role",
+      "userId"
+    ]
+  },
+  {
+    "id": "EP-060",
+    "method": "POST",
+    "path": "/api/quick-actions/create-booking",
+    "lineNo": 4138,
+    "middleware": "authenticateAdmin",
+    "authRequirement": "Admin Role Required",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      400,
+      500
+    ],
+    "bodyFields": [
+      "client",
+      "origin",
+      "destination",
+      "lorry",
+      "rate"
+    ],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-061",
+    "method": "POST",
+    "path": "/api/pricing/create-client-quote",
+    "lineNo": 4201,
+    "middleware": "authenticateAdmin",
+    "authRequirement": "Admin Role Required",
+    "dbOperations": [
+      "supabase.auth_audit_log.insert"
+    ],
+    "statusCodes": [
+      200,
+      400,
+      500
+    ],
+    "bodyFields": [
+      "requirementId",
+      "vendorQuotationId",
+      "vendorCost",
+      "marginType",
+      "marginValue",
+      "extraCharges",
+      "gstRatePercent",
+      "validityDays",
+      "status",
+      "terms"
+    ],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-062",
+    "method": "GET",
+    "path": "/api/client/quotes/:requirementId",
+    "lineNo": 4354,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      400,
+      500
+    ],
+    "bodyFields": [],
+    "pathParams": [
+      "requirementId"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-063",
+    "method": "GET",
+    "path": "/api/vendor/quotes/:requirementId",
+    "lineNo": 4398,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      400,
+      500
+    ],
+    "bodyFields": [],
+    "pathParams": [
+      "requirementId"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-064",
+    "method": "POST",
+    "path": "/api/vendor/submit-quotation",
+    "lineNo": 4444,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      400,
+      403,
+      404,
+      500
+    ],
+    "bodyFields": [
+      "vendorId",
+      "requirementId",
+      "vehicleId",
+      "driverId",
+      "quotedRate",
+      "transitDays",
+      "remarks"
+    ],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-065",
+    "method": "POST",
+    "path": "/api/pricing/override-margin",
+    "lineNo": 4712,
+    "middleware": "authenticateAdmin",
+    "authRequirement": "Admin Role Required",
+    "dbOperations": [
+      "supabase.auth_audit_log.insert"
+    ],
+    "statusCodes": [
+      200,
+      400,
+      404,
+      500
+    ],
+    "bodyFields": [
+      "quoteId",
+      "newMargin",
+      "justification"
+    ],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-066",
+    "method": "POST",
+    "path": "/api/client/quotes/:quoteId/accept",
+    "lineNo": 4805,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      400,
+      403,
+      404,
+      409,
+      500
+    ],
+    "bodyFields": [
+      "clientId",
+      "notes"
+    ],
+    "pathParams": [
+      "quoteId"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-067",
+    "method": "POST",
+    "path": "/api/client/quotes/:quoteId/reject",
+    "lineNo": 5016,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      400,
+      404,
+      500
+    ],
+    "bodyFields": [
+      "clientId",
+      "reason"
+    ],
+    "pathParams": [
+      "quoteId"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-068",
+    "method": "POST",
+    "path": "/api/bookings/emergency-direct-create",
+    "lineNo": 5081,
+    "middleware": "authenticateAdmin",
+    "authRequirement": "Admin Role Required",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      400,
+      404,
+      409,
+      500
+    ],
+    "bodyFields": [
+      "requirementId",
+      "clientId",
+      "justification",
+      "agreedRate",
+      "notes"
+    ],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-069",
+    "method": "GET",
+    "path": "/api/bookings/:bookingId",
+    "lineNo": 5215,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      404,
+      500
+    ],
+    "bodyFields": [],
+    "pathParams": [
+      "bookingId"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-070",
+    "method": "POST",
+    "path": "/api/trips/generate-from-booking",
+    "lineNo": 5277,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      400,
+      404,
+      500
+    ],
+    "bodyFields": [
+      "bookingId",
+      "vendorId",
+      "vendorRate",
+      "vehicleId",
+      "driverId"
+    ],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-071",
+    "method": "POST",
+    "path": "/api/trips/:tripId/assign",
+    "lineNo": 5474,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      400,
+      403,
+      404,
+      409,
+      500
+    ],
+    "bodyFields": [
+      "vendorId",
+      "vehicleId",
+      "driverId"
+    ],
+    "pathParams": [
+      "tripId"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-072",
+    "method": "GET",
+    "path": "/api/vendor/trips",
+    "lineNo": 5644,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      400,
+      500
+    ],
+    "bodyFields": [],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-073",
+    "method": "GET",
+    "path": "/api/trips/:tripId",
+    "lineNo": 5707,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      404,
+      500
+    ],
+    "bodyFields": [],
+    "pathParams": [
+      "tripId"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-074",
+    "method": "POST",
+    "path": "/api/driver/trips/:tripId/acknowledge-dispatch",
+    "lineNo": 5797,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [
+      "supabase.auth_audit_log.insert"
+    ],
+    "statusCodes": [
+      200,
+      400,
+      403,
+      404,
+      500
+    ],
+    "bodyFields": [
+      "driverId"
+    ],
+    "pathParams": [
+      "tripId"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-075",
+    "method": "POST",
+    "path": "/api/trips/:tripId/generate-lr",
+    "lineNo": 5902,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [
+      "supabase.auth_audit_log.insert"
+    ],
+    "statusCodes": [
+      200,
+      400,
+      404,
+      500
+    ],
+    "bodyFields": [
+      "createdBy"
+    ],
+    "pathParams": [
+      "tripId"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-076",
+    "method": "POST",
+    "path": "/api/trips/:tripId/link-ewaybill",
+    "lineNo": 6106,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [
+      "supabase.auth_audit_log.insert"
+    ],
+    "statusCodes": [
+      200,
+      400,
+      404,
+      500
+    ],
+    "bodyFields": [
+      "ewaybillNumber",
+      "validUntil",
+      "linkedBy"
+    ],
+    "pathParams": [
+      "tripId"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-077",
+    "method": "GET",
+    "path": "/api/trips/:tripId/lr",
+    "lineNo": 6215,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      400,
+      404,
+      500
+    ],
+    "bodyFields": [],
+    "pathParams": [
+      "tripId"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-078",
+    "method": "GET",
+    "path": "/api/driver/trips",
+    "lineNo": 6353,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [
+      "supabase.auth_audit_log.insert"
+    ],
+    "statusCodes": [
+      200,
+      400,
+      500
+    ],
+    "bodyFields": [],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-079",
+    "method": "GET",
+    "path": "/api/audit-logs",
+    "lineNo": 6526,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200
+    ],
+    "bodyFields": [],
+    "pathParams": [],
+    "queryFields": [
+      "eventType",
+      "limit"
+    ]
+  },
+  {
+    "id": "EP-080",
+    "method": "POST",
+    "path": "/api/trips/:tripId/location-ping",
+    "lineNo": 6545,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [
+      "supabase.auth_audit_log.insert"
+    ],
+    "statusCodes": [
+      200,
+      400,
+      404,
+      500
+    ],
+    "bodyFields": [
+      "latitude",
+      "longitude",
+      "speed",
+      "heading",
+      "accuracy",
+      "batteryLevel",
+      "recordedAt",
+      "isMock"
+    ],
+    "pathParams": [
+      "tripId"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-081",
+    "method": "POST",
+    "path": "/api/trips/:tripId/milestone",
+    "lineNo": 6820,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [
+      "supabase.auth_audit_log.insert"
+    ],
+    "statusCodes": [
+      200,
+      400,
+      404,
+      500
+    ],
+    "bodyFields": [
+      "newStatus",
+      "notes",
+      "updatedBy"
+    ],
+    "pathParams": [
+      "tripId"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-082",
+    "method": "POST",
+    "path": "/api/trips/:tripId/geofence-check",
+    "lineNo": 6951,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      400,
+      404,
+      500
+    ],
+    "bodyFields": [
+      "latitude",
+      "longitude",
+      "targetType"
+    ],
+    "pathParams": [
+      "tripId"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-083",
+    "method": "GET",
+    "path": "/api/trips/:tripId/tracking",
+    "lineNo": 7008,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      400,
+      404,
+      500
+    ],
+    "bodyFields": [],
+    "pathParams": [
+      "tripId"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-084",
+    "method": "POST",
+    "path": "/api/trips/:tripId/pod",
+    "lineNo": 7140,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [
+      "supabase.auth_audit_log.insert"
+    ],
+    "statusCodes": [
+      200,
+      400,
+      404,
+      500
+    ],
+    "bodyFields": [
+      "receiverName",
+      "receiverPhone",
+      "deliveredCondition",
+      "consigneeStampVerified",
+      "podDocumentUrl",
+      "signatureUrl",
+      "remarks",
+      "submittedBy"
+    ],
+    "pathParams": [
+      "tripId"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-085",
+    "method": "GET",
+    "path": "/api/trips/:tripId/pod",
+    "lineNo": 7289,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      400,
+      404,
+      500
+    ],
+    "bodyFields": [],
+    "pathParams": [
+      "tripId"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-086",
+    "method": "POST",
+    "path": "/api/trips/:tripId/pod/review",
+    "lineNo": 7359,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [
+      "supabase.auth_audit_log.insert"
+    ],
+    "statusCodes": [
+      200,
+      400,
+      404,
+      500
+    ],
+    "bodyFields": [
+      "action",
+      "rejectionReason",
+      "adminNotes",
+      "adminId"
+    ],
+    "pathParams": [
+      "tripId"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-087",
+    "method": "POST",
+    "path": "/api/trips/:tripId/weighbridge",
+    "lineNo": 7616,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [
+      "supabase.auth_audit_log.insert"
+    ],
+    "statusCodes": [
+      200,
+      400,
+      404,
+      500
+    ],
+    "bodyFields": [
+      "stage",
+      "grossWeightMt",
+      "tareWeightMt",
+      "slipNumber",
+      "slipLocation",
+      "slipDocumentUrl",
+      "weighbridgeName",
+      "recordedBy"
+    ],
+    "pathParams": [
+      "tripId"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-088",
+    "method": "GET",
+    "path": "/api/trips/:tripId/weighbridge",
+    "lineNo": 7825,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      400,
+      500
+    ],
+    "bodyFields": [],
+    "pathParams": [
+      "tripId"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-089",
+    "method": "POST",
+    "path": "/api/trips/:tripId/claims",
+    "lineNo": 7868,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [
+      "supabase.auth_audit_log.insert"
+    ],
+    "statusCodes": [
+      200,
+      400,
+      404,
+      500
+    ],
+    "bodyFields": [
+      "claimType",
+      "claimedAmount",
+      "itemDescription",
+      "damagedQuantity",
+      "evidenceUrls",
+      "submittedBy"
+    ],
+    "pathParams": [
+      "tripId"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-090",
+    "method": "GET",
+    "path": "/api/trips/:tripId/claims",
+    "lineNo": 7994,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      400,
+      500
+    ],
+    "bodyFields": [],
+    "pathParams": [
+      "tripId"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-091",
+    "method": "POST",
+    "path": "/api/claims/:claimId/resolve",
+    "lineNo": 8032,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [
+      "supabase.auth_audit_log.insert"
+    ],
+    "statusCodes": [
+      200,
+      400,
+      500
+    ],
+    "bodyFields": [
+      "action",
+      "approvedAmount",
+      "settlementNotes",
+      "reviewedBy"
+    ],
+    "pathParams": [
+      "claimId"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-092",
+    "method": "POST",
+    "path": "/api/invoices/client/generate",
+    "lineNo": 8155,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [
+      "supabase.auth_audit_log.insert"
+    ],
+    "statusCodes": [
+      200,
+      400,
+      404,
+      500
+    ],
+    "bodyFields": [
+      "bookingId",
+      "loadingDetention",
+      "unloadingDetention",
+      "platformFee",
+      "creditDays",
+      "generatedBy"
+    ],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-093",
+    "method": "GET",
+    "path": "/api/invoices/client/:invoiceId",
+    "lineNo": 8404,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      400,
+      404,
+      500
+    ],
+    "bodyFields": [],
+    "pathParams": [
+      "invoiceId"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-094",
+    "method": "POST",
+    "path": "/api/invoices/client/:invoiceId/record-payment",
+    "lineNo": 8465,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [
+      "supabase.auth_audit_log.insert"
+    ],
+    "statusCodes": [
+      200,
+      400,
+      404,
+      500
+    ],
+    "bodyFields": [
+      "amount",
+      "paymentMode",
+      "transactionReference",
+      "paymentDate",
+      "notes",
+      "recordedBy"
+    ],
+    "pathParams": [
+      "invoiceId"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-095",
+    "method": "POST",
+    "path": "/api/payouts/transporter/generate",
+    "lineNo": 8625,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [
+      "supabase.auth_audit_log.insert"
+    ],
+    "statusCodes": [
+      200,
+      400,
+      404,
+      500
+    ],
+    "bodyFields": [
+      "tripId",
+      "advancePaid",
+      "claimDeduction",
+      "otherDeductions",
+      "generatedBy"
+    ],
+    "pathParams": [],
+    "queryFields": []
+  },
+  {
+    "id": "EP-096",
+    "method": "GET",
+    "path": "/api/payouts/transporter/:payoutId",
+    "lineNo": 8833,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [],
+    "statusCodes": [
+      200,
+      400,
+      404,
+      500
+    ],
+    "bodyFields": [],
+    "pathParams": [
+      "payoutId"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-097",
+    "method": "POST",
+    "path": "/api/payouts/transporter/:payoutId/record-disbursal",
+    "lineNo": 8890,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [
+      "supabase.auth_audit_log.insert"
+    ],
+    "statusCodes": [
+      200,
+      400,
+      404,
+      500
+    ],
+    "bodyFields": [
+      "bankReferenceUtr",
+      "paymentMethod",
+      "amountDisbursed",
+      "disbursedBy"
+    ],
+    "pathParams": [
+      "payoutId"
+    ],
+    "queryFields": []
+  },
+  {
+    "id": "EP-098",
+    "method": "GET",
+    "path": "/api/finance/reconciliation",
+    "lineNo": 9006,
+    "middleware": "None",
+    "authRequirement": "Public (No Token Required)",
+    "dbOperations": [
+      "supabase.auth_audit_log.insert"
+    ],
+    "statusCodes": [
+      200,
+      500
+    ],
+    "bodyFields": [],
+    "pathParams": [],
+    "queryFields": []
+  }
+]

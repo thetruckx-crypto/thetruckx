@@ -52,6 +52,16 @@ export const DocumentRejectionModal: React.FC<DocumentRejectionModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [validationError, setValidationError] = useState<string | null>(null);
 
+  // Close on Escape key
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isSubmitting) onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, isSubmitting, onClose]);
+
   if (!isOpen) return null;
 
   const handleToggleReason = (reason: string) => {
@@ -107,6 +117,53 @@ export const DocumentRejectionModal: React.FC<DocumentRejectionModalProps> = ({
 
       if (vendorUpdateErr) throw vendorUpdateErr;
 
+      // 3. Dispatch push notification to Vendor with exact rejection reason
+      if (notifyVendor) {
+        try {
+          await fetch('/api/notifications/send-push', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: vendor.id,
+              role: 'VENDOR',
+              title: `Document Rejected: ${docTitle}`,
+              body: `Reason: ${fullReasonText}. Please tap to review and re-upload the corrected document.`,
+              data: {
+                entityType: 'DOCUMENT_REJECTED',
+                entityId: document?.id || vendor.id,
+                category: 'document_correction',
+                rejectionReason: fullReasonText,
+              },
+            }),
+          });
+        } catch (pushErr) {
+          console.warn('Failed to dispatch vendor rejection notification:', pushErr);
+        }
+      }
+
+      // 4. Audit Log
+      try {
+        await supabase.from('audit_logs').insert([
+          {
+            user_id: 'USR-ADM-002',
+            user_role: 'ADMIN',
+            action: 'VENDOR_DOCUMENT_REJECTED',
+            entity_type: 'VENDOR_DOCUMENT',
+            entity_id: document?.id || vendor.id,
+            payload_after: {
+              vendor_id: vendor.id,
+              vendor_name: vendor.name,
+              document_type: docTitle,
+              rejection_reasons: selectedReasons,
+              comments: comments.trim(),
+              full_reason: fullReasonText,
+            },
+          },
+        ]);
+      } catch (auditErr) {
+        console.warn('Audit log write note:', auditErr);
+      }
+
       onRejectSuccess({
         reasons: selectedReasons,
         comments: comments.trim(),
@@ -126,16 +183,22 @@ export const DocumentRejectionModal: React.FC<DocumentRejectionModalProps> = ({
 
   return (
     <div className="rejection-modal-backdrop" onClick={onClose}>
-      <div className="rejection-modal-card" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="rejection-modal-card"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="reject-doc-modal-title"
+      >
         {/* Header */}
         <div className="rejection-modal-header">
           <div>
-            <h3 className="rejection-modal-title">Reject Document</h3>
+            <h3 className="rejection-modal-title" id="reject-doc-modal-title">Reject Document</h3>
             <p className="rejection-modal-subtitle">
               Provide the reason for rejection so the vendor can re-upload the correct document.
             </p>
           </div>
-          <button className="rejection-modal-close" onClick={onClose} title="Close dialog">
+          <button className="rejection-modal-close" onClick={onClose} title="Close dialog" aria-label="Close dialog">
             <X size={18} />
           </button>
         </div>

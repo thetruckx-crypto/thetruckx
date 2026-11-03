@@ -9,7 +9,7 @@ import {
   MoreVertical
 } from "lucide-react";
 import { supabase, ensureAdminSession } from "../../utils/supabase";
-import { formatDisplayId } from "../../utils/idGenerator";
+import { formatDisplayId, generateDbTruckxId } from "../../utils/idGenerator";
 
 export interface VendorOptionItem {
   id: string;
@@ -30,6 +30,8 @@ export interface SourcingDataState {
 
 export interface Requirement {
   id: string; // Exact Requirement ID stored in database (e.g. REQ-YYYYMMDD-XXXX)
+  requirement_code?: string;
+  displayId?: string;
   requirement_reference: string;
   client_id: string;
   pickup_address: string;
@@ -403,10 +405,16 @@ export const RequirementsModule: React.FC<RequirementsModuleProps> = ({
           ? req.client_companies[0]
           : req.client_companies || req.client_company;
 
+        const canonicalCode = req.requirement_code && req.requirement_code.startsWith('TRUCKX-REQ-')
+          ? req.requirement_code
+          : formatDisplayId('REQ', req.id, req.created_at);
+
         return {
           ...req,
           id: req.id, // Preserved exact ID from database
-          requirement_reference: req.id, // Stored ID is single source of truth
+          requirement_code: canonicalCode,
+          displayId: canonicalCode,
+          requirement_reference: canonicalCode,
           origin: req.pickup_address || req.origin || "Origin",
           destination: req.destination_address || req.destination || "Destination",
           required_date: req.loading_datetime || req.required_date || req.created_at,
@@ -884,7 +892,7 @@ export const RequirementsModule: React.FC<RequirementsModuleProps> = ({
       // Requirement ID, Client ID, Client name, Pickup location, Delivery location, Cargo description, Vehicle type
       if (searchQuery.trim()) {
         const q = searchQuery.trim().toLowerCase();
-        const matchId = req.id.toLowerCase().includes(q);
+        const matchId = req.id.toLowerCase().includes(q) || (req.displayId || "").toLowerCase().includes(q);
         const matchClientCode = req.client_company?.client_code?.toLowerCase().includes(q);
         const matchClientId = req.client_id?.toLowerCase().includes(q);
         const matchClientName = req.client_company?.company_name?.toLowerCase().includes(q);
@@ -1106,6 +1114,42 @@ export const RequirementsModule: React.FC<RequirementsModuleProps> = ({
 
       if (updErr) throw updErr;
 
+      // Activity history audit log
+      try {
+        await supabase.from("audit_logs").insert([
+          {
+            user_id: selectedReq.client_id,
+            user_role: "ADMIN",
+            action: `REQUIREMENT_STATUS_${newStatus}`,
+            entity_type: "REQUIREMENT",
+            entity_id: selectedReq.id,
+            payload_before: { status: selectedReq.status },
+            payload_after: { status: newStatus },
+          },
+        ]);
+      } catch {}
+
+      // Real-time notification for Under Review status
+      if (newStatus === "UNDER_REVIEW") {
+        try {
+          await fetch("/api/notifications/send-push", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userId: selectedReq.client_id,
+              role: "CLIENT",
+              title: "Requirement Under Review",
+              body: `Your transport requirement ${selectedReq.id} is now being audited and reviewed by operations.`,
+              data: {
+                entityType: "REQUIREMENT",
+                entityId: selectedReq.id,
+                category: "requirement",
+              },
+            }),
+          });
+        } catch {}
+      }
+
       setToastMessage(`Requirement ${selectedReq.id} updated to ${newStatus}`);
       setSelectedReq((prev) => (prev ? { ...prev, status: newStatus } : null));
       fetchRequirements();
@@ -1236,6 +1280,45 @@ export const RequirementsModule: React.FC<RequirementsModuleProps> = ({
 
       if (reqErr) throw reqErr;
 
+      // Activity history for sourcing assignment
+      try {
+        await supabase.from("audit_logs").insert([
+          {
+            user_id: sourcingReq.client_id,
+            user_role: "ADMIN",
+            action: "ASSIGN_FOR_SOURCING",
+            entity_type: "REQUIREMENT",
+            entity_id: sourcingReq.id,
+            payload_after: {
+              requirement_id: sourcingReq.id,
+              vendor_count: newVendorIds.length,
+              vendor_ids: newVendorIds,
+            },
+          },
+        ]);
+      } catch {}
+
+      // Dispatch notifications to invited vendors
+      for (const vId of newVendorIds) {
+        try {
+          await fetch("/api/notifications/send-push", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userId: vId,
+              role: "VENDOR",
+              title: "New Freight Requirement Available 📦",
+              body: `RFQ #${sourcingReq.id}: Route ${sourcingReq.origin} → ${sourcingReq.destination}. Review specs & submit quotation.`,
+              data: {
+                entityType: "REQUIREMENT",
+                entityId: sourcingReq.id,
+                category: "booking",
+              },
+            }),
+          });
+        } catch {}
+      }
+
       setToastMessage(`Sourcing RFQ dispatched to ${newVendorIds.length} vendor(s) for Requirement ${sourcingReq.id}!`);
       setSourcingReq(null);
       setSelectedVendorIdsForSourcing(new Set());
@@ -1293,6 +1376,43 @@ export const RequirementsModule: React.FC<RequirementsModuleProps> = ({
 
       if (updErr) throw updErr;
 
+      // Activity history for client corrections request
+      try {
+        await supabase.from("audit_logs").insert([
+          {
+            user_id: correctionsModalReq.client_id,
+            user_role: "ADMIN",
+            action: "REQUEST_CLIENT_CORRECTIONS",
+            entity_type: "REQUIREMENT",
+            entity_id: correctionsModalReq.id,
+            payload_after: {
+              requirement_id: correctionsModalReq.id,
+              correction_notes: correctionNotesInput.trim(),
+            },
+          },
+        ]);
+      } catch {}
+
+      // Dispatch push notification to client
+      try {
+        await fetch("/api/notifications/send-push", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: correctionsModalReq.client_id,
+            role: "CLIENT",
+            title: "Requirement Action Required: Clarification ⚠️",
+            body: `Clarifications requested for Requirement #${correctionsModalReq.id}: ${correctionNotesInput.trim()}`,
+            data: {
+              entityType: "REQUIREMENT",
+              entityId: correctionsModalReq.id,
+              category: "requirement",
+              correctionNotes: correctionNotesInput.trim(),
+            },
+          }),
+        });
+      } catch {}
+
       setToastMessage(`Revisions requested for Requirement ${correctionsModalReq.id}. Client notified.`);
       setCorrectionsModalReq(null);
       setCorrectionNotesInput("");
@@ -1333,7 +1453,7 @@ export const RequirementsModule: React.FC<RequirementsModuleProps> = ({
     setActionLoading(true);
     try {
       await ensureAdminSession();
-      const newBokId = `BOK-${Date.now().toString().slice(-8)}`;
+      const newBokId = await generateDbTruckxId("BK");
 
       // Live bookings table schema: id, requirement_id, client_id, accepted_quote_id, booking_status, payment_status, confirmed_at
       const { error: bokErr } = await supabase.from("bookings").insert([
@@ -1352,12 +1472,50 @@ export const RequirementsModule: React.FC<RequirementsModuleProps> = ({
         .from("requirements")
         .update({
           status: "BOOKED",
+          booking_id: newBokId,
           special_instructions: `${emergencyBookingReq.special_instructions ? emergencyBookingReq.special_instructions + " | " : ""}[DIRECT BOOKING EXCEPTION]: ${emergencyReason.trim()}`,
           updated_at: new Date().toISOString()
         })
         .eq("id", emergencyBookingReq.id);
 
-      setToastMessage(`Emergency Booking #${newBokId} confirmed for Requirement ${emergencyBookingReq.id}!`);
+      // Audit Log & Activity History
+      try {
+        await supabase.from("audit_logs").insert([
+          {
+            user_id: emergencyBookingReq.client_id,
+            user_role: "ADMIN",
+            action: "EMERGENCY_DIRECT_BOOKING",
+            entity_type: "BOOKING",
+            entity_id: newBokId,
+            payload_after: {
+              booking_id: newBokId,
+              requirement_id: emergencyBookingReq.id,
+              reason: emergencyReason.trim(),
+            },
+          },
+        ]);
+      } catch {}
+
+      // Dispatch push notification to client
+      try {
+        await fetch("/api/notifications/send-push", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: emergencyBookingReq.client_id,
+            role: "CLIENT",
+            title: "Booking Confirmed (Direct)",
+            body: `Your booking #${newBokId} has been confirmed for Requirement ${emergencyBookingReq.id}.`,
+            data: {
+              entityType: "BOOKING",
+              entityId: newBokId,
+              category: "booking",
+            },
+          }),
+        });
+      } catch {}
+
+      setToastMessage(`Direct Booking #${newBokId} confirmed for Requirement ${emergencyBookingReq.id}!`);
       setEmergencyBookingReq(null);
       if (selectedReq && selectedReq.id === emergencyBookingReq.id) {
         setSelectedReq({ ...selectedReq, status: "BOOKED" });
@@ -1531,18 +1689,19 @@ export const RequirementsModule: React.FC<RequirementsModuleProps> = ({
             position: "fixed",
             top: "24px",
             right: "24px",
-            background: "#1E293B",
-            color: "#FFF",
+            background: "#FFFFFF",
+            color: "#111827",
             padding: "12px 20px",
             borderRadius: "8px",
-            boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
+            boxShadow: "0 8px 24px rgba(17, 24, 39, 0.12)",
             display: "flex",
             alignItems: "center",
             gap: "10px",
             zIndex: 9999,
             fontSize: "14px",
             fontWeight: 600,
-            borderLeft: "4px solid #F45325"
+            border: "1px solid #E5EAF1",
+            borderLeft: "4px solid #F4510B"
           }}
         >
           <CheckCircle size={16} color="#10B981" />
@@ -1582,10 +1741,10 @@ export const RequirementsModule: React.FC<RequirementsModuleProps> = ({
         </div>
       )}
 
-      {/* ── Transport Requirements Hero Banner (Deep Navy + Truck Visual) ── */}
+      {/* ── Transport Requirements Hero Banner (Clean White Enterprise SaaS Header) ── */}
       <div
         style={{
-          background: "linear-gradient(135deg, #0B192C 0%, #0F172A 60%, #1E293B 100%)",
+          background: "#FFFFFF",
           borderRadius: "14px",
           padding: "24px 28px",
           marginBottom: "20px",
@@ -1594,27 +1753,10 @@ export const RequirementsModule: React.FC<RequirementsModuleProps> = ({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          boxShadow: "0 4px 20px rgba(11, 25, 44, 0.25)"
+          boxShadow: "0 1px 3px rgba(17, 24, 39, 0.05)",
+          border: "1px solid #E5EAF1",
         }}
       >
-        {/* Background ambient glow and truck visual on right */}
-        <div
-          style={{
-            position: "absolute",
-            right: 0,
-            top: 0,
-            bottom: 0,
-            width: "55%",
-            backgroundImage: 'url("/dashboard-hero-truck.jpg")',
-            backgroundSize: "cover",
-            backgroundPosition: "center right",
-            maskImage: "linear-gradient(to right, transparent, black 35%)",
-            WebkitMaskImage: "linear-gradient(to right, transparent, black 35%)",
-            opacity: 0.85,
-            pointerEvents: "none"
-          }}
-        />
-
         {/* Content on left */}
         <div style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "center", gap: "16px", maxWidth: "60%" }}>
           <div
@@ -1622,22 +1764,21 @@ export const RequirementsModule: React.FC<RequirementsModuleProps> = ({
               width: "48px",
               height: "48px",
               borderRadius: "10px",
-              background: "rgba(255, 255, 255, 0.1)",
-              border: "1px solid rgba(255, 255, 255, 0.2)",
+              background: "#FFF3EC",
+              border: "1px solid #FFE8DF",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               flexShrink: 0,
-              backdropFilter: "blur(6px)"
             }}
           >
-            <Package size={26} color="#FFFFFF" />
+            <Package size={26} color="#F4510B" />
           </div>
           <div>
-            <h1 style={{ fontSize: "24px", fontWeight: 800, color: "#FFFFFF", margin: "0 0 4px 0", letterSpacing: "-0.01em" }}>
+            <h1 style={{ fontSize: "24px", fontWeight: 800, color: "#111827", margin: "0 0 4px 0", letterSpacing: "-0.01em" }}>
               Transport Requirements
             </h1>
-            <p style={{ fontSize: "13.5px", color: "#94A3B8", margin: 0 }}>
+            <p style={{ fontSize: "13.5px", color: "#64748B", margin: 0 }}>
               Review client freight requirements, manage vendor sourcing and track quotation progress.
             </p>
           </div>
@@ -2464,7 +2605,7 @@ export const RequirementsModule: React.FC<RequirementsModuleProps> = ({
                     <td style={{ padding: "12px 14px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                         <span
-                          title={req.id}
+                          title={req.displayId || req.id}
                           style={{
                             fontWeight: 800,
                             color: "#0F172A",
@@ -2472,10 +2613,10 @@ export const RequirementsModule: React.FC<RequirementsModuleProps> = ({
                             fontSize: "12.5px"
                           }}
                         >
-                          {req.id}
+                          {req.displayId || req.id}
                         </span>
                         <button
-                          onClick={(e) => handleCopyId(req.id, e)}
+                          onClick={(e) => handleCopyId(req.displayId || req.id, e)}
                           title="Copy Requirement ID"
                           style={{
                             background: "none",
@@ -2806,10 +2947,10 @@ export const RequirementsModule: React.FC<RequirementsModuleProps> = ({
                       fontFamily: "monospace"
                     }}
                   >
-                    {selectedReq.id}
+                    {selectedReq.displayId || selectedReq.requirement_code || selectedReq.id}
                   </h2>
                   <button
-                    onClick={(e) => handleCopyId(selectedReq.id, e)}
+                    onClick={(e) => handleCopyId(selectedReq.displayId || selectedReq.requirement_code || selectedReq.id, e)}
                     title="Copy Requirement ID"
                     style={{
                       background: "none",
@@ -2912,7 +3053,7 @@ export const RequirementsModule: React.FC<RequirementsModuleProps> = ({
                           <div>
                             <div style={{ fontSize: "11.5px", color: "#64748B" }}>Requirement ID</div>
                             <div style={{ fontSize: "13.5px", fontWeight: 700, color: "#0F172A", fontFamily: "monospace" }}>
-                              {selectedReq.id}
+                              {selectedReq.displayId || selectedReq.requirement_code || selectedReq.id}
                             </div>
                           </div>
                           <div>
@@ -5051,9 +5192,9 @@ export const RequirementsModule: React.FC<RequirementsModuleProps> = ({
                 onClick={() => setVendorResponsesModalReq(null)}
                 style={{
                   padding: "8px 18px",
-                  background: "#0F172A",
-                  color: "#FFFFFF",
-                  border: "none",
+                  background: "#FFFFFF",
+                  color: "#111827",
+                  border: "1px solid #D9E1EC",
                   borderRadius: "6px",
                   fontSize: "13px",
                   fontWeight: 600,
@@ -5219,9 +5360,9 @@ export const RequirementsModule: React.FC<RequirementsModuleProps> = ({
                 onClick={() => setStatusHistoryModalReq(null)}
                 style={{
                   padding: "8px 18px",
-                  background: "#0F172A",
-                  color: "#FFFFFF",
-                  border: "none",
+                  background: "#FFFFFF",
+                  color: "#111827",
+                  border: "1px solid #D9E1EC",
                   borderRadius: "6px",
                   fontSize: "13px",
                   fontWeight: 600,

@@ -5,6 +5,7 @@ import {
   User, Package, FileText, Shield, ArrowUpDown, ChevronDown
 } from "lucide-react";
 import { supabase } from "../../utils/supabase";
+import { formatDisplayId } from "../../utils/idGenerator";
 
 export interface Trip {
   id: string;
@@ -46,18 +47,18 @@ function getCompletionColor(percentage: number): string {
   return "#F45325"; // green
 }
 
-function formatTripReference(id: string, createdAt: string): string {
-  if (!id) return "TRP-00000001";
-  if (id.startsWith("TRP-")) return id;
-  const numPart = id.replace(/\D/g, "").substring(0, 8) || "00000001";
-  return `TRP-${numPart.padStart(8, "0")}`;
+function formatTripReference(id: string, createdAt: string, tripCode?: string): string {
+  if (tripCode && tripCode.startsWith("TRUCKX-TR-")) return tripCode;
+  if (!id) return formatDisplayId("TR", null, createdAt);
+  if (id.startsWith("TRUCKX-TR-")) return id;
+  return formatDisplayId("TR", id, createdAt);
 }
 
-function formatBookingReference(id: string): string {
-  if (!id) return "BKG-00000001";
-  if (id.startsWith("BKG-")) return id;
-  const numPart = id.replace(/\D/g, "").substring(0, 8) || "00000001";
-  return `BKG-${numPart.padStart(8, "0")}`;
+function formatBookingReference(id: string, bookingCode?: string): string {
+  if (bookingCode && bookingCode.startsWith("TRUCKX-BK-")) return bookingCode;
+  if (!id) return formatDisplayId("BK", null);
+  if (id.startsWith("TRUCKX-BK-")) return id;
+  return formatDisplayId("BK", id);
 }
 
 export const DocumentClearanceModule: React.FC<DocumentClearanceModuleProps> = ({
@@ -155,9 +156,9 @@ export const DocumentClearanceModule: React.FC<DocumentClearanceModuleProps> = (
 
         return {
           id: t.id,
-          trip_reference: formatTripReference(t.id, t.created_at),
+          trip_reference: formatTripReference(t.id, t.created_at, (t as any).trip_code),
           booking_id: t.booking_id,
-          booking_reference: formatBookingReference(t.booking_id),
+          booking_reference: formatBookingReference(t.booking_id, (t as any).bookings?.booking_code),
           vehicle_id: t.vehicle_id,
           vehicle_registration: vMap.get(t.vehicle_id) || "—",
           driver_id: t.driver_id,
@@ -839,15 +840,95 @@ export const DocumentClearanceModule: React.FC<DocumentClearanceModuleProps> = (
 
             <div className="doc-lightbox-footer">
               <button
-                onClick={() => {
+                onClick={async () => {
                   if (!reviewRejectionReason.trim()) {
                     setToastMessage("Please select or enter a rejection reason first.");
                     setTimeout(() => setToastMessage(null), 2500);
                     return;
                   }
-                  setToastMessage(`Trip ${selectedReviewTrip.trip_reference} flagged: ${reviewRejectionReason}`);
+                  const tripRef = selectedReviewTrip.trip_reference;
+                  const reason = reviewRejectionReason.trim();
+                  const targetTripId = selectedReviewTrip.id;
+                  const driverId = selectedReviewTrip.driver_id;
+
+                  try {
+                    // Update documents for this trip
+                    await supabase
+                      .from("documents")
+                      .update({
+                        verification_status: "REJECTED",
+                        rejection_reason: reason,
+                        verified_by: "USR-ADM-002",
+                        updated_at: new Date().toISOString(),
+                      })
+                      .eq("reference_id", targetTripId);
+
+                    // Insert audit log
+                    await supabase.from("audit_logs").insert([
+                      {
+                        user_id: "USR-ADM-002",
+                        user_role: "ADMIN",
+                        action: "PRE_TRIP_DOCS_REJECTED",
+                        entity_type: "TRIP",
+                        entity_id: targetTripId,
+                        payload_after: {
+                          trip_id: targetTripId,
+                          trip_reference: tripRef,
+                          rejection_reason: reason,
+                        },
+                      },
+                    ]);
+
+                    // Dispatch push notifications to Driver and Vendor
+                    if (driverId) {
+                      await fetch("/api/notifications/send-push", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          userId: driverId,
+                          role: "DRIVER",
+                          title: "Pre-Trip Document Flagged ⚠️",
+                          body: `Trip ${tripRef}: ${reason}. Please tap to upload corrected documents.`,
+                          data: {
+                            entityType: "DOCUMENT_REJECTED",
+                            entityId: targetTripId,
+                            category: "document_correction",
+                            rejectionReason: reason,
+                          },
+                        }),
+                      }).catch(() => {});
+                    }
+
+                    await fetch("/api/notifications/send-push", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        role: "VENDOR",
+                        title: "Pre-Trip Document Rejection ⚠️",
+                        body: `Trip ${tripRef} (Lorry: ${selectedReviewTrip.vehicle_registration}): ${reason}. Re-upload required.`,
+                        data: {
+                          entityType: "DOCUMENT_REJECTED",
+                          entityId: targetTripId,
+                          category: "document_correction",
+                          rejectionReason: reason,
+                        },
+                      }),
+                    }).catch(() => {});
+
+                    setTrips((prev) =>
+                      prev.map((t) =>
+                        t.id === targetTripId
+                          ? { ...t, pre_trip_gate_completion: 25, status: "PENDING_DOC_CLEARANCE" }
+                          : t
+                      )
+                    );
+                    setToastMessage(`Trip ${tripRef} flagged: ${reason}. Driver & Vendor notified.`);
+                  } catch (err: any) {
+                    setToastMessage(`Error updating trip: ${err?.message || "Failed"}`);
+                  }
+
                   setSelectedReviewTrip(null);
-                  setTimeout(() => setToastMessage(null), 2500);
+                  setTimeout(() => setToastMessage(null), 3000);
                 }}
                 style={{
                   padding: "9px 18px", background: "#FEF2F2", color: "#DC2626",
@@ -858,10 +939,96 @@ export const DocumentClearanceModule: React.FC<DocumentClearanceModuleProps> = (
               </button>
 
               <button
-                onClick={() => {
-                  setToastMessage(`Trip ${selectedReviewTrip.trip_reference} cleared for dispatch! Gate pass generated.`);
+                onClick={async () => {
+                  const tripRef = selectedReviewTrip.trip_reference;
+                  const targetTripId = selectedReviewTrip.id;
+                  const driverId = selectedReviewTrip.driver_id;
+
+                  try {
+                    // Update documents to verified
+                    await supabase
+                      .from("documents")
+                      .update({
+                        verification_status: "APPROVED",
+                        verified_by: "USR-ADM-002",
+                        verified_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString(),
+                      })
+                      .eq("reference_id", targetTripId);
+
+                    // Update trip status to CLEARED_FOR_DISPATCH
+                    await supabase
+                      .from("trips")
+                      .update({
+                        trip_status: "CLEARED_FOR_DISPATCH",
+                        updated_at: new Date().toISOString(),
+                      })
+                      .eq("id", targetTripId);
+
+                    // Audit log
+                    await supabase.from("audit_logs").insert([
+                      {
+                        user_id: "USR-ADM-002",
+                        user_role: "ADMIN",
+                        action: "PRE_TRIP_GATE_CLEARED",
+                        entity_type: "TRIP",
+                        entity_id: targetTripId,
+                        payload_after: {
+                          trip_id: targetTripId,
+                          trip_reference: tripRef,
+                          cleared_by: "USR-ADM-002",
+                        },
+                      },
+                    ]);
+
+                    // Dispatch notifications
+                    if (driverId) {
+                      await fetch("/api/notifications/send-push", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          userId: driverId,
+                          role: "DRIVER",
+                          title: "Gate Pass Issued ✅",
+                          body: `Trip ${tripRef} documents cleared! Gate pass generated. Proceed with loading/dispatch.`,
+                          data: {
+                            entityType: "TRIP",
+                            entityId: targetTripId,
+                            category: "shipment",
+                          },
+                        }),
+                      }).catch(() => {});
+                    }
+
+                    await fetch("/api/notifications/send-push", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        role: "VENDOR",
+                        title: "Gate Pass Issued ✅",
+                        body: `Trip ${tripRef} (Lorry: ${selectedReviewTrip.vehicle_registration}) is cleared for dispatch!`,
+                        data: {
+                          entityType: "TRIP",
+                          entityId: targetTripId,
+                          category: "shipment",
+                        },
+                      }),
+                    }).catch(() => {});
+
+                    setTrips((prev) =>
+                      prev.map((t) =>
+                        t.id === targetTripId
+                          ? { ...t, pre_trip_gate_completion: 100, status: "CLEARED_FOR_DISPATCH" }
+                          : t
+                      )
+                    );
+                    setToastMessage(`Trip ${tripRef} cleared for dispatch! Gate pass generated.`);
+                  } catch (err: any) {
+                    setToastMessage(`Error clearing trip: ${err?.message || "Failed"}`);
+                  }
+
                   setSelectedReviewTrip(null);
-                  setTimeout(() => setToastMessage(null), 2500);
+                  setTimeout(() => setToastMessage(null), 3000);
                 }}
                 style={{
                   padding: "9px 20px", background: "#10B981", color: "#FFFFFF",

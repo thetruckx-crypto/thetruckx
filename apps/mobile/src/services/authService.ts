@@ -3,6 +3,9 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { supabase, ensureMobileSession } from '../supabase';
 import { MobileRole, ClientProfileFormData, ScreenId } from '../types';
+import { formatDisplayId } from '../utils/idGenerator';
+
+export { supabase };
 
 export const SESSION_STORAGE_KEY = 'necl_mobile_session_v2';
 export const USER_REGISTRY_KEY = '@necl_user_registry_v4';
@@ -50,9 +53,12 @@ async function callBackendApi<T = any>(
 ): Promise<T | null> {
   try {
     const controller = new AbortController();
-    // Fast 800ms timeout so offline/local-only apps never stall navigation
-    const timer = setTimeout(() => controller.abort(), 800);
-    const res = await fetch(`${getBackendApiUrl()}${endpoint}`, {
+    // 8000ms timeout for reliable network requests across cellular connections
+    const timer = setTimeout(() => controller.abort(), 8000);
+    const base = getBackendApiUrl().replace(/\/api\/?$/, '');
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : '/' + endpoint;
+    const url = `${base}/api${cleanEndpoint.replace(/^\/api/, '')}`;
+    const res = await fetch(url, {
       method,
       headers: {
         'Content-Type': 'application/json',
@@ -90,6 +96,12 @@ export interface AuthSessionData {
   profileCompletionStatus?: 'COMPLETE' | 'INCOMPLETE';
   clientCode?: string;
   clientId?: string;
+  vendorCode?: string;
+  vendorId?: string;
+  driverCode?: string;
+  driverId?: string;
+  accountId?: string;
+  profilePhotoUrl?: string;
   email?: string;
   designation?: string;
   department?: string;
@@ -119,6 +131,12 @@ export interface RegisteredUserRecord {
   businessType?: string;
   clientId?: string;
   clientCode?: string;
+  vendorId?: string;
+  vendorCode?: string;
+  driverId?: string;
+  driverCode?: string;
+  accountId?: string;
+  profilePhotoUrl?: string;
   status:
   | 'ACTIVE'
   | 'PENDING'
@@ -1272,13 +1290,15 @@ export const authService = {
             if (!parsed.pincode && localRec.pincode) parsed.pincode = localRec.pincode;
             if (!parsed.gstin && localRec.gstin) parsed.gstin = localRec.gstin;
             if (!parsed.pan && localRec.pan) parsed.pan = localRec.pan;
+            if (localRec.accountId && !parsed.accountId) parsed.accountId = localRec.accountId;
+            if (localRec.profilePhotoUrl && !parsed.profilePhotoUrl) parsed.profilePhotoUrl = localRec.profilePhotoUrl;
             if (parsed.role === 'CLIENT' && localRec.clientCode) {
               parsed.clientCode = localRec.clientCode;
               parsed.clientId = localRec.clientId || localRec.clientCode;
               parsed.userId = localRec.clientCode;
             }
           }
-        } catch {}
+        } catch { }
 
         await this.saveSession(parsed);
       } catch (checkErr) {
@@ -1547,6 +1567,26 @@ export const authService = {
           const normalizedStatus = (rawStatus === 'ACTIVE' || rawStatus === 'APPROVED') ? 'APPROVED' : rawStatus;
           const isComp = apiRes.isRegistrationComplete ?? true;
 
+          const resolvedAccountId =
+            apiRes.userProfile?.accountId ||
+            apiRes.userProfile?.account_id ||
+            formatDisplayId('AC', cleanPhone);
+
+          const resolvedClientCode =
+            requestedRole === 'CLIENT'
+              ? (apiRes.userProfile?.clientCode || apiRes.userProfile?.client_code || formatDisplayId('CL', cleanPhone))
+              : undefined;
+
+          const resolvedVendorCode =
+            requestedRole === 'VENDOR'
+              ? (apiRes.userProfile?.vendorCode || apiRes.userProfile?.vendor_code || formatDisplayId('VE', resolvedUserId))
+              : undefined;
+
+          const resolvedDriverCode =
+            requestedRole === 'DRIVER'
+              ? (apiRes.userProfile?.driverCode || apiRes.userProfile?.driver_code || formatDisplayId('DR', resolvedUserId))
+              : undefined;
+
           await this.saveSession({
             userId: resolvedUserId,
             mobile: cleanPhone,
@@ -1557,6 +1597,14 @@ export const authService = {
             createdAt: new Date().toISOString(),
             accountStatus: normalizedStatus,
             isRegistrationComplete: isComp,
+            accountId: resolvedAccountId,
+            clientCode: resolvedClientCode,
+            clientId: resolvedUserId,
+            vendorCode: resolvedVendorCode,
+            vendorId: requestedRole === 'VENDOR' ? resolvedUserId : undefined,
+            driverCode: resolvedDriverCode,
+            driverId: requestedRole === 'DRIVER' ? resolvedUserId : undefined,
+            profilePhotoUrl: apiRes.userProfile?.profilePhotoUrl || apiRes.userProfile?.profile_photo_url,
           });
 
           return {
@@ -1669,6 +1717,26 @@ export const authService = {
     const normalizedFbStatus = (rawFbStatus === 'ACTIVE' || rawFbStatus === 'APPROVED') ? 'APPROVED' : rawFbStatus;
     const isFbComp = regCheck.isRegistrationComplete ?? true;
 
+    const resolvedAccountId =
+      userProfile?.accountId ||
+      userProfile?.account_id ||
+      formatDisplayId('AC', cleanPhone);
+
+    const resolvedClientCode =
+      existingRole === 'CLIENT'
+        ? (userProfile?.clientCode || userProfile?.client_code || formatDisplayId('CL', cleanPhone))
+        : undefined;
+
+    const resolvedVendorCode =
+      existingRole === 'VENDOR'
+        ? (userProfile?.vendorCode || userProfile?.vendor_code || formatDisplayId('VE', resolvedUserId))
+        : undefined;
+
+    const resolvedDriverCode =
+      existingRole === 'DRIVER'
+        ? (userProfile?.driverCode || userProfile?.driver_code || formatDisplayId('DR', resolvedUserId))
+        : undefined;
+
     await this.saveSession({
       userId: resolvedUserId,
       mobile: cleanPhone,
@@ -1679,6 +1747,14 @@ export const authService = {
       createdAt: new Date().toISOString(),
       accountStatus: normalizedFbStatus,
       isRegistrationComplete: isFbComp,
+      accountId: resolvedAccountId,
+      clientCode: resolvedClientCode,
+      clientId: resolvedUserId,
+      vendorCode: resolvedVendorCode,
+      vendorId: existingRole === 'VENDOR' ? resolvedUserId : undefined,
+      driverCode: resolvedDriverCode,
+      driverId: existingRole === 'DRIVER' ? resolvedUserId : undefined,
+      profilePhotoUrl: userProfile?.profilePhotoUrl || userProfile?.profile_photo_url,
     });
 
     if (purpose === 'LOGIN') {
@@ -1918,6 +1994,8 @@ export const authService = {
       designation?: string;
       department?: string;
       address?: string;
+      profilePhotoUrl?: string;
+      accountId?: string;
     }
   ): Promise<{ success: boolean; message?: string }> {
     try {
@@ -1929,6 +2007,8 @@ export const authService = {
         if (updates.designation !== undefined) current.designation = updates.designation;
         if (updates.department !== undefined) current.department = updates.department;
         if (updates.address !== undefined) current.address = updates.address;
+        if (updates.profilePhotoUrl !== undefined) current.profilePhotoUrl = updates.profilePhotoUrl;
+        if (updates.accountId !== undefined) current.accountId = updates.accountId;
         await this.saveSession(current);
       }
 
@@ -1945,48 +2025,66 @@ export const authService = {
             if (updates.designation !== undefined) target.designation = updates.designation;
             if (updates.department !== undefined) target.department = updates.department;
             if (updates.address !== undefined) target.address = updates.address;
+            if (updates.profilePhotoUrl !== undefined) target.profilePhotoUrl = updates.profilePhotoUrl;
+            if (updates.accountId !== undefined) target.accountId = updates.accountId;
             await this.saveLocalRegistry(registry);
           }
         }
-      } catch {}
+      } catch { }
 
       // Persist to Supabase based on role
       if (role === 'CLIENT') {
         const cleanPhone = current?.mobile || '';
+        const clientUpdate: any = {
+          full_name: updates.fullName,
+        };
+        if (updates.email !== undefined) clientUpdate.email = updates.email;
+        if (updates.designation !== undefined) clientUpdate.designation = updates.designation;
+        if (updates.department !== undefined) clientUpdate.department = updates.department;
+        if (updates.profilePhotoUrl !== undefined) clientUpdate.profile_photo_url = updates.profilePhotoUrl;
+        if (updates.accountId !== undefined) clientUpdate.account_id = updates.accountId;
+
         await supabase
           .from('client_users')
-          .update({
-            full_name: updates.fullName,
-            email: updates.email,
-            designation: updates.designation,
-            department: updates.department,
-          })
+          .update(clientUpdate)
           .eq('mobile', cleanPhone);
 
         if (current?.clientId || current?.userId) {
           const compRef = current.clientId || current.userId;
-          await supabase
-            .from('client_companies')
-            .update({
-              company_name: updates.companyName,
-              registered_address: updates.address,
-            })
-            .or(`id.eq.${compRef},client_code.eq.${compRef}`);
+          const compUpdate: any = {};
+          if (updates.companyName) compUpdate.company_name = updates.companyName;
+          if (updates.address) compUpdate.registered_address = updates.address;
+          if (Object.keys(compUpdate).length > 0) {
+            await supabase
+              .from('client_companies')
+              .update(compUpdate)
+              .or(`id.eq.${compRef},client_code.eq.${compRef}`);
+          }
         }
       } else if (role === 'VENDOR') {
+        const vendorUpdate: any = {
+          vendor_name: updates.fullName,
+        };
+        if (updates.address !== undefined) vendorUpdate.address = updates.address;
         await supabase
           .from('vendor_companies')
-          .update({
-            vendor_name: updates.fullName,
-            address: updates.address,
-          })
+          .update(vendorUpdate)
           .eq('id', userId);
+
+        if (updates.profilePhotoUrl !== undefined) {
+          await supabase
+            .from('vendor_users')
+            .update({ profile_photo_url: updates.profilePhotoUrl })
+            .eq('mobile', current?.mobile || '');
+        }
       } else if (role === 'DRIVER') {
+        const driverUpdate: any = {
+          full_name: updates.fullName,
+        };
+        if (updates.profilePhotoUrl !== undefined) driverUpdate.profile_photo_url = updates.profilePhotoUrl;
         await supabase
           .from('drivers')
-          .update({
-            full_name: updates.fullName,
-          })
+          .update(driverUpdate)
           .eq('id', userId);
       }
 
@@ -2038,6 +2136,68 @@ export const authService = {
       await AsyncStorage.setItem(storageKey, JSON.stringify(updated));
     } catch (e) {
       console.warn('Failed to append custom notification:', e);
+    }
+  },
+
+  async getReadNotificationIds(userKey?: string): Promise<string[]> {
+    try {
+      const cleanKey = (userKey || 'common').replace(/[^0-9a-zA-Z_-]/g, '');
+      const raw = await AsyncStorage.getItem(`@necl_read_notif_ids_${cleanKey}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      }
+    } catch { }
+    return [];
+  },
+
+  async markNotificationAsRead(id: string, userKey?: string): Promise<void> {
+    try {
+      const session = await this.getCurrentSession();
+      const cleanKey = (userKey || session?.mobile || session?.userId || 'common').replace(/[^0-9a-zA-Z_-]/g, '');
+      const existing = await this.getReadNotificationIds(cleanKey);
+      if (!existing.includes(id)) {
+        existing.push(id);
+        await AsyncStorage.setItem(`@necl_read_notif_ids_${cleanKey}`, JSON.stringify(existing));
+      }
+
+      const role = session?.role || 'CLIENT';
+      const storageKey = `@necl_user_custom_notifs_${cleanKey}_${role.toLowerCase()}`;
+      const customItems = await this.getUserCustomNotifications(cleanKey, role);
+      let changed = false;
+      const updated = customItems.map((n) => {
+        if (n.id === id) {
+          changed = true;
+          return { ...n, isRead: true, read: true };
+        }
+        return n;
+      });
+      if (changed) {
+        await AsyncStorage.setItem(storageKey, JSON.stringify(updated));
+      }
+    } catch (e) {
+      console.warn('Failed to mark notification as read:', e);
+    }
+  },
+
+  async markAllNotificationsAsRead(userKey?: string, role?: MobileRole): Promise<void> {
+    try {
+      const session = await this.getCurrentSession();
+      const cleanKey = (userKey || session?.mobile || session?.userId || 'common').replace(/[^0-9a-zA-Z_-]/g, '');
+      const effectiveRole = role || session?.role || 'CLIENT';
+
+      const allCurrent = await this.fetchRealNotifications(session?.userId, effectiveRole);
+      const allIds = allCurrent.map((n) => n.id).filter(Boolean);
+      const existing = await this.getReadNotificationIds(cleanKey);
+      const combined = Array.from(new Set([...existing, ...allIds]));
+      await AsyncStorage.setItem(`@necl_read_notif_ids_${cleanKey}`, JSON.stringify(combined));
+
+      const storageKey = `@necl_user_custom_notifs_${cleanKey}_${effectiveRole.toLowerCase()}`;
+      const customItems = await this.getUserCustomNotifications(cleanKey, effectiveRole);
+      const updated = customItems.map((n) => ({ ...n, isRead: true, read: true }));
+      await AsyncStorage.setItem(storageKey, JSON.stringify(updated));
+    } catch (e) {
+      console.warn('Failed to mark all notifications as read:', e);
     }
   },
 
@@ -2106,6 +2266,31 @@ export const authService = {
               content: `A verified transport requirement for ${r.material_type || 'Cargo'} is open for quotation. Review specs and submit your commercial bid.`,
             });
           });
+
+          // Check for rejected vendor KYC documents
+          if (targetVendorId) {
+            const { data: rejDocs } = await supabase
+              .from('documents')
+              .select('*')
+              .eq('reference_id', targetVendorId)
+              .eq('verification_status', 'REJECTED')
+              .order('updated_at', { ascending: false });
+
+            (rejDocs || []).forEach((rd: any) => {
+              items.push({
+                id: `v-doc-rej-${rd.id}`,
+                category: 'document_correction',
+                entityType: 'DOCUMENT_REJECTED',
+                title: `KYC Document Rejected: ${rd.document_type || 'Document'}`,
+                subtitle: `Rejection reason: ${rd.rejection_reason || 'Compliance criteria not met'}. Tap to upload corrected document.`,
+                content: `Your submitted ${rd.document_type || 'document'} was reviewed and rejected by operations. Reason: ${rd.rejection_reason || 'Please upload a clear, legible copy'}. Tap here to submit correction.`,
+                time: rd.updated_at ? new Date(rd.updated_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }) : 'Action Required',
+                isRead: false,
+                isImportant: true,
+                refId: rd.id,
+              });
+            });
+          }
         } catch (vErr) {
           console.warn('Vendor notification fetch notice:', vErr);
         }
@@ -2137,11 +2322,36 @@ export const authService = {
               content: `You are assigned to Trip #${t.id.slice(0, 8)}. Report to the loading bay on schedule and upload the stamped delivery challan/e-POD upon destination arrival.`,
             });
           });
+
+          // Check for rejected driver documents
+          if (targetDriverId) {
+            const { data: rejDriverDocs } = await supabase
+              .from('documents')
+              .select('*')
+              .eq('reference_id', targetDriverId)
+              .eq('verification_status', 'REJECTED')
+              .order('updated_at', { ascending: false });
+
+            (rejDriverDocs || []).forEach((rd: any) => {
+              items.push({
+                id: `d-doc-rej-${rd.id}`,
+                category: 'document_correction',
+                entityType: 'DOCUMENT_REJECTED',
+                title: `Driver Document Rejected: ${rd.document_type || 'License/Aadhaar'}`,
+                subtitle: `Rejection reason: ${rd.rejection_reason || 'Compliance criteria not met'}. Tap to upload corrected copy.`,
+                content: `Your submitted ${rd.document_type || 'document'} was rejected by compliance. Reason: ${rd.rejection_reason || 'Please upload a valid document'}. Tap here to correct.`,
+                time: rd.updated_at ? new Date(rd.updated_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }) : 'Action Required',
+                isRead: false,
+                isImportant: true,
+                refId: rd.id,
+              });
+            });
+          }
         } catch (dErr) {
           console.warn('Driver notification fetch notice:', dErr);
         }
       } else {
-        // CLIENT Role: Requirements, bookings, and live consignment trips
+        // CLIENT Role: Genuine business notifications from requirements, quotations, bookings, trips, PODs, invoices
         let targetCompanyId = effectiveUserId;
         if (effectiveUserId && effectiveUserId.includes('-')) {
           const { data: userRec } = await supabase
@@ -2153,80 +2363,593 @@ export const authService = {
             targetCompanyId = userRec.client_id || userRec.client_company_id;
           }
         }
-
-        let reqsQuery = supabase.from('requirements').select('*').order('created_at', { ascending: false }).limit(6);
-        let boksQuery = supabase.from('bookings').select('*').order('created_at', { ascending: false }).limit(6);
-
-        if (targetCompanyId) {
-          reqsQuery = reqsQuery.or(`client_id.eq.${targetCompanyId},client_id.eq.${effectiveUserId}`);
-          boksQuery = boksQuery.or(`client_id.eq.${targetCompanyId},client_id.eq.${effectiveUserId}`);
+        if (!targetCompanyId && session?.mobile) {
+          const cleanMobile = session.mobile.replace(/[^0-9]/g, '').slice(-10);
+          const { data: userRec } = await supabase
+            .from('client_users')
+            .select('client_id, client_company_id')
+            .eq('mobile', cleanMobile)
+            .maybeSingle();
+          if (userRec?.client_id || userRec?.client_company_id) {
+            targetCompanyId = userRec.client_id || userRec.client_company_id;
+          }
         }
 
-        const [{ data: reqs }, { data: boks }] = await Promise.all([reqsQuery, boksQuery]);
+        const formatNotificationTime = (dateStr?: string): string => {
+          if (!dateStr) return 'Recently';
+          try {
+            const d = new Date(dateStr);
+            if (isNaN(d.getTime())) return 'Recently';
+            const now = new Date();
+            const diffMs = now.getTime() - d.getTime();
+            const diffMins = Math.floor(diffMs / 60000);
+            if (diffMins < 1) return 'Just now';
+            if (diffMins < 60) return `${diffMins}m ago`;
+            const diffHours = Math.floor(diffMins / 60);
+            if (diffHours < 24 && d.getDate() === now.getDate()) {
+              return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+            }
+            const yesterday = new Date(now);
+            yesterday.setDate(now.getDate() - 1);
+            if (
+              d.getDate() === yesterday.getDate() &&
+              d.getMonth() === yesterday.getMonth() &&
+              d.getFullYear() === yesterday.getFullYear()
+            ) {
+              return `Yesterday, ${d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}`;
+            }
+            return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true });
+          } catch {
+            return 'Recently';
+          }
+        };
 
-        const bookingIds = (boks || []).map((b) => b.id);
-        let trips: any[] = [];
-        if (bookingIds.length > 0) {
-          const { data: tripsData } = await supabase
-            .from('trips')
-            .select('*, vehicles(registration_number)')
-            .in('booking_id', bookingIds)
+        try {
+          // 1. Requirements query
+          let reqsQuery = supabase
+            .from('requirements')
+            .select('*')
             .order('created_at', { ascending: false })
-            .limit(6);
-          trips = tripsData || [];
+            .limit(30);
+          if (targetCompanyId) {
+            reqsQuery = reqsQuery.or(`client_id.eq.${targetCompanyId},client_id.eq.${effectiveUserId}`);
+          }
+
+          // 2. Bookings query
+          let boksQuery = supabase
+            .from('bookings')
+            .select('*, requirements(*)')
+            .order('created_at', { ascending: false })
+            .limit(30);
+          if (targetCompanyId) {
+            boksQuery = boksQuery.or(`client_id.eq.${targetCompanyId},client_id.eq.${effectiveUserId}`);
+          }
+
+          const [{ data: reqs }, { data: boks }] = await Promise.all([reqsQuery, boksQuery]);
+
+          const reqIds = (reqs || []).map((r: any) => r.id);
+          const bookingIds = (boks || []).map((b: any) => b.id);
+          const bookingMap = new Map<string, any>();
+          (boks || []).forEach((b: any) => bookingMap.set(b.id, b));
+
+          // 3. Client Quotations query
+          let quotes: any[] = [];
+          if (reqIds.length > 0) {
+            const { data: qData } = await supabase
+              .from('client_quotes')
+              .select('*')
+              .in('requirement_id', reqIds)
+              .order('created_at', { ascending: false })
+              .limit(30);
+            quotes = qData || [];
+          }
+
+          // 4. Trips query
+          let trips: any[] = [];
+          if (bookingIds.length > 0) {
+            const { data: tripsData } = await supabase
+              .from('trips')
+              .select('*, vehicles(registration_number, vehicle_type, model), drivers(name, full_name, phone, mobile)')
+              .in('booking_id', bookingIds)
+              .order('created_at', { ascending: false })
+              .limit(30);
+            trips = tripsData || [];
+          }
+
+          const tripIds = trips.map((t: any) => t.id);
+
+          // 5. POD Submissions query
+          let podSubmissions: any[] = [];
+          if (tripIds.length > 0 || bookingIds.length > 0) {
+            try {
+              let podQuery = supabase
+                .from('trip_pod_submissions')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(20);
+              if (tripIds.length > 0) {
+                podQuery = podQuery.in('trip_id', tripIds);
+              }
+              const { data: pods } = await podQuery;
+              podSubmissions = pods || [];
+            } catch { }
+          }
+
+          // 6. Client Invoices query
+          let invoices: any[] = [];
+          if (targetCompanyId) {
+            try {
+              const { data: invData } = await supabase
+                .from('client_invoices')
+                .select('*')
+                .eq('client_id', targetCompanyId)
+                .order('created_at', { ascending: false })
+                .limit(20);
+              invoices = invData || [];
+            } catch { }
+          }
+
+          // 7. Client Rejected Documents query
+          if (targetCompanyId) {
+            try {
+              const { data: rejClientDocs } = await supabase
+                .from('documents')
+                .select('*')
+                .eq('reference_id', targetCompanyId)
+                .eq('verification_status', 'REJECTED')
+                .order('updated_at', { ascending: false });
+
+              (rejClientDocs || []).forEach((rd: any) => {
+                items.push({
+                  id: `c-doc-rej-${rd.id}`,
+                  category: 'document_correction',
+                  entityType: 'DOCUMENT_REJECTED',
+                  entityId: rd.id,
+                  refId: rd.id,
+                  title: `Document Resubmission Required: ${rd.document_type || 'KYC Document'}`,
+                  subtitle: `Rejection reason: ${rd.rejection_reason || 'Compliance criteria not met'}. Tap to upload corrected copy.`,
+                  content: `Your submitted ${rd.document_type || 'document'} was reviewed and rejected. Reason: "${rd.rejection_reason || 'Please upload a clear, legible copy'}". Tap here to navigate directly to the document upload screen for correction.`,
+                  time: formatNotificationTime(rd.updated_at || rd.created_at),
+                  createdAt: rd.updated_at || rd.created_at || new Date().toISOString(),
+                  isRead: false,
+                  isImportant: true,
+                });
+              });
+            } catch { }
+          }
+
+          // --- TRANSFORM INTO BUSINESS NOTIFICATIONS ---
+
+          // A. Requirements Notifications
+          (reqs || []).forEach((r: any) => {
+            const origin = r.pickup_address || r.origin_city || 'Origin';
+            const dest = r.destination_address || r.destination_city || 'Destination';
+
+            // 1. Requirement Submitted
+            items.push({
+              id: `notif-req-sub-${r.id}`,
+              category: 'requirement',
+              entityType: 'REQUIREMENT',
+              entityId: r.id,
+              refId: r.id,
+              title: 'Requirement Submitted',
+              subtitle: `Your transport requirement ${r.id} has been submitted successfully.`,
+              content: `Your transport requirement ${r.id} (${origin} → ${dest}) for ${r.material_type || 'Cargo'} has been recorded and submitted for operations review.`,
+              time: formatNotificationTime(r.created_at),
+              createdAt: r.created_at || new Date().toISOString(),
+              isRead: false,
+              isImportant: false,
+            });
+
+            // 2. Requirement Review Status Updated
+            if (r.status === 'UNDER_REVIEW') {
+              items.push({
+                id: `notif-req-rev-${r.id}`,
+                category: 'requirement',
+                entityType: 'REQUIREMENT',
+                entityId: r.id,
+                refId: r.id,
+                title: 'Requirement Under Review',
+                subtitle: `Requirement ${r.id} is being reviewed by the operations team.`,
+                content: `Operations is auditing vehicle specifications, load compliance, and route feasibility for Requirement ${r.id}.`,
+                time: formatNotificationTime(r.reviewed_at || r.updated_at || r.created_at),
+                createdAt: r.reviewed_at || r.updated_at || r.created_at || new Date().toISOString(),
+                isRead: false,
+                isImportant: false,
+              });
+            } else if (r.status === 'VERIFIED' || r.status === 'OPEN_FOR_BIDDING') {
+              items.push({
+                id: `notif-req-app-${r.id}`,
+                category: 'requirement',
+                entityType: 'REQUIREMENT',
+                entityId: r.id,
+                refId: r.id,
+                title: 'Requirement Verified',
+                subtitle: `Requirement ${r.id} has been verified and is open for quotations.`,
+                content: `Your requirement is verified and open for verified transporters to place competitive commercial bids.`,
+                time: formatNotificationTime(r.reviewed_at || r.updated_at || r.created_at),
+                createdAt: r.reviewed_at || r.updated_at || r.created_at || new Date().toISOString(),
+                isRead: false,
+                isImportant: true,
+              });
+            } else if (r.status === 'REJECTED') {
+              items.push({
+                id: `notif-req-rej-${r.id}`,
+                category: 'requirement',
+                entityType: 'REQUIREMENT',
+                entityId: r.id,
+                refId: r.id,
+                title: 'Requirement Action Required',
+                subtitle: `Requirement ${r.id} requires revision: ${r.correction_notes || 'Please verify specifications.'}`,
+                content: `Action needed on Requirement ${r.id}: ${r.correction_notes || 'Please adjust cargo weight or dimensions and resubmit.'}`,
+                time: formatNotificationTime(r.reviewed_at || r.updated_at || r.created_at),
+                createdAt: r.reviewed_at || r.updated_at || r.created_at || new Date().toISOString(),
+                isRead: false,
+                isImportant: true,
+              });
+            }
+          });
+
+          // B. Quotation Notifications
+          (quotes || []).forEach((q: any) => {
+            const amountStr = Number(q.total_client_amount || 0).toLocaleString('en-IN');
+            if (q.status === 'SENT' || q.status === 'ISSUED') {
+              items.push({
+                id: `notif-qte-rec-${q.id}`,
+                category: 'quotation',
+                entityType: 'QUOTATION',
+                entityId: q.requirement_id,
+                refId: q.requirement_id,
+                title: 'Quotation Received',
+                subtitle: `A new quotation of ₹${amountStr} is available for requirement ${q.requirement_id}. Review the quotation details.`,
+                content: `A verified transporter submitted a competitive commercial quote of ₹${amountStr} for requirement ${q.requirement_id}. Tap to review and accept.`,
+                time: formatNotificationTime(q.created_at),
+                createdAt: q.created_at || new Date().toISOString(),
+                isRead: false,
+                isImportant: true,
+              });
+            } else if (q.status === 'ACCEPTED') {
+              items.push({
+                id: `notif-qte-acc-${q.id}`,
+                category: 'quotation',
+                entityType: 'QUOTATION',
+                entityId: q.requirement_id,
+                refId: q.requirement_id,
+                title: 'Quotation Accepted',
+                subtitle: `Quotation of ₹${amountStr} for requirement ${q.requirement_id} has been accepted. Booking created.`,
+                content: `Commercial quote of ₹${amountStr} was accepted. Booking confirmation has been generated.`,
+                time: formatNotificationTime(q.updated_at || q.created_at),
+                createdAt: q.updated_at || q.created_at || new Date().toISOString(),
+                isRead: true,
+                isImportant: false,
+              });
+            } else if (q.status === 'REJECTED') {
+              items.push({
+                id: `notif-qte-rej-${q.id}`,
+                category: 'quotation',
+                entityType: 'QUOTATION',
+                entityId: q.requirement_id,
+                refId: q.requirement_id,
+                title: 'Quotation Declined',
+                subtitle: `Quotation for requirement ${q.requirement_id} was declined.`,
+                content: `You declined a quotation of ₹${amountStr}. Alternative bids remain accessible on your dashboard.`,
+                time: formatNotificationTime(q.updated_at || q.created_at),
+                createdAt: q.updated_at || q.created_at || new Date().toISOString(),
+                isRead: true,
+                isImportant: false,
+              });
+            }
+          });
+
+          // C. Bookings Notifications
+          (boks || []).forEach((b: any) => {
+            const bRef = b.booking_number || b.id;
+            const isConfirmed = b.booking_status === 'CONFIRMED' || !b.booking_status;
+
+            if (isConfirmed) {
+              items.push({
+                id: `notif-bok-conf-${b.id}`,
+                category: 'booking',
+                entityType: 'BOOKING',
+                entityId: b.id,
+                refId: bRef,
+                title: 'Booking Confirmed',
+                subtitle: `Your booking ${bRef} has been confirmed. View your booking details.`,
+                content: `Transport booking ${bRef} has been registered and confirmed. Vehicle and driver allocation is underway.`,
+                time: formatNotificationTime(b.confirmed_at || b.created_at),
+                createdAt: b.confirmed_at || b.created_at || new Date().toISOString(),
+                isRead: false,
+                isImportant: true,
+              });
+            } else if (b.booking_status === 'CANCELLED') {
+              items.push({
+                id: `notif-bok-can-${b.id}`,
+                category: 'booking',
+                entityType: 'BOOKING',
+                entityId: b.id,
+                refId: bRef,
+                title: 'Booking Cancelled',
+                subtitle: `Booking ${bRef} has been cancelled.`,
+                content: `Consignment booking ${bRef} was cancelled. Any applicable freight adjustments have been processed.`,
+                time: formatNotificationTime(b.updated_at || b.created_at),
+                createdAt: b.updated_at || b.created_at || new Date().toISOString(),
+                isRead: true,
+                isImportant: false,
+              });
+            }
+          });
+
+          // D. Trips & Shipments Notifications
+          (trips || []).forEach((t: any) => {
+            const bMatch = bookingMap.get(t.booking_id);
+            const bookingRef = bMatch?.booking_number || t.booking_id || t.id;
+            const regNum = t.vehicles?.registration_number;
+            const driverName = t.drivers?.full_name || t.drivers?.name;
+
+            // 1. Vehicle / Driver Assigned
+            if (regNum) {
+              items.push({
+                id: `notif-trip-veh-${t.id}`,
+                category: 'shipment',
+                entityType: 'TRIP',
+                entityId: t.id,
+                refId: bookingRef,
+                title: 'Vehicle Assigned',
+                subtitle: `Vehicle ${regNum} has been assigned to booking ${bookingRef}.`,
+                content: `Transporter has assigned vehicle ${regNum}${driverName ? ` (Driver: ${driverName})` : ''} to booking ${bookingRef}.`,
+                time: formatNotificationTime(t.assigned_at || t.created_at),
+                createdAt: t.assigned_at || t.created_at || new Date().toISOString(),
+                isRead: false,
+                isImportant: true,
+              });
+            }
+
+            // 2. Loading Started
+            if (t.loading_started_at || t.trip_status === 'LOADING_STARTED') {
+              items.push({
+                id: `notif-trip-loadstart-${t.id}`,
+                category: 'shipment',
+                entityType: 'TRIP',
+                entityId: t.id,
+                refId: bookingRef,
+                title: 'Loading Started',
+                subtitle: `Loading started for booking ${bookingRef} at origin warehouse.`,
+                content: `Assigned vehicle has reported at origin. Cargo loading and physical check are underway.`,
+                time: formatNotificationTime(t.loading_started_at || t.created_at),
+                createdAt: t.loading_started_at || t.created_at || new Date().toISOString(),
+                isRead: false,
+                isImportant: false,
+              });
+            }
+
+            // 3. Loading Completed
+            if (t.loading_completed_at || t.trip_status === 'LOADING_COMPLETED') {
+              items.push({
+                id: `notif-trip-loadend-${t.id}`,
+                category: 'shipment',
+                entityType: 'TRIP',
+                entityId: t.id,
+                refId: bookingRef,
+                title: 'Loading Completed',
+                subtitle: `Loading for booking ${bookingRef} has been completed.`,
+                content: `Material loading finished. Vehicle tarping, weighbridge slip, and dispatch clearance complete.`,
+                time: formatNotificationTime(t.loading_completed_at || t.created_at),
+                createdAt: t.loading_completed_at || t.created_at || new Date().toISOString(),
+                isRead: false,
+                isImportant: false,
+              });
+            }
+
+            // 4. Shipment Dispatched / In Transit
+            if (t.dispatched_at || t.trip_status === 'VEHICLE_DISPATCHED' || t.trip_status === 'IN_TRANSIT') {
+              items.push({
+                id: `notif-trip-disp-${t.id}`,
+                category: 'shipment',
+                entityType: 'TRIP',
+                entityId: t.id,
+                refId: bookingRef,
+                title: 'Shipment Dispatched',
+                subtitle: `Your shipment for booking ${bookingRef} is now in transit.`,
+                content: `Lorry ${regNum || 'Assigned'} has departed origin. Live GPS telematics and waypoint milestones are active.`,
+                time: formatNotificationTime(t.dispatched_at || t.started_at || t.created_at),
+                createdAt: t.dispatched_at || t.started_at || t.created_at || new Date().toISOString(),
+                isRead: false,
+                isImportant: true,
+              });
+            }
+
+            // 5. Shipment Delay Recorded
+            if (t.trip_status === 'DELAYED' || t.delay_reason) {
+              items.push({
+                id: `notif-trip-delay-${t.id}`,
+                category: 'shipment',
+                entityType: 'TRIP',
+                entityId: t.id,
+                refId: bookingRef,
+                title: 'Shipment Delayed',
+                subtitle: `Transit delay recorded for booking ${bookingRef}: ${t.delay_reason || 'Route clearance delay'}.`,
+                content: `Transit delay recorded: ${t.delay_reason || 'Route congestion/clearance'}. The telematics desk is actively tracking.`,
+                time: formatNotificationTime(t.updated_at || t.created_at),
+                createdAt: t.updated_at || t.created_at || new Date().toISOString(),
+                isRead: false,
+                isImportant: true,
+              });
+            }
+
+            // 6. Vehicle Arrived at Destination
+            if (t.trip_status === 'REACHED_DESTINATION') {
+              items.push({
+                id: `notif-trip-dest-${t.id}`,
+                category: 'shipment',
+                entityType: 'TRIP',
+                entityId: t.id,
+                refId: bookingRef,
+                title: 'Vehicle Arrived at Destination',
+                subtitle: `Shipment for booking ${bookingRef} has arrived at destination unloading point.`,
+                content: `Lorry ${regNum || ''} arrived at destination warehouse dock. Awaiting receiving team clearance.`,
+                time: formatNotificationTime(t.updated_at || t.created_at),
+                createdAt: t.updated_at || t.created_at || new Date().toISOString(),
+                isRead: false,
+                isImportant: false,
+              });
+            }
+
+            // 7. Unloading Started
+            if (t.unloading_started_at || t.trip_status === 'UNLOADING_STARTED') {
+              items.push({
+                id: `notif-trip-unloadstart-${t.id}`,
+                category: 'shipment',
+                entityType: 'TRIP',
+                entityId: t.id,
+                refId: bookingRef,
+                title: 'Unloading Started',
+                subtitle: `Consignment unloading has commenced for booking ${bookingRef}.`,
+                content: `Receiving team has initiated consignment discharge and physical verification.`,
+                time: formatNotificationTime(t.unloading_started_at || t.created_at),
+                createdAt: t.unloading_started_at || t.created_at || new Date().toISOString(),
+                isRead: false,
+                isImportant: false,
+              });
+            }
+
+            // 8. Unloading Completed
+            if (t.unloading_completed_at || t.trip_status === 'UNLOADING_COMPLETED') {
+              items.push({
+                id: `notif-trip-unloadend-${t.id}`,
+                category: 'shipment',
+                entityType: 'TRIP',
+                entityId: t.id,
+                refId: bookingRef,
+                title: 'Unloading Completed',
+                subtitle: `Unloading completed for booking ${bookingRef}. Awaiting POD.`,
+                content: `Cargo safely unloaded at destination dock. Awaiting consignee proof of delivery signature.`,
+                time: formatNotificationTime(t.unloading_completed_at || t.created_at),
+                createdAt: t.unloading_completed_at || t.created_at || new Date().toISOString(),
+                isRead: false,
+                isImportant: false,
+              });
+            }
+
+            // 9. Delivery Completed
+            if (t.delivered_at || t.trip_status === 'DELIVERED' || t.trip_status === 'COMPLETED') {
+              items.push({
+                id: `notif-trip-delv-${t.id}`,
+                category: 'shipment',
+                entityType: 'TRIP',
+                entityId: t.id,
+                refId: bookingRef,
+                title: 'Delivery Completed',
+                subtitle: `Your shipment for booking ${bookingRef} has been marked as delivered.`,
+                content: `Consignment has been delivered successfully. Verified delivery status recorded.`,
+                time: formatNotificationTime(t.delivered_at || t.completed_at || t.created_at),
+                createdAt: t.delivered_at || t.completed_at || t.created_at || new Date().toISOString(),
+                isRead: false,
+                isImportant: true,
+              });
+            }
+          });
+
+          // E. POD Submissions Notifications
+          (podSubmissions || []).forEach((pod: any) => {
+            const bMatch = bookingMap.get(pod.booking_id);
+            const podBRef = bMatch?.booking_number || pod.booking_id || 'Shipment';
+
+            if (pod.review_status === 'PENDING') {
+              items.push({
+                id: `notif-pod-up-${pod.id}`,
+                category: 'document',
+                entityType: 'POD',
+                entityId: pod.trip_id || pod.booking_id,
+                refId: podBRef,
+                title: 'POD Uploaded',
+                subtitle: `Proof of Delivery uploaded for booking ${podBRef}. Verification in progress.`,
+                content: `Consignee delivery challan/e-POD has been uploaded for booking ${podBRef} and is queued for verification.`,
+                time: formatNotificationTime(pod.created_at),
+                createdAt: pod.created_at || new Date().toISOString(),
+                isRead: false,
+                isImportant: false,
+              });
+            } else if (pod.review_status === 'APPROVED') {
+              items.push({
+                id: `notif-pod-app-${pod.id}`,
+                category: 'document',
+                entityType: 'POD',
+                entityId: pod.trip_id || pod.booking_id,
+                refId: podBRef,
+                title: 'POD Verified',
+                subtitle: `Proof of Delivery (POD) for booking ${podBRef} has been verified.`,
+                content: `Consignee stamped delivery document has been verified and approved by the compliance team.`,
+                time: formatNotificationTime(pod.reviewed_at || pod.updated_at || pod.created_at),
+                createdAt: pod.reviewed_at || pod.updated_at || pod.created_at || new Date().toISOString(),
+                isRead: false,
+                isImportant: true,
+              });
+            }
+          });
+
+          // F. Invoices Notifications
+          (invoices || []).forEach((inv: any) => {
+            const invDue = Number(inv.balance_due || inv.total_amount || 0).toLocaleString('en-IN');
+            const invPaid = Number(inv.amount_paid || inv.total_amount || 0).toLocaleString('en-IN');
+
+            items.push({
+              id: `notif-inv-gen-${inv.id}`,
+              category: 'payment',
+              entityType: 'INVOICE',
+              entityId: inv.booking_id,
+              refId: inv.invoice_number,
+              title: 'Invoice Generated',
+              subtitle: `Commercial invoice ${inv.invoice_number} generated for booking ${inv.booking_id}. Balance due: ₹${invDue}.`,
+              content: `Commercial freight invoice ${inv.invoice_number} has been generated. Due date: ${inv.due_date || 'Within credit period'}.`,
+              time: formatNotificationTime(inv.created_at),
+              createdAt: inv.created_at || new Date().toISOString(),
+              isRead: false,
+              isImportant: inv.payment_status !== 'PAID',
+            });
+
+            if (inv.payment_status === 'PAID' || Number(inv.amount_paid || 0) > 0) {
+              items.push({
+                id: `notif-inv-paid-${inv.id}`,
+                category: 'payment',
+                entityType: 'INVOICE',
+                entityId: inv.booking_id,
+                refId: inv.invoice_number,
+                title: 'Payment Received',
+                subtitle: `Your payment of ₹${invPaid} for booking ${inv.booking_id} has been received successfully.`,
+                content: `Payment of ₹${invPaid} has been received and reconciled against invoice ${inv.invoice_number}.`,
+                time: formatNotificationTime(inv.updated_at || inv.created_at),
+                createdAt: inv.updated_at || inv.created_at || new Date().toISOString(),
+                isRead: false,
+                isImportant: false,
+              });
+            }
+          });
+        } catch (cErr) {
+          console.warn('Client notification fetch notice:', cErr);
         }
-
-        (trips || []).forEach((t) => {
-          const inTransit = t.trip_status === 'IN_TRANSIT';
-          items.push({
-            id: `trip-${t.id}`,
-            category: 'shipment',
-            title: `Trip ${t.trip_status === 'IN_TRANSIT' ? 'In Transit' : t.trip_status}`,
-            subtitle: `Lorry: ${t.vehicles?.registration_number || 'Standard Fleet'} | Freight ₹${(t.vendor_rate || 0).toLocaleString('en-IN')}`,
-            time: t.started_at ? new Date(t.started_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Recent Update',
-            isRead: !inTransit,
-            isImportant: inTransit,
-            refId: t.booking_id || t.id,
-            content: `Your shipment with vehicle ${t.vehicles?.registration_number || 'Assigned'} is currently progressing towards its destination with real-time GPS telematics active.`,
-          });
-        });
-
-        (boks || []).forEach((b) => {
-          const isPending = b.payment_status === 'PAYMENT_PENDING';
-          items.push({
-            id: `bok-${b.id}`,
-            category: 'booking',
-            title: `Booking: ${b.booking_status}`,
-            subtitle: `Reference: ${b.booking_number || b.id.slice(0, 8)} | Payment: ${b.payment_status || 'CONFIRMED'}`,
-            time: b.confirmed_at ? new Date(b.confirmed_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Today',
-            isRead: !isPending,
-            isImportant: isPending,
-            refId: b.id,
-            content: `Consignment booking ${b.booking_number || b.id} has been registered into the TRUCKS central brokerage system.`,
-          });
-        });
-
-        (reqs || []).forEach((r) => {
-          items.push({
-            id: `req-${r.id}`,
-            category: 'system',
-            title: `Requirement: ${r.status}`,
-            subtitle: `Route: ${r.pickup_address} → ${r.destination_address}`,
-            time: r.created_at ? new Date(r.created_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }) : 'Active',
-            isRead: true,
-            isImportant: false,
-            refId: r.id,
-            content: `Freight requirement for ${r.material_type || 'Cargo'} between ${r.pickup_address} and ${r.destination_address} is logged in TRUCKS dispatch.`,
-          });
-        });
       }
 
       // Deduplicate items strictly by both unique ID and event signature (category + refId + title)
       // Ensures exactly one notification per valid event per recipient with no duplicate noise
+      const readIds = await this.getReadNotificationIds(cleanPhone);
+      const readSet = new Set(readIds);
+
       const seenIds = new Set<string>();
       const seenSignatures = new Set<string>();
-      return items.filter((item) => {
+      let seenWelcome = false;
+
+      const deduplicated = items.filter((item) => {
         if (!item?.id || seenIds.has(item.id)) return false;
+
+        // Clean up duplicate welcome notifications: keep only the single latest welcome item
+        const isWelcome =
+          item.id?.startsWith('welcome-') ||
+          (item.category === 'system' && (item.title?.toLowerCase().includes('welcome') || false));
+        if (isWelcome) {
+          if (seenWelcome) return false;
+          seenWelcome = true;
+        }
+
         seenIds.add(item.id);
 
         const sig = item.refId
@@ -2236,6 +2959,22 @@ export const authService = {
         seenSignatures.add(sig);
 
         return true;
+      });
+
+      // Sort strictly chronologically, newest first!
+      deduplicated.sort((a, b) => {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return timeB - timeA;
+      });
+
+      return deduplicated.map((item) => {
+        const isItemRead = readSet.has(item.id) || item.isRead === true || item.read === true;
+        return {
+          ...item,
+          isRead: isItemRead,
+          read: isItemRead,
+        };
       });
     } catch {
       return [];

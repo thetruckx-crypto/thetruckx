@@ -154,7 +154,17 @@ export const VendorTripDetailsScreen: React.FC<VendorTripDetailsScreenProps> = (
           <View style={styles.headerRow}>
             <View>
               <Text style={styles.titleText}>Trip Execution</Text>
-              <Text style={styles.subText}>{trip.id.substring(0, 22)}</Text>
+              <Text style={styles.subText}>{trip.id}</Text>
+              {trip.bookingId && (
+                <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#64748B', marginTop: 2 }}>
+                  Booking: <Text style={{ color: '#F05A22' }}>{trip.bookingId}</Text>
+                </Text>
+              )}
+              {trip.lrNumber && (
+                <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#64748B', marginTop: 1 }}>
+                  LR No: <Text style={{ color: '#0C1A34' }}>{trip.lrNumber}</Text>
+                </Text>
+              )}
             </View>
 
             <View style={styles.statusPill}>

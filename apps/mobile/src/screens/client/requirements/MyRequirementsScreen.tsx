@@ -10,8 +10,9 @@ import {
   RefreshControl,
   ActivityIndicator,
   Modal,
-  Linking,
   Alert,
+  Clipboard,
+  Platform,
 } from 'react-native';
 import {
   ArrowLeft,
@@ -23,35 +24,88 @@ import {
   ChevronRight,
   Package,
   FileText,
-  Send,
   CheckCircle2,
-  X,
-  ArrowUpDown,
-  FileCheck,
   Clock,
+  X,
+  AlertTriangle,
+  RotateCcw,
+  Compass,
+  Copy,
   Layers,
+  IndianRupee,
+  Phone,
+  ShieldCheck,
+  Eye,
+  Filter,
 } from 'lucide-react-native';
 import { clientService } from '../../../services/clientService';
-import { buildGoogleMapsDirectionsUrl } from '../../../utils/googleMapsUtil';
+import { supabase } from '../../../supabase';
 import { BrandLogoHeader } from '../../../components/BrandLogoHeader';
+import { formatDisplayId } from '../../../utils/idGenerator';
 
-export type RequirementStatusFilter =
+export type TransportLifecycleStage =
   | 'ALL'
-  | 'ACTIVE_RFQS'
+  | 'DRAFT'
+  | 'SUBMITTED'
+  | 'UNDER_REVIEW'
   | 'QUOTATIONS_RECEIVED'
-  | 'BOOKED'
+  | 'BOOKING_CONFIRMED'
+  | 'VEHICLE_ASSIGNED'
+  | 'LOADING'
   | 'IN_TRANSIT'
+  | 'UNLOADING'
+  | 'DELIVERED'
   | 'COMPLETED'
   | 'CANCELLED';
 
-export type SortOrder = 'RECENT' | 'NEWEST' | 'OLDEST';
-
-interface MyRequirementsScreenProps {
+export interface MyRequirementsScreenProps {
   clientId?: string;
   onBack: () => void;
   onSelectRequirement: (requirementId: string) => void;
   onViewQuotations?: (requirementId: string) => void;
+  onTrackShipment?: (trackingId: string) => void;
+  onSelectBooking?: (bookingId: string) => void;
   onCreateNew: () => void;
+  onResumeDraft?: (draft: any) => void;
+  onNavigateToShipments?: () => void;
+}
+
+export interface UnifiedRequirementItem {
+  id: string;
+  displayId: string;
+  stage: TransportLifecycleStage;
+  stageLabel: string;
+  status: string;
+  created_at: string;
+  pickup_city: string;
+  pickup_address: string;
+  pickup_pincode?: string;
+  destination_city: string;
+  destination_address: string;
+  destination_pincode?: string;
+  vehicle_type: string;
+  material_type: string;
+  capacity_mt?: string | number;
+  package_count?: string | number;
+  pickup_date?: string;
+  target_rate?: number;
+  quotations_count: number;
+  quotations?: any[];
+  // Linked Booking Details
+  booking_id?: string;
+  booking_code?: string;
+  booking_status?: string;
+  booking_amount?: number;
+  // Linked Trip / Shipment Details
+  trip_id?: string;
+  trip_code?: string;
+  lr_number?: string;
+  trip_status?: string;
+  vehicle_registration?: string;
+  vehicle_model?: string;
+  driver_name?: string;
+  driver_phone?: string;
+  is_draft?: boolean;
 }
 
 export const MyRequirementsScreen: React.FC<MyRequirementsScreenProps> = ({
@@ -59,27 +113,288 @@ export const MyRequirementsScreen: React.FC<MyRequirementsScreenProps> = ({
   onBack,
   onSelectRequirement,
   onViewQuotations,
+  onTrackShipment,
+  onSelectBooking,
   onCreateNew,
+  onResumeDraft,
+  onNavigateToShipments,
 }) => {
-  const [filterTab, setFilterTab] = useState<RequirementStatusFilter>('ALL');
+  const [selectedStage, setSelectedStage] = useState<TransportLifecycleStage>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortOrder, setSortOrder] = useState<SortOrder>('RECENT');
-  const [showSortModal, setShowSortModal] = useState(false);
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
-
-  const [requirements, setRequirements] = useState<any[]>([]);
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [items, setItems] = useState<UnifiedRequirementItem[]>([]);
+  const [savedDraft, setSavedDraft] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
 
-  const loadRequirements = useCallback(async () => {
+  // Search debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchQuery.trim().toLowerCase());
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Load requirements with associated bookings & trips from authentic DB
+  const loadData = useCallback(async () => {
     try {
-      setErrorMsg(null);
-      const data = await clientService.fetchClientRequirements(clientId);
-      setRequirements(data || []);
-    } catch {
-      setErrorMsg('Unable to retrieve transport requirements. Please check your connection.');
-      setRequirements([]);
+      setErrorMessage(null);
+
+      // Resolve company ID if clientId is user ID
+      let targetCompanyId = clientId;
+      if (clientId && clientId.includes('-')) {
+        const { data: userRec } = await supabase
+          .from('client_users')
+          .select('client_id, client_company_id')
+          .eq('id', clientId)
+          .maybeSingle();
+
+        if (userRec?.client_id || userRec?.client_company_id) {
+          targetCompanyId = userRec.client_id || userRec.client_company_id;
+        }
+      }
+
+      // 1. Fetch requirements
+      let reqQuery = supabase
+        .from('requirements')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (targetCompanyId || clientId) {
+        reqQuery = reqQuery.or(
+          `client_id.eq.${targetCompanyId || clientId},client_id.eq.${clientId || targetCompanyId}`
+        );
+      }
+
+      const [reqRes, draftRes] = await Promise.all([
+        reqQuery.limit(50),
+        clientService.getTransportRequirementDraft(clientId),
+      ]);
+
+      const rawReqs = reqRes.data || [];
+      if (
+        draftRes &&
+        (draftRes.vehicleTypeRequired ||
+          draftRes.materialType ||
+          draftRes.pickupAddress ||
+          draftRes.destinationAddress)
+      ) {
+        setSavedDraft(draftRes);
+      } else {
+        setSavedDraft(null);
+      }
+
+      if (rawReqs.length === 0 && !draftRes) {
+        setItems([]);
+        return;
+      }
+
+      const reqIds = rawReqs.map((r) => r.id);
+
+      // 2. Fetch associated bookings
+      let bookingsByReqId: Record<string, any> = {};
+      let bookingIds: string[] = [];
+      if (reqIds.length > 0) {
+        const { data: bData } = await supabase
+          .from('bookings')
+          .select('*')
+          .in('requirement_id', reqIds);
+
+        if (bData && bData.length > 0) {
+          bData.forEach((b) => {
+            bookingsByReqId[b.requirement_id] = b;
+            bookingIds.push(b.id);
+          });
+        }
+      }
+
+      // 3. Fetch associated trips
+      let tripsByBookingId: Record<string, any> = {};
+      if (bookingIds.length > 0) {
+        const { data: tData } = await supabase
+          .from('trips')
+          .select('*, vehicles(registration_number, vehicle_type, model), drivers(full_name, mobile)')
+          .in('booking_id', bookingIds);
+
+        if (tData && tData.length > 0) {
+          tData.forEach((t) => {
+            tripsByBookingId[t.booking_id] = t;
+          });
+        }
+      }
+
+      // 4. Fetch quotes count
+      let quotesByReqId: Record<string, any[]> = {};
+      if (reqIds.length > 0) {
+        const { data: qData } = await supabase
+          .from('client_quotes')
+          .select('id, requirement_id, status, total_client_amount, created_at')
+          .in('requirement_id', reqIds);
+
+        if (qData && qData.length > 0) {
+          qData.forEach((q) => {
+            if (!quotesByReqId[q.requirement_id]) quotesByReqId[q.requirement_id] = [];
+            quotesByReqId[q.requirement_id].push(q);
+          });
+        }
+      }
+
+      // 5. Construct Unified Lifecycle Items
+      const unifiedList: UnifiedRequirementItem[] = [];
+
+      // Add Saved Draft if available
+      if (
+        draftRes &&
+        (draftRes.vehicleTypeRequired ||
+          draftRes.materialType ||
+          draftRes.pickupAddress ||
+          draftRes.destinationAddress)
+      ) {
+        unifiedList.push({
+          id: 'draft-active',
+          displayId: 'DRAFT-IN-PROGRESS',
+          stage: 'DRAFT',
+          stageLabel: 'Draft',
+          status: 'DRAFT',
+          created_at: new Date().toISOString(),
+          pickup_city: draftRes.pickupCity || 'Origin',
+          pickup_address: draftRes.pickupAddress || 'Unsaved Pickup Address',
+          pickup_pincode: draftRes.pickupPincode,
+          destination_city: draftRes.destinationCity || 'Destination',
+          destination_address: draftRes.destinationAddress || 'Unsaved Delivery Address',
+          destination_pincode: draftRes.destinationPincode,
+          vehicle_type: draftRes.vehicleTypeRequired || 'Commercial Unit',
+          material_type: draftRes.materialType || 'General Freight',
+          capacity_mt: draftRes.requiredCapacityMt,
+          pickup_date: draftRes.preferredLoadingDate || draftRes.loadingDatetime,
+          target_rate: draftRes.targetBudget ? Number(draftRes.targetBudget) : undefined,
+          quotations_count: 0,
+          is_draft: true,
+        });
+      }
+
+      // Map Real Database Requirements
+      rawReqs.forEach((r) => {
+        const linkedBooking = bookingsByReqId[r.id];
+        const linkedTrip = linkedBooking ? tripsByBookingId[linkedBooking.id] : undefined;
+        const linkedQuotes = quotesByReqId[r.id] || [];
+
+        // Determine precise lifecycle stage based on workflow state machine
+        let stage: TransportLifecycleStage = 'SUBMITTED';
+        let stageLabel = 'Submitted';
+
+        const rawReqStatus = (r.status || '').toUpperCase();
+        const rawTripStatus = (linkedTrip?.trip_status || '').toUpperCase();
+        const rawBookingStatus = (linkedBooking?.booking_status || '').toUpperCase();
+
+        if (rawReqStatus === 'CANCELLED' || rawBookingStatus === 'CANCELLED' || rawTripStatus === 'CANCELLED') {
+          stage = 'CANCELLED';
+          stageLabel = 'Cancelled';
+        } else if (rawTripStatus === 'COMPLETED' || rawReqStatus === 'COMPLETED' || rawBookingStatus === 'COMPLETED') {
+          stage = 'COMPLETED';
+          stageLabel = 'Completed';
+        } else if (rawTripStatus === 'DELIVERED') {
+          stage = 'DELIVERED';
+          stageLabel = 'Delivered';
+        } else if (rawTripStatus === 'AT_DESTINATION' || rawTripStatus === 'UNLOADING') {
+          stage = 'UNLOADING';
+          stageLabel = 'Unloading';
+        } else if (
+          rawTripStatus === 'IN_TRANSIT' ||
+          rawTripStatus === 'LOADED' ||
+          rawTripStatus === 'DISPATCHED'
+        ) {
+          stage = 'IN_TRANSIT';
+          stageLabel = 'In Transit';
+        } else if (rawTripStatus === 'AT_LOADING' || rawTripStatus === 'LOADING') {
+          stage = 'LOADING';
+          stageLabel = 'Loading';
+        } else if (
+          rawTripStatus === 'LORRY_ASSIGNED' ||
+          linkedTrip?.vehicle_id ||
+          linkedTrip?.driver_id ||
+          linkedTrip?.vehicles
+        ) {
+          stage = 'VEHICLE_ASSIGNED';
+          stageLabel = 'Vehicle Assigned';
+        } else if (linkedBooking && (rawBookingStatus === 'CONFIRMED' || rawBookingStatus === 'BOOKED')) {
+          stage = 'BOOKING_CONFIRMED';
+          stageLabel = 'Booking Confirmed';
+        } else if (linkedQuotes.length > 0 || rawReqStatus === 'QUOTATIONS_RECEIVED') {
+          stage = 'QUOTATIONS_RECEIVED';
+          stageLabel = 'Quotes Received';
+        } else if (rawReqStatus === 'UNDER_REVIEW' || rawReqStatus === 'PENDING_REVIEW') {
+          stage = 'UNDER_REVIEW';
+          stageLabel = 'Under Review';
+        } else if (rawReqStatus === 'DRAFT') {
+          stage = 'DRAFT';
+          stageLabel = 'Draft';
+        }
+
+        const displayId =
+          r.requirement_code && r.requirement_code.startsWith('TRUCKX-REQ-')
+            ? r.requirement_code
+            : formatDisplayId('REQ', r.requirement_code || r.requirement_id || r.id, r.created_at);
+
+        const canonicalBookingCode = linkedBooking
+          ? (linkedBooking.booking_code && linkedBooking.booking_code.startsWith('TRUCKX-BK-')
+              ? linkedBooking.booking_code
+              : formatDisplayId('BK', linkedBooking.booking_code || linkedBooking.id, linkedBooking.confirmed_at || linkedBooking.created_at))
+          : undefined;
+
+        const canonicalTripCode = linkedTrip
+          ? (linkedTrip.trip_code && linkedTrip.trip_code.startsWith('TRUCKX-TR-')
+              ? linkedTrip.trip_code
+              : formatDisplayId('TR', linkedTrip.trip_code || linkedTrip.lr_number || linkedTrip.id, linkedTrip.created_at))
+          : undefined;
+
+        unifiedList.push({
+          id: r.id,
+          displayId,
+          stage,
+          stageLabel,
+          status: r.status,
+          created_at: r.created_at,
+          pickup_city:
+            r.pickup_city ||
+            (r.pickup_address ? r.pickup_address.split(',')[0].trim() : 'Origin Hub'),
+          pickup_address: r.pickup_address || 'Pickup Point',
+          pickup_pincode: r.pickup_pincode,
+          destination_city:
+            r.destination_city ||
+            (r.destination_address ? r.destination_address.split(',')[0].trim() : 'Destination Depot'),
+          destination_address: r.destination_address || 'Delivery Point',
+          destination_pincode: r.destination_pincode,
+          vehicle_type: r.vehicle_type || r.vehicle_type_required || 'Commercial Fleet Unit',
+          material_type: r.material_type || 'General Cargo',
+          capacity_mt: r.capacity_mt || r.weight_mt,
+          package_count: r.package_count || r.quantity,
+          pickup_date: r.pickup_date || r.schedule_date,
+          target_rate: r.target_rate || r.budget_amount,
+          quotations_count: linkedQuotes.length,
+          quotations: linkedQuotes,
+          booking_id: linkedBooking?.id,
+          booking_code: canonicalBookingCode,
+          booking_status: linkedBooking?.booking_status,
+          booking_amount: linkedBooking?.grand_total,
+          trip_id: linkedTrip?.id,
+          trip_code: canonicalTripCode,
+          lr_number: linkedTrip?.lr_number || canonicalTripCode,
+          trip_status: linkedTrip?.trip_status,
+          vehicle_registration: linkedTrip?.vehicles?.registration_number,
+          vehicle_model: linkedTrip?.vehicles?.model,
+          driver_name: linkedTrip?.drivers?.full_name,
+          driver_phone: linkedTrip?.drivers?.mobile,
+        });
+      });
+
+      setItems(unifiedList);
+    } catch (err: any) {
+      console.warn('Error loading client requirements:', err);
+      setErrorMessage('Unable to load requirements. Please check your network connection.');
+      setItems([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -87,703 +402,577 @@ export const MyRequirementsScreen: React.FC<MyRequirementsScreenProps> = ({
   }, [clientId]);
 
   useEffect(() => {
-    loadRequirements();
-  }, [loadRequirements]);
+    loadData();
+
+    // Supabase Live Realtime Subscription for requirements, bookings & trips
+    const channel = supabase
+      .channel('my_requirements_live_sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'requirements' }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'trips' }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'client_quotes' }, () => loadData())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [loadData]);
 
   const onRefresh = () => {
     setRefreshing(true);
-    loadRequirements();
+    loadData();
   };
 
-  // ── Helper to resolve customer status ──
-  const getRequirementCategory = (item: any): RequirementStatusFilter => {
-    const rawStatus = (item.status || '').toUpperCase();
-    if (rawStatus === 'BOOKED') return 'BOOKED';
-    if (rawStatus === 'COMPLETED' || rawStatus === 'DELIVERED') return 'COMPLETED';
-    if (rawStatus === 'IN_TRANSIT') return 'IN_TRANSIT';
-    if (rawStatus === 'CANCELLED') return 'CANCELLED';
-
-    const quoteCount = item.quotationsCount || (item.quotations && item.quotations.length) || 0;
-    if (quoteCount > 0) return 'QUOTATIONS_RECEIVED';
-    return 'ACTIVE_RFQS';
+  const handleClearDraft = async () => {
+    Alert.alert(
+      'Clear Draft',
+      'Are you sure you want to discard your unsaved transport requirement draft?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear Draft',
+          style: 'destructive',
+          onPress: async () => {
+            await clientService.clearTransportRequirementDraft(clientId);
+            setSavedDraft(null);
+            setItems((prev) => prev.filter((i) => !i.is_draft));
+          },
+        },
+      ]
+    );
   };
 
-  // ── Calculated Summary Counts ──
-  const summaryCounts = useMemo(() => {
-    let total = requirements.length;
-    let active = 0;
-    let quotesReceived = 0;
-    let booked = 0;
+  // Stage filters matching Task 5 requirements
+  const stageFilters: { key: TransportLifecycleStage; label: string }[] = [
+    { key: 'ALL', label: 'All' },
+    { key: 'DRAFT', label: 'Draft' },
+    { key: 'SUBMITTED', label: 'Submitted' },
+    { key: 'UNDER_REVIEW', label: 'Under Review' },
+    { key: 'QUOTATIONS_RECEIVED', label: 'Quotations Received' },
+    { key: 'BOOKING_CONFIRMED', label: 'Booking Confirmed' },
+    { key: 'VEHICLE_ASSIGNED', label: 'Vehicle Assigned' },
+    { key: 'LOADING', label: 'Loading' },
+    { key: 'IN_TRANSIT', label: 'In Transit' },
+    { key: 'UNLOADING', label: 'Unloading' },
+    { key: 'DELIVERED', label: 'Delivered' },
+    { key: 'COMPLETED', label: 'Completed' },
+    { key: 'CANCELLED', label: 'Cancelled' },
+  ];
+
+  // Stage counts for quick header cards
+  const stageCounts = useMemo(() => {
+    let total = items.length;
+    let quotes = 0;
+    let confirmed = 0;
     let inTransit = 0;
     let completed = 0;
-    let cancelled = 0;
 
-    requirements.forEach((r) => {
-      const cat = getRequirementCategory(r);
-      if (cat === 'ACTIVE_RFQS') active++;
-      else if (cat === 'QUOTATIONS_RECEIVED') quotesReceived++;
-      else if (cat === 'BOOKED') booked++;
-      else if (cat === 'IN_TRANSIT') inTransit++;
-      else if (cat === 'COMPLETED') completed++;
-      else if (cat === 'CANCELLED') cancelled++;
+    items.forEach((i) => {
+      if (i.stage === 'QUOTATIONS_RECEIVED') quotes++;
+      else if (i.stage === 'BOOKING_CONFIRMED' || i.stage === 'VEHICLE_ASSIGNED') confirmed++;
+      else if (i.stage === 'LOADING' || i.stage === 'IN_TRANSIT' || i.stage === 'UNLOADING') inTransit++;
+      else if (i.stage === 'DELIVERED' || i.stage === 'COMPLETED') completed++;
     });
 
-    return {
-      total,
-      active: active + quotesReceived,
-      quotesReceived,
-      booked,
-      inTransit,
-      completed,
-      cancelled,
-    };
-  }, [requirements]);
+    return { total, quotes, confirmed, inTransit, completed };
+  }, [items]);
 
-  // ── Filtered & Sorted Requirements ──
-  const filteredAndSortedItems = useMemo(() => {
-    let list = [...requirements];
+  // Filter & Search
+  const filteredItems = useMemo(() => {
+    return items.filter((item) => {
+      // Stage Filter
+      if (selectedStage !== 'ALL') {
+        if (item.stage !== selectedStage) return false;
+      }
 
-    // Filter by Tab
-    if (filterTab !== 'ALL') {
-      list = list.filter((item) => {
-        const cat = getRequirementCategory(item);
-        if (filterTab === 'ACTIVE_RFQS') {
-          return cat === 'ACTIVE_RFQS' || cat === 'QUOTATIONS_RECEIVED';
-        }
-        return cat === filterTab;
-      });
-    }
-
-    // Search query
-    const cleanSearch = searchQuery.trim().toLowerCase();
-    if (cleanSearch) {
-      list = list.filter((item) => {
+      // Search Query
+      if (debouncedQuery) {
         const searchTarget = [
           item.id,
-          item.pickup_address,
+          item.displayId,
+          item.lr_number,
+          item.trip_code,
+          item.booking_code,
           item.pickup_city,
-          item.pickup_pincode,
-          item.destination_address,
+          item.pickup_address,
           item.destination_city,
-          item.destination_pincode,
-          item.material_type,
+          item.destination_address,
           item.vehicle_type,
-          item.vehicle_type_required,
+          item.material_type,
+          item.vehicle_registration,
+          item.driver_name,
         ]
           .filter(Boolean)
           .join(' ')
           .toLowerCase();
 
-        return searchTarget.includes(cleanSearch);
-      });
-    }
+        if (!searchTarget.includes(debouncedQuery)) return false;
+      }
 
-    // Sort order
-    list.sort((a, b) => {
-      const dateA = new Date(a.updated_at || a.created_at || 0).getTime();
-      const dateB = new Date(b.updated_at || b.created_at || 0).getTime();
-
-      if (sortOrder === 'NEWEST') return dateB - dateA;
-      if (sortOrder === 'OLDEST') return dateA - dateB;
-      // Default: Recently updated
-      return dateB - dateA;
+      return true;
     });
+  }, [items, selectedStage, debouncedQuery]);
 
-    return list;
-  }, [requirements, filterTab, searchQuery, sortOrder]);
-
-  const handleOpenMap = (item: any) => {
-    const directionsUrl = buildGoogleMapsDirectionsUrl({
-      latitude: item.pickup_latitude,
-      longitude: item.pickup_longitude,
-      address: `${item.pickup_address || item.pickup_city || ''}`,
-    });
-
-    Linking.canOpenURL(directionsUrl)
-      .then((supported) => {
-        if (supported) {
-          Linking.openURL(directionsUrl);
-        } else {
-          Linking.openURL(directionsUrl);
-        }
-      })
-      .catch(() => {
-        Alert.alert('Cannot Open Maps', 'Unable to launch Google Maps.');
-      });
+  const handleCopyId = (id: string) => {
+    Clipboard.setString(id);
+    Alert.alert('Copied', `ID ${id} copied to clipboard.`);
   };
 
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return 'Flexible Schedule';
-    try {
-      const d = new Date(dateString);
-      if (isNaN(d.getTime())) return dateString;
-      return d.toLocaleDateString('en-GB', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-      });
-    } catch {
-      return dateString;
+  const handleCallDriver = (phone?: string) => {
+    if (!phone) {
+      Alert.alert('Driver Contact', 'Driver phone number is not available.');
+      return;
     }
-  };
-
-  const formatDateTime = (dateString?: string) => {
-    if (!dateString) return 'Immediate Loading Required';
-    try {
-      const d = new Date(dateString);
-      if (isNaN(d.getTime())) return dateString;
-      const datePart = d.toLocaleDateString('en-GB', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-      });
-      const timePart = d.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true,
-      });
-      return `${datePart} · ${timePart}`;
-    } catch {
-      return dateString;
-    }
-  };
-
-  const getCity = (addr?: string, pincode?: string) => {
-    if (!addr) return pincode ? `PIN: ${pincode}` : 'Hub Depot';
-    const firstPart = addr.split(',')[0].trim();
-    return firstPart || addr;
+    const clean = phone.replace(/[^0-9+]/g, '');
+    Platform.OS === 'web'
+      ? window.open(`tel:${clean}`)
+      : Alert.alert('Call Driver', `Calling ${clean}`);
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* ── Top Header Bar with "My Transport Requirements" Title & Action ── */}
-      <View style={styles.topBar}>
-        <View style={styles.topLeftWrap}>
-          {onBack && (
-            <TouchableOpacity
-              style={styles.backBtn}
-              onPress={onBack}
-              accessibilityLabel="Back to Dashboard"
-              activeOpacity={0.7}
-            >
-              <ArrowLeft size={20} color="#101D36" strokeWidth={2.4} />
-            </TouchableOpacity>
-          )}
-          <Text style={[styles.headerTitle, !onBack && { marginLeft: 0 }]} numberOfLines={1}>
-            My Transport Requirements
-          </Text>
+      {/* ── Top Header matching Shipment Screen Theme ── */}
+      <View style={styles.topHeader}>
+        <View style={styles.topHeaderLeft}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={onBack}
+            accessibilityLabel="Back to Dashboard"
+          >
+            <ArrowLeft size={20} color="#0C1A34" />
+          </TouchableOpacity>
+          <BrandLogoHeader size="sm" showSubtitle={false} />
         </View>
 
-        {onCreateNew && (
+        <TouchableOpacity
+          style={styles.createRfqButton}
+          onPress={onCreateNew}
+          activeOpacity={0.85}
+          accessibilityLabel="Post New Requirement"
+        >
+          <Plus size={16} color="#FFFFFF" strokeWidth={2.4} />
+          <Text style={styles.createRfqButtonText}>Post RFQ</Text>
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#F15A24" />}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* ── Quick Summary Cards ── */}
+        <View style={styles.metricsRow}>
           <TouchableOpacity
-            style={styles.addBtn}
-            onPress={onCreateNew}
-            accessibilityLabel="Create Transport Requirement"
-            activeOpacity={0.85}
+            style={[styles.metricCard, selectedStage === 'ALL' && styles.metricCardActive]}
+            onPress={() => setSelectedStage('ALL')}
+            activeOpacity={0.8}
           >
-            <Plus size={20} color="#FFFFFF" strokeWidth={2.8} />
+            <Text style={[styles.metricValue, { color: '#0C1A34' }]}>{stageCounts.total}</Text>
+            <Text style={styles.metricLabel}>Total Reqs</Text>
+            <View style={[styles.metricBar, { backgroundColor: '#0C1A34' }]} />
           </TouchableOpacity>
-        )}
-      </View>
 
-      {/* Hidden test-compatibility tokens */}
-      <View style={{ height: 0, overflow: 'hidden' }} accessibilityElementsHidden={true}>
-        <BrandLogoHeader size="sm" showSubtitle={false} />
-        <Text style={styles.screenHeading}>My Transport Requirements</Text>
-        <Text style={styles.screenSubtitle}>
-          Track freight requests, compare quotations, and manage shipments.
-        </Text>
-      </View>
+          <TouchableOpacity
+            style={[
+              styles.metricCard,
+              selectedStage === 'QUOTATIONS_RECEIVED' && styles.metricCardActive,
+            ]}
+            onPress={() => setSelectedStage(selectedStage === 'QUOTATIONS_RECEIVED' ? 'ALL' : 'QUOTATIONS_RECEIVED')}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.metricValue, { color: '#16A34A' }]}>{stageCounts.quotes}</Text>
+            <Text style={styles.metricLabel}>Quotes Recv</Text>
+            <View style={[styles.metricBar, { backgroundColor: '#16A34A' }]} />
+          </TouchableOpacity>
 
-      {/* ── Summary Statistics Cards (Screenshot 2 Match) ── */}
-      <View style={styles.statsContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsScroll}>
-          {/* Card 1: Total Requirements */}
-          <View style={styles.statCard}>
-            <View style={styles.statIconBoxOrange}>
-              <FileText size={17} color="#F05A24" />
-            </View>
-            <View>
-              <Text style={styles.statNumber}>{summaryCounts.total}</Text>
-              <Text style={styles.statLabel}>Total Requirements</Text>
-            </View>
-          </View>
+          <TouchableOpacity
+            style={[
+              styles.metricCard,
+              selectedStage === 'IN_TRANSIT' && styles.metricCardActive,
+            ]}
+            onPress={() => setSelectedStage(selectedStage === 'IN_TRANSIT' ? 'ALL' : 'IN_TRANSIT')}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.metricValue, { color: '#F15A24' }]}>{stageCounts.inTransit}</Text>
+            <Text style={styles.metricLabel}>In Transit</Text>
+            <View style={[styles.metricBar, { backgroundColor: '#F15A24' }]} />
+          </TouchableOpacity>
 
-          {/* Card 2: Active RFQs */}
-          <View style={styles.statCard}>
-            <View style={styles.statIconBoxOrange}>
-              <Send size={16} color="#F05A24" />
-            </View>
-            <View>
-              <Text style={styles.statNumber}>{summaryCounts.active}</Text>
-              <Text style={styles.statLabel}>Active RFQs</Text>
-            </View>
-          </View>
+          <TouchableOpacity
+            style={[
+              styles.metricCard,
+              selectedStage === 'COMPLETED' && styles.metricCardActive,
+            ]}
+            onPress={() => setSelectedStage(selectedStage === 'COMPLETED' ? 'ALL' : 'COMPLETED')}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.metricValue, { color: '#2563EB' }]}>{stageCounts.completed}</Text>
+            <Text style={styles.metricLabel}>Completed</Text>
+            <View style={[styles.metricBar, { backgroundColor: '#2563EB' }]} />
+          </TouchableOpacity>
+        </View>
 
-          {/* Card 3: Booked */}
-          <View style={styles.statCard}>
-            <View style={styles.statIconBoxOrange}>
-              <Truck size={17} color="#F05A24" />
-            </View>
-            <View>
-              <Text style={styles.statNumber}>{summaryCounts.booked}</Text>
-              <Text style={styles.statLabel}>Booked</Text>
-            </View>
-          </View>
-
-          {/* Card 4: Completed */}
-          <View style={styles.statCard}>
-            <View style={styles.statIconBoxGreen}>
-              <CheckCircle2 size={17} color="#10B981" />
-            </View>
-            <View>
-              <Text style={styles.statNumber}>{summaryCounts.completed}</Text>
-              <Text style={styles.statLabel}>Completed</Text>
-            </View>
-          </View>
-        </ScrollView>
-      </View>
-
-      {/* ── Functional Search & Sort Bar ── */}
-      <View style={styles.searchAndSortRow}>
-        <View style={[styles.searchBox, isSearchFocused && styles.searchBoxFocused]}>
-          <Search size={16} color={isSearchFocused ? '#F05A24' : '#64748B'} />
+        {/* ── Search Input Bar ── */}
+        <View style={[styles.searchBarContainer, isSearchFocused && styles.searchBarFocused]}>
+          <Search size={18} color="#64748B" />
           <TextInput
             style={styles.searchInput}
+            placeholder="Search by ID, route, material, vehicle, driver..."
+            placeholderTextColor="#94A3B8"
             value={searchQuery}
             onChangeText={setSearchQuery}
             onFocus={() => setIsSearchFocused(true)}
             onBlur={() => setIsSearchFocused(false)}
-            placeholder="Search by ID, route, material, vehicle..."
-            placeholderTextColor="#94A3B8"
-            autoCapitalize="characters"
+            autoCapitalize="none"
             autoCorrect={false}
-            returnKeyType="search"
-            accessibilityLabel="Search by ID, route, material, vehicle"
           />
           {searchQuery.length > 0 && (
-            <TouchableOpacity
-              onPress={() => setSearchQuery('')}
-              style={styles.clearSearchBtn}
-              accessibilityLabel="Clear Search"
-              activeOpacity={0.7}
-            >
+            <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearSearchBtn}>
               <X size={15} color="#64748B" />
             </TouchableOpacity>
           )}
         </View>
 
-        <TouchableOpacity
-          style={styles.sortBtn}
-          onPress={() => setShowSortModal(true)}
-          activeOpacity={0.8}
-          accessibilityLabel="Sort Requirements"
-        >
-          <ArrowUpDown size={14} color="#101D36" />
-          <Text style={styles.sortBtnText}>Sort</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* ── Horizontally Scrollable Status Filter Chips ── */}
-      <View style={styles.filterChipsWrap}>
+        {/* ── Horizontal Stage Filters (Matching Theme) ── */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterChipsScroll}
-          style={styles.filterChipsScrollView}
+          contentContainerStyle={styles.filterScroll}
         >
-          <TouchableOpacity
-            style={[styles.chip, filterTab === 'ALL' && styles.chipActive]}
-            onPress={() => setFilterTab('ALL')}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.chipText, filterTab === 'ALL' && styles.chipTextActive]}>
-              All ({summaryCounts.total})
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.chip, filterTab === 'ACTIVE_RFQS' && styles.chipActive]}
-            onPress={() => setFilterTab('ACTIVE_RFQS')}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.chipText, filterTab === 'ACTIVE_RFQS' && styles.chipTextActive]}>
-              Active RFQs ({summaryCounts.active})
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.chip, filterTab === 'QUOTATIONS_RECEIVED' && styles.chipActive]}
-            onPress={() => setFilterTab('QUOTATIONS_RECEIVED')}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.chipText, filterTab === 'QUOTATIONS_RECEIVED' && styles.chipTextActive]}>
-              Quotations ({summaryCounts.quotesReceived})
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.chip, filterTab === 'BOOKED' && styles.chipActive]}
-            onPress={() => setFilterTab('BOOKED')}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.chipText, filterTab === 'BOOKED' && styles.chipTextActive]}>
-              Booked ({summaryCounts.booked})
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.chip, filterTab === 'IN_TRANSIT' && styles.chipActive]}
-            onPress={() => setFilterTab('IN_TRANSIT')}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.chipText, filterTab === 'IN_TRANSIT' && styles.chipTextActive]}>
-              In Transit ({summaryCounts.inTransit})
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.chip, filterTab === 'COMPLETED' && styles.chipActive]}
-            onPress={() => setFilterTab('COMPLETED')}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.chipText, filterTab === 'COMPLETED' && styles.chipTextActive]}>
-              Completed ({summaryCounts.completed})
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.chip, filterTab === 'CANCELLED' && styles.chipActive]}
-            onPress={() => setFilterTab('CANCELLED')}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.chipText, filterTab === 'CANCELLED' && styles.chipTextActive]}>
-              Cancelled ({summaryCounts.cancelled})
-            </Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </View>
-
-      {/* ── Requirements List ── */}
-      <ScrollView
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#F05A24']} />}
-      >
-        {loading ? (
-          <View style={styles.centerContainer}>
-            <ActivityIndicator size="large" color="#F05A24" />
-            <Text style={styles.loadingText}>Fetching authorized freight requirements...</Text>
-          </View>
-        ) : errorMsg ? (
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>{errorMsg}</Text>
-            <TouchableOpacity style={styles.retryBtn} onPress={loadRequirements}>
-              <Text style={styles.retryBtnText}>Retry</Text>
-            </TouchableOpacity>
-          </View>
-        ) : filteredAndSortedItems.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <View style={styles.emptyIconCircle}>
-              <Layers size={40} color="#94A3B8" />
-            </View>
-            <Text style={styles.emptyTitle}>
-              {searchQuery ? 'No matching requirements' : 'No transport requirements yet'}
-            </Text>
-            <Text style={styles.emptySubtitle}>
-              {searchQuery
-                ? 'Try adjusting your search criteria or clear the filter.'
-                : 'Post a new freight requirement to get competitive carrier quotations across North Eastern corridors.'}
-            </Text>
-            {searchQuery ? (
-              <TouchableOpacity style={styles.clearFilterBtn} onPress={() => setSearchQuery('')}>
-                <Text style={styles.clearFilterBtnText}>Clear Search</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity style={styles.createFirstBtn} onPress={onCreateNew}>
-                <Plus size={16} color="#FFFFFF" strokeWidth={2.4} />
-                <Text style={styles.createFirstBtnText}>Create Requirement</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        ) : (
-          filteredAndSortedItems.map((item) => {
-            const category = getRequirementCategory(item);
-            const quoteCount = item.quotationsCount || (item.quotations && item.quotations.length) || 0;
-            const isBooked = category === 'BOOKED' || item.status === 'BOOKED';
-            const isCompleted = category === 'COMPLETED' || item.status === 'COMPLETED';
-
-            const originCity = getCity(item.pickup_address, item.pickup_pincode);
-            const destinationCity = getCity(item.destination_address, item.destination_pincode);
-
+          {stageFilters.map((tab) => {
+            const isSelected = selectedStage === tab.key;
             return (
               <TouchableOpacity
-                key={item.id}
-                style={styles.requirementCard}
-                onPress={() => onSelectRequirement(item.id)}
-                activeOpacity={0.88}
+                key={tab.key}
+                style={[styles.filterChip, isSelected && styles.filterChipActive]}
+                onPress={() => setSelectedStage(tab.key)}
+                activeOpacity={0.75}
               >
-                {/* 1. Card Top Row: ID, Date, Status */}
-                <View style={styles.cardTopRow}>
-                  <View style={styles.idDateRow}>
-                    <Text style={styles.requirementIdText}>{item.id}</Text>
-                    <Text style={styles.datePostedText}>{formatDate(item.created_at)}</Text>
-                  </View>
+                <Text style={[styles.filterChipText, isSelected && styles.filterChipTextActive]}>
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
 
-                  {/* Status Badge */}
-                  {category === 'QUOTATIONS_RECEIVED' ? (
-                    <View style={styles.badgeBlue}>
-                      <View style={styles.dotBlue} />
-                      <Text style={styles.badgeBlueText}>Quotations Received</Text>
-                    </View>
-                  ) : isBooked ? (
-                    <View style={styles.badgeGreen}>
-                      <View style={styles.dotGreen} />
-                      <Text style={styles.badgeGreenText}>Booked</Text>
-                    </View>
-                  ) : isCompleted ? (
-                    <View style={styles.badgeGreen}>
-                      <View style={styles.dotGreen} />
-                      <Text style={styles.badgeGreenText}>Completed</Text>
-                    </View>
-                  ) : category === 'CANCELLED' ? (
-                    <View style={styles.badgeGrey}>
-                      <View style={styles.dotGrey} />
-                      <Text style={styles.badgeGreyText}>Cancelled</Text>
-                    </View>
-                  ) : (
-                    <View style={styles.badgeOrange}>
-                      <View style={styles.dotOrange} />
-                      <Text style={styles.badgeOrangeText}>Under Review / RFQ</Text>
-                    </View>
-                  )}
-                </View>
+        {/* ── List of Requirements & Shipments ── */}
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#F15A24" />
+            <Text style={styles.loadingText}>Syncing transport requirements & shipments...</Text>
+          </View>
+        ) : errorMessage ? (
+          <View style={styles.errorContainer}>
+            <AlertTriangle size={32} color="#DC2626" />
+            <Text style={styles.errorTitle}>Connection Issue</Text>
+            <Text style={styles.errorSubtitle}>{errorMessage}</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={loadData} activeOpacity={0.8}>
+              <RotateCcw size={15} color="#FFFFFF" />
+              <Text style={styles.retryButtonText}>Retry Sync</Text>
+            </TouchableOpacity>
+          </View>
+        ) : filteredItems.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <View style={styles.emptyIconCircle}>
+              <Package size={34} color="#94A3B8" />
+            </View>
+            <Text style={styles.emptyTitle}>No requirements found</Text>
+            <Text style={styles.emptySubtitle}>
+              {searchQuery
+                ? `No matching records found for "${searchQuery}".`
+                : selectedStage !== 'ALL'
+                  ? `No records found under the "${stageFilters.find((s) => s.key === selectedStage)?.label}" stage.`
+                  : 'You have not submitted any transport requirements yet. Post an RFQ to get instant carrier quotes.'}
+            </Text>
+            <TouchableOpacity style={styles.emptyActionBtn} onPress={onCreateNew} activeOpacity={0.85}>
+              <Plus size={16} color="#FFFFFF" strokeWidth={2.4} />
+              <Text style={styles.emptyActionBtnText}>Create Transport Requirement</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          filteredItems.map((item) => {
+            const hasTrip = !!item.trip_id;
+            const hasBooking = !!item.booking_id;
+            const hasQuotes = item.quotations_count > 0;
+            const isLiveShipment =
+              item.stage === 'LOADING' ||
+              item.stage === 'IN_TRANSIT' ||
+              item.stage === 'UNLOADING' ||
+              item.stage === 'DELIVERED';
 
-                {/* 2. Route Corridor & Actions (Screenshot 2 Match) */}
-                <View style={styles.routeSectionRow}>
-                  {/* Origin & Destination Display */}
-                  <View style={styles.corridorBlock}>
-                    <View style={styles.originNode}>
-                      <View style={styles.nodeTagRow}>
-                        <MapPin size={11} color="#F05A24" />
-                        <Text style={styles.nodeTagOrigin}>FROM</Text>
-                      </View>
-                      <Text style={styles.nodeCityText} numberOfLines={1}>
-                        {originCity}
-                      </Text>
-                      {item.pickup_pincode ? (
-                        <Text style={styles.nodePinText}>PIN: {item.pickup_pincode}</Text>
-                      ) : null}
-                    </View>
+            // Resolve stage badge styling
+            let badgeBg = '#EFF6FF';
+            let badgeColor = '#2563EB';
+            let badgeBorder = '#BFDBFE';
 
-                    {/* Dotted Route Connector */}
-                    <View style={styles.corridorConnector}>
-                      <View style={styles.corridorDotLine} />
-                      <View style={styles.truckIconBadge}>
-                        <Truck size={13} color="#F05A24" />
-                      </View>
-                      <View style={styles.corridorDotLine} />
-                    </View>
+            if (item.stage === 'DRAFT') {
+              badgeBg = '#F1F5F9';
+              badgeColor = '#64748B';
+              badgeBorder = '#CBD5E1';
+            } else if (item.stage === 'UNDER_REVIEW') {
+              badgeBg = '#FFFBEB';
+              badgeColor = '#D97706';
+              badgeBorder = '#FDE68A';
+            } else if (item.stage === 'QUOTATIONS_RECEIVED') {
+              badgeBg = '#F0FDF4';
+              badgeColor = '#16A34A';
+              badgeBorder = '#BBF7D0';
+            } else if (item.stage === 'BOOKING_CONFIRMED' || item.stage === 'VEHICLE_ASSIGNED') {
+              badgeBg = '#F5F3FF';
+              badgeColor = '#7C3AED';
+              badgeBorder = '#DDD6FE';
+            } else if (item.stage === 'LOADING' || item.stage === 'IN_TRANSIT' || item.stage === 'UNLOADING') {
+              badgeBg = '#FFF5ED';
+              badgeColor = '#F15A24';
+              badgeBorder = '#FED7AA';
+            } else if (item.stage === 'DELIVERED' || item.stage === 'COMPLETED') {
+              badgeBg = '#ECFDF5';
+              badgeColor = '#059669';
+              badgeBorder = '#A7F3D0';
+            } else if (item.stage === 'CANCELLED') {
+              badgeBg = '#FEF2F2';
+              badgeColor = '#DC2626';
+              badgeBorder = '#FECACA';
+            }
 
-                    <View style={styles.destNode}>
-                      <View style={styles.nodeTagRow}>
-                        <MapPin size={11} color="#10B981" />
-                        <Text style={styles.nodeTagDest}>TO</Text>
-                      </View>
-                      <Text style={styles.nodeCityText} numberOfLines={1}>
-                        {destinationCity}
-                      </Text>
-                      {item.destination_pincode ? (
-                        <Text style={styles.nodePinText}>PIN: {item.destination_pincode}</Text>
-                      ) : null}
-                    </View>
-                  </View>
-
-                  {/* Actions Column (Far Right) */}
-                  <View style={styles.rightActionsColumn}>
+            return (
+              <View key={item.id} style={styles.card}>
+                {/* ── Top Header Row ── */}
+                <View style={styles.cardHeaderRow}>
+                  <View style={styles.cardIdGroup}>
                     <TouchableOpacity
-                      style={styles.viewOnMapBtn}
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        handleOpenMap(item);
-                      }}
-                      activeOpacity={0.8}
+                      onPress={() => !item.is_draft && handleCopyId(item.displayId)}
+                      style={styles.idCopyRow}
+                      activeOpacity={0.7}
                     >
-                      <MapPin size={12} color="#101D36" />
-                      <Text style={styles.viewOnMapBtnText}>View on Map</Text>
+                      <Text style={styles.cardIdText}>{item.displayId}</Text>
+                      {!item.is_draft && <Copy size={12} color="#94A3B8" />}
                     </TouchableOpacity>
 
-                    {isBooked || isCompleted ? (
+                    {item.trip_id && (
+                      <View style={styles.tripIdPill}>
+                        <Compass size={11} color="#F15A24" />
+                        <Text style={styles.tripIdPillText}>
+                          {item.lr_number || formatDisplayId('TRP', item.trip_id)}
+                        </Text>
+                      </View>
+                    )}
+
+                    {item.booking_id && !item.trip_id && (
+                      <View style={styles.bookingIdPill}>
+                        <Text style={styles.bookingIdPillText}>
+                          {item.booking_code || formatDisplayId('BK', item.booking_id)}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  <View style={[styles.stageBadge, { backgroundColor: badgeBg, borderColor: badgeBorder }]}>
+                    <Text style={[styles.stageBadgeText, { color: badgeColor }]}>
+                      {item.stageLabel}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* ── Route Row ── */}
+                <View style={styles.routeRow}>
+                  <View style={styles.routeCityBox}>
+                    <View style={styles.originGreenDot} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.cityText} numberOfLines={1}>
+                        {item.pickup_city}
+                      </Text>
+                      <Text style={styles.addressSubText} numberOfLines={1}>
+                        {item.pickup_address}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.routeArrowBox}>
+                    <Text style={styles.routeArrow}>➔</Text>
+                  </View>
+
+                  <View style={styles.routeCityBox}>
+                    <View style={styles.destRedDot} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.cityText} numberOfLines={1}>
+                        {item.destination_city}
+                      </Text>
+                      <Text style={styles.addressSubText} numberOfLines={1}>
+                        {item.destination_address}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* ── Cargo & Vehicle Row ── */}
+                <View style={styles.specsRow}>
+                  <View style={styles.specChip}>
+                    <Truck size={13} color="#64748B" />
+                    <Text style={styles.specChipText} numberOfLines={1}>
+                      {item.vehicle_type}
+                    </Text>
+                  </View>
+
+                  <View style={styles.specChip}>
+                    <Package size={13} color="#64748B" />
+                    <Text style={styles.specChipText} numberOfLines={1}>
+                      {item.material_type} {item.capacity_mt ? `• ${item.capacity_mt} MT` : ''}
+                    </Text>
+                  </View>
+
+                  {item.target_rate ? (
+                    <View style={styles.budgetChip}>
+                      <IndianRupee size={12} color="#16A34A" />
+                      <Text style={styles.budgetChipText}>
+                        ₹{Number(item.target_rate).toLocaleString('en-IN')}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+
+                {/* ── Assigned Driver / Vehicle Details if available ── */}
+                {item.driver_name || item.vehicle_registration ? (
+                  <View style={styles.driverInfoBanner}>
+                    <View style={styles.driverBannerLeft}>
+                      <ShieldCheck size={14} color="#16A34A" />
+                      <Text style={styles.driverBannerText} numberOfLines={1}>
+                        {item.vehicle_registration || 'Vehicle Assigned'}
+                        {item.driver_name ? ` • ${item.driver_name}` : ''}
+                      </Text>
+                    </View>
+
+                    {item.driver_phone ? (
                       <TouchableOpacity
-                        style={styles.viewDetailsBtn}
-                        onPress={() => onSelectRequirement(item.id)}
-                        activeOpacity={0.85}
+                        style={styles.callDriverBtn}
+                        onPress={() => handleCallDriver(item.driver_phone)}
+                        accessibilityLabel="Call Driver"
                       >
-                        <FileCheck size={12} color="#FFFFFF" />
-                        <Text style={styles.viewDetailsBtnText}>View Details</Text>
+                        <Phone size={12} color="#F15A24" />
+                        <Text style={styles.callDriverText}>Call</Text>
                       </TouchableOpacity>
-                    ) : (
+                    ) : null}
+                  </View>
+                ) : null}
+
+                {/* ── Card Footer & Contextual Actions ── */}
+                <View style={styles.cardFooterRow}>
+                  <View style={styles.dateWrap}>
+                    <Calendar size={13} color="#94A3B8" />
+                    <Text style={styles.dateText}>
+                      {item.created_at
+                        ? new Date(item.created_at).toLocaleDateString('en-GB', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                          })
+                        : 'Recent'}
+                    </Text>
+                  </View>
+
+                  <View style={styles.actionsRight}>
+                    {/* Live Shipment / Trip Active: Prominent Track CTA */}
+                    {isLiveShipment && item.trip_id && (
                       <TouchableOpacity
-                        style={styles.viewQuotesBtn}
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          if (onViewQuotations) {
-                            onViewQuotations(item.id);
-                          } else {
-                            onSelectRequirement(item.id);
-                          }
+                        style={styles.primaryActionBtn}
+                        onPress={() => {
+                          if (onTrackShipment) onTrackShipment(item.trip_id!);
                         }}
                         activeOpacity={0.85}
+                        accessibilityLabel="Track Shipment"
                       >
-                        <FileText size={12} color="#FFFFFF" />
-                        <Text style={styles.viewQuotesBtnText}>
-                          {quoteCount > 0 ? `View ${quoteCount} Quotations` : 'View Quotations'}
+                        <Compass size={14} color="#FFFFFF" strokeWidth={2.4} />
+                        <Text style={styles.primaryActionBtnText}>Track Shipment</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {/* Quotations Received: Review Quotes CTA */}
+                    {!isLiveShipment && hasQuotes && (
+                      <TouchableOpacity
+                        style={styles.primaryActionBtn}
+                        onPress={() => {
+                          if (onViewQuotations) onViewQuotations(item.id);
+                        }}
+                        activeOpacity={0.85}
+                        accessibilityLabel="View Quotations"
+                      >
+                        <FileText size={14} color="#FFFFFF" strokeWidth={2.2} />
+                        <Text style={styles.primaryActionBtnText}>
+                          Quotes ({item.quotations_count})
                         </Text>
                       </TouchableOpacity>
                     )}
-                  </View>
-                </View>
 
-                {/* 3. Specs Row: Vehicle & Cargo */}
-                <View style={styles.specsRow}>
-                  <View style={styles.specColumn}>
-                    <View style={styles.specLabelRow}>
-                      <Truck size={14} color="#64748B" />
-                      <Text style={styles.specTitle} numberOfLines={1}>
-                        {item.vehicle_type || item.vehicle_type_required || '32 FT Multi-Axle'}
-                      </Text>
-                    </View>
-                    <Text style={styles.specSub}>
-                      {item.required_capacity_mt ? `${item.required_capacity_mt} MT Capacity` : '25 MT Capacity'}
-                    </Text>
-                  </View>
+                    {/* Booking Confirmed without live trip yet: View Booking CTA */}
+                    {!isLiveShipment && !hasQuotes && hasBooking && (
+                      <TouchableOpacity
+                        style={styles.secondaryActionBtn}
+                        onPress={() => {
+                          if (onSelectBooking) onSelectBooking(item.booking_id!);
+                          else onSelectRequirement(item.id);
+                        }}
+                        activeOpacity={0.8}
+                        accessibilityLabel="View Booking Details"
+                      >
+                        <Text style={styles.secondaryActionBtnText}>View Booking</Text>
+                      </TouchableOpacity>
+                    )}
 
-                  <View style={styles.specDivider} />
-
-                  <View style={styles.specColumn}>
-                    <View style={styles.specLabelRow}>
-                      <Package size={14} color="#64748B" />
-                      <Text style={styles.specTitle} numberOfLines={1}>
-                        {item.material_type || 'FMCG & Consumer Goods'}
-                      </Text>
-                    </View>
-                    <Text style={styles.specSub}>
-                      {item.required_capacity_mt ? `${item.required_capacity_mt} MT` : 'Full Truckload'}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* 4. Bottom Meta Row: Loading Date & Quote Status */}
-                <View style={styles.bottomMetaRow}>
-                  <View style={styles.dateMetaWrap}>
-                    <Calendar size={13} color="#64748B" />
-                    <Text style={styles.dateMetaText}>
-                      {formatDateTime(item.loading_datetime)}
-                    </Text>
-                  </View>
-
-                  <View style={styles.quoteStatusWrap}>
-                    {isBooked ? (
-                      <View style={styles.quoteStatusPillGreen}>
-                        <CheckCircle2 size={12} color="#16A34A" />
-                        <Text style={styles.quoteStatusTextGreen}>Booked with Certified Transporter</Text>
-                      </View>
-                    ) : quoteCount > 0 ? (
-                      <View style={styles.quoteStatusPillBlue}>
-                        <FileText size={12} color="#2563EB" />
-                        <Text style={styles.quoteStatusTextBlue}>{quoteCount} Quotations Received</Text>
-                      </View>
-                    ) : (
-                      <View style={styles.quoteStatusPillOrange}>
-                        <Clock size={12} color="#F05A24" />
-                        <Text style={styles.quoteStatusTextOrange}>Awaiting Carrier Quotations</Text>
+                    {/* Unsaved Draft: Resume Draft or Clear CTA */}
+                    {item.is_draft && (
+                      <View style={{ flexDirection: 'row', gap: 6 }}>
+                        <TouchableOpacity
+                          style={styles.clearDraftBtn}
+                          onPress={handleClearDraft}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.clearDraftBtnText}>Discard</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.primaryActionBtn}
+                          onPress={() => {
+                            if (onResumeDraft && savedDraft) onResumeDraft(savedDraft);
+                          }}
+                          activeOpacity={0.85}
+                        >
+                          <Text style={styles.primaryActionBtnText}>Resume Draft</Text>
+                        </TouchableOpacity>
                       </View>
                     )}
-                    <ChevronRight size={15} color="#F05A24" />
+
+                    {/* Normal Submitted / Under Review Requirement Details */}
+                    {!item.is_draft && (
+                      <TouchableOpacity
+                        style={styles.detailsBtn}
+                        onPress={() => onSelectRequirement(item.id)}
+                        activeOpacity={0.8}
+                        accessibilityLabel="View Requirement Details"
+                      >
+                        <Text style={styles.detailsBtnText}>Details</Text>
+                        <ChevronRight size={14} color="#64748B" />
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
-              </TouchableOpacity>
+              </View>
             );
           })
         )}
+
+        <View style={{ height: 40 }} />
       </ScrollView>
-
-      {/* ── Sort Order Selection Modal ── */}
-      <Modal
-        visible={showSortModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowSortModal(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalBackdrop}
-          activeOpacity={1}
-          onPress={() => setShowSortModal(false)}
-        >
-          <View style={styles.sortModalCard}>
-            <View style={styles.sortModalHeader}>
-              <Text style={styles.sortModalTitle}>Sort Requirements</Text>
-              <TouchableOpacity onPress={() => setShowSortModal(false)}>
-                <X size={20} color="#64748B" />
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity
-              style={[styles.sortOptionItem, sortOrder === 'RECENT' && styles.sortOptionSelected]}
-              onPress={() => {
-                setSortOrder('RECENT');
-                setShowSortModal(false);
-              }}
-            >
-              <Text style={[styles.sortOptionText, sortOrder === 'RECENT' && styles.sortOptionTextActive]}>
-                Recently Updated
-              </Text>
-              {sortOrder === 'RECENT' && <CheckCircle2 size={16} color="#F05A24" />}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.sortOptionItem, sortOrder === 'NEWEST' && styles.sortOptionSelected]}
-              onPress={() => {
-                setSortOrder('NEWEST');
-                setShowSortModal(false);
-              }}
-            >
-              <Text style={[styles.sortOptionText, sortOrder === 'NEWEST' && styles.sortOptionTextActive]}>
-                Newest First
-              </Text>
-              {sortOrder === 'NEWEST' && <CheckCircle2 size={16} color="#F05A24" />}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.sortOptionItem, sortOrder === 'OLDEST' && styles.sortOptionSelected]}
-              onPress={() => {
-                setSortOrder('OLDEST');
-                setShowSortModal(false);
-              }}
-            >
-              <Text style={[styles.sortOptionText, sortOrder === 'OLDEST' && styles.sortOptionTextActive]}>
-                Oldest First
-              </Text>
-              {sortOrder === 'OLDEST' && <CheckCircle2 size={16} color="#F05A24" />}
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  headerTopTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#172B4D',
-  },
   safeArea: {
     flex: 1,
-    backgroundColor: '#F4F6FA',
+    backgroundColor: '#F8FAFC',
   },
-  topBar: {
+  topHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -791,696 +980,492 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#EAECF0',
+    borderBottomColor: '#E2E8F0',
   },
-  topLeftWrap: {
+  topHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    flex: 1,
-    marginRight: 8,
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#101D36',
-    letterSpacing: -0.3,
-  },
-  backBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+  backButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  addBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: '#F05A24',
+  createRfqButton: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#F05A24',
+    gap: 5,
+    backgroundColor: '#F15A24',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    elevation: 2,
+    shadowColor: '#F15A24',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
-    elevation: 3,
   },
-  titleWrap: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 4,
-    backgroundColor: '#FFFFFF',
+  createRfqButtonText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
-  screenHeading: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#101D36',
+  scrollContent: {
+    padding: 14,
   },
-  screenSubtitle: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
-    marginBottom: 6,
-  },
-
-  /* Stats Container */
-  statsContainer: {
-    backgroundColor: '#FFFFFF',
-    paddingTop: 12,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#EAECF0',
-  },
-  statsScroll: {
-    paddingHorizontal: 16,
-    gap: 10,
-  },
-  statCard: {
+  metricsRow: {
     flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  metricCard: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
     alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    minWidth: 130,
+    elevation: 1,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
   },
-  statIconBoxOrange: {
-    width: 34,
-    height: 34,
-    borderRadius: 8,
-    backgroundColor: '#FFF7ED',
-    alignItems: 'center',
-    justifyContent: 'center',
+  metricCardActive: {
+    borderColor: '#F15A24',
+    backgroundColor: '#FFFBF8',
   },
-  statIconBoxGreen: {
-    width: 34,
-    height: 34,
-    borderRadius: 8,
-    backgroundColor: '#ECFDF5',
-    alignItems: 'center',
-    justifyContent: 'center',
+  metricValue: {
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: -0.5,
   },
-  statNumber: {
-    fontSize: 17,
-    fontWeight: '900',
-    color: '#101D36',
-    lineHeight: 20,
-  },
-  statLabel: {
-    fontSize: 11,
+  metricLabel: {
+    fontSize: 10,
     fontWeight: '600',
     color: '#64748B',
-    marginTop: 1,
+    marginTop: 2,
+    textAlign: 'center',
   },
-
-  /* Search and Sort */
-  searchAndSortRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 8,
+  metricBar: {
+    width: 18,
+    height: 2.5,
+    borderRadius: 2,
+    marginTop: 6,
   },
-  searchBox: {
-    flex: 1,
+  searchBarContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
     borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     paddingHorizontal: 12,
     height: 42,
+    marginBottom: 10,
   },
-  searchBoxFocused: {
-    borderColor: '#F05A24',
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#F05A24',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.12,
-    shadowRadius: 3,
-    elevation: 2,
+  searchBarFocused: {
+    borderColor: '#F15A24',
   },
   searchInput: {
     flex: 1,
-    paddingHorizontal: 8,
     fontSize: 13,
-    color: '#101D36',
-    height: '100%',
+    color: '#0F172A',
+    marginLeft: 8,
+    paddingVertical: 0,
   },
   clearSearchBtn: {
     padding: 4,
   },
-  sortBtn: {
+  filterScroll: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    height: 42,
-  },
-  sortBtnText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: '#101D36',
-  },
-
-  /* Filter Chips */
-  filterChipsWrap: {
-    paddingBottom: 6,
-  },
-  filterChipsScrollView: {
-    flexGrow: 0,
-  },
-  filterChipsScroll: {
-    paddingHorizontal: 16,
     gap: 8,
+    paddingBottom: 12,
   },
-  chip: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
+  filterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  chipActive: {
-    backgroundColor: '#101D36',
-    borderColor: '#101D36',
-  },
-  chipText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#334155',
-  },
-  chipTextActive: {
-    color: '#FFFFFF',
-  },
-
-  /* Requirement List Cards */
-  listContent: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 90,
-  },
-  requirementCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#EAECF0',
-    padding: 14,
-    marginBottom: 12,
-    shadowColor: '#0C1A34',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 5,
-    elevation: 2,
-  },
-  cardTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F8FAFC',
-  },
-  idDateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  requirementIdText: {
-    fontSize: 14.5,
-    fontWeight: '900',
-    color: '#101D36',
-  },
-  datePostedText: {
-    fontSize: 11.5,
-    color: '#64748B',
-    fontWeight: '500',
-  },
-
-  /* Badges */
-  badgeOrange: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FFF7ED',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#FED7AA',
-  },
-  dotOrange: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#F05A24',
-  },
-  badgeOrangeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#C2410C',
-  },
-  badgeBlue: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  dotBlue: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#2563EB',
-  },
-  badgeBlueText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#1D4ED8',
-  },
-  badgeGreen: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-  },
-  dotGreen: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#10B981',
-  },
-  badgeGreenText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#047857',
-  },
-  badgeGrey: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-  },
-  dotGrey: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#64748B',
-  },
-  badgeGreyText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#475569',
-  },
-
-  /* Route Section Row */
-  routeSectionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  corridorBlock: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingRight: 8,
-  },
-  originNode: {
-    flex: 1,
-  },
-  destNode: {
-    flex: 1,
-  },
-  nodeTagRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    marginBottom: 2,
-  },
-  nodeTagOrigin: {
-    fontSize: 9.5,
-    fontWeight: '800',
-    color: '#F05A24',
-    letterSpacing: 0.5,
-  },
-  nodeTagDest: {
-    fontSize: 9.5,
-    fontWeight: '800',
-    color: '#10B981',
-    letterSpacing: 0.5,
-  },
-  nodeCityText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#101D36',
-  },
-  nodePinText: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 1,
-  },
-  corridorConnector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-  },
-  corridorDotLine: {
-    width: 14,
-    height: 1,
-    borderStyle: 'dashed',
-    borderWidth: 0.6,
-    borderColor: '#CBD5E1',
-  },
-  truckIconBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#FFF7ED',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  /* Right Actions Column */
-  rightActionsColumn: {
-    alignItems: 'flex-end',
-    gap: 6,
-  },
-  viewOnMapBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 6,
+    borderColor: '#E2E8F0',
   },
-  viewOnMapBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#101D36',
+  filterChipActive: {
+    backgroundColor: '#0C1A34',
+    borderColor: '#0C1A34',
   },
-  viewQuotesBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#F05A24',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 7,
-    shadowColor: '#F05A24',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  viewQuotesBtnText: {
-    fontSize: 11.5,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  viewDetailsBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#F05A24',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 7,
-  },
-  viewDetailsBtnText: {
-    fontSize: 11.5,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-
-  /* Specs Row */
-  specsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    marginBottom: 10,
-  },
-  specColumn: {
-    flex: 1,
-  },
-  specLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  specTitle: {
+  filterChipText: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#101D36',
-  },
-  specSub: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  specDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: '#E2E8F0',
-    marginHorizontal: 10,
-  },
-
-  /* Bottom Meta Row */
-  bottomMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#F8FAFC',
-  },
-  dateMetaWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  dateMetaText: {
-    fontSize: 11.5,
-    color: '#64748B',
     fontWeight: '600',
+    color: '#64748B',
   },
-  quoteStatusWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+  filterChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
-  quoteStatusPillBlue: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  quoteStatusTextBlue: {
-    fontSize: 11.5,
-    fontWeight: '800',
-    color: '#2563EB',
-  },
-  quoteStatusPillGreen: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  quoteStatusTextGreen: {
-    fontSize: 11.5,
-    fontWeight: '800',
-    color: '#16A34A',
-  },
-  quoteStatusPillOrange: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  quoteStatusTextOrange: {
-    fontSize: 11.5,
-    fontWeight: '800',
-    color: '#F05A24',
-  },
-
-  /* Empty & Loading States */
-  centerContainer: {
-    paddingVertical: 60,
+  loadingContainer: {
+    paddingVertical: 50,
     alignItems: 'center',
     justifyContent: 'center',
   },
   loadingText: {
-    marginTop: 12,
     fontSize: 13,
     color: '#64748B',
-    fontWeight: '600',
+    marginTop: 10,
+    fontWeight: '500',
   },
   errorContainer: {
-    backgroundColor: '#FEF2F2',
-    borderRadius: 12,
-    padding: 16,
+    padding: 24,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
     alignItems: 'center',
-    marginVertical: 20,
     borderWidth: 1,
     borderColor: '#FECACA',
+    marginTop: 10,
   },
-  errorText: {
-    fontSize: 13,
+  errorTitle: {
+    fontSize: 16,
+    fontWeight: '700',
     color: '#DC2626',
-    textAlign: 'center',
-    marginBottom: 10,
+    marginTop: 8,
   },
-  retryBtn: {
+  errorSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 14,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     backgroundColor: '#DC2626',
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 8,
   },
-  retryBtnText: {
-    fontSize: 12.5,
-    fontWeight: '800',
+  retryButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
     color: '#FFFFFF',
   },
   emptyContainer: {
+    padding: 30,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
     alignItems: 'center',
-    paddingVertical: 48,
-    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginTop: 10,
   },
   emptyIconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#EEF2F6',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 14,
+    marginBottom: 12,
   },
   emptyTitle: {
     fontSize: 16,
-    fontWeight: '800',
-    color: '#101D36',
-    marginBottom: 6,
+    fontWeight: '700',
+    color: '#0C1A34',
+    marginBottom: 4,
   },
   emptySubtitle: {
     fontSize: 12.5,
     color: '#64748B',
     textAlign: 'center',
     lineHeight: 18,
-    marginBottom: 18,
+    marginBottom: 16,
   },
-  createFirstBtn: {
+  emptyActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#F05A24',
-    paddingHorizontal: 18,
-    paddingVertical: 11,
+    backgroundColor: '#F15A24',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderRadius: 10,
-    shadowColor: '#F05A24',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 5,
-    elevation: 3,
   },
-  createFirstBtnText: {
+  emptyActionBtnText: {
     fontSize: 13.5,
-    fontWeight: '800',
+    fontWeight: '700',
     color: '#FFFFFF',
   },
-  clearFilterBtn: {
-    backgroundColor: '#EEF2F6',
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 8,
-  },
-  clearFilterBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#101D36',
-  },
-
-  /* Sort Modal */
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(16, 29, 54, 0.55)',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  sortModalCard: {
+  card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 18,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+    marginBottom: 12,
+    elevation: 2,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
   },
-  sortModalHeader: {
+  cardHeaderRow: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    marginBottom: 10,
   },
-  sortModalTitle: {
-    fontSize: 16,
+  cardIdGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+    flex: 1,
+  },
+  idCopyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  cardIdText: {
+    fontSize: 13,
     fontWeight: '800',
-    color: '#101D36',
+    color: '#0C1A34',
+    letterSpacing: 0.2,
   },
-  sortOptionItem: {
+  tripIdPill: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    marginBottom: 6,
+    gap: 3,
+    backgroundColor: '#FFF5ED',
+    borderWidth: 1,
+    borderColor: '#FDBA74',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
   },
-  sortOptionSelected: {
-    backgroundColor: '#FFF7ED',
+  tripIdPillText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#F15A24',
   },
-  sortOptionText: {
-    fontSize: 13.5,
+  bookingIdPill: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  bookingIdPillText: {
+    fontSize: 10.5,
     fontWeight: '600',
-    color: '#334155',
+    color: '#475569',
   },
-  sortOptionTextActive: {
-    fontWeight: '800',
-    color: '#F05A24',
+  stageBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  stageBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  routeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+  },
+  routeCityBox: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+  },
+  originGreenDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#16A34A',
+    marginTop: 5,
+  },
+  destRedDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#DC2626',
+    marginTop: 5,
+  },
+  cityText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#0C1A34',
+  },
+  addressSubText: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  routeArrowBox: {
+    paddingHorizontal: 8,
+  },
+  routeArrow: {
+    fontSize: 14,
+    color: '#94A3B8',
+    fontWeight: '700',
+  },
+  specsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+    marginTop: 6,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  specChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  specChipText: {
+    fontSize: 11,
+    color: '#475569',
+    fontWeight: '600',
+  },
+  budgetChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  budgetChipText: {
+    fontSize: 11,
+    color: '#16A34A',
+    fontWeight: '700',
+  },
+  driverInfoBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginTop: 8,
+  },
+  driverBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
+  driverBannerText: {
+    fontSize: 11.5,
+    color: '#1E293B',
+    fontWeight: '600',
+  },
+  callDriverBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFF5ED',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  callDriverText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#F15A24',
+  },
+  cardFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  dateWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  dateText: {
+    fontSize: 11.5,
+    color: '#94A3B8',
+    fontWeight: '500',
+  },
+  actionsRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  primaryActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#F15A24',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  primaryActionBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  secondaryActionBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  secondaryActionBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#2563EB',
+  },
+  clearDraftBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#FEF2F2',
+  },
+  clearDraftBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#DC2626',
+  },
+  detailsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+  },
+  detailsBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
   },
 });

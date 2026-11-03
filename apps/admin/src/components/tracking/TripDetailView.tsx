@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../../utils/supabase";
+import { formatDisplayId } from "../../utils/idGenerator";
 
 const STATUS_STEPS = [
   "LORRY_ASSIGNED",
@@ -71,9 +72,13 @@ export const TripDetailView: React.FC = () => {
         clientData = cl;
       }
 
+      const canonicalTripRef = tripData.trip_code?.startsWith('TRUCKX-TR-')
+        ? tripData.trip_code
+        : formatDisplayId('TR', tripData.id, tripData.created_at);
+
       setTrip({
         ...tripData,
-        trip_reference: `TRP-${tripData.id.substring(0, 8)}`,
+        trip_reference: canonicalTripRef,
         booking: bookingRes.data,
         requirement: reqData,
         client: clientData,
@@ -197,7 +202,7 @@ export const TripDetailView: React.FC = () => {
             </span>
           </div>
           <p className="page-subtitle">
-            Booking: {trip.booking?.id || "N/A"} • Client: {trip.client?.company_name || "Enterprise Client"}
+            Booking: {trip.booking?.booking_code?.startsWith('TRUCKX-BK-') ? trip.booking.booking_code : (trip.booking?.id ? formatDisplayId('BK', trip.booking.id, trip.booking.created_at) : "N/A")} • Client: {trip.client?.company_name || "Enterprise Client"}
           </p>
         </div>
         <div style={{ display: "flex", gap: "0.75rem" }}>

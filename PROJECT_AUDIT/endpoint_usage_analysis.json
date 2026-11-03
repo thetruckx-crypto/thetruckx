@@ -1,0 +1,2430 @@
+[
+  {
+    "id": "EP-001",
+    "domain": "Auth & Admin Access",
+    "method": "POST",
+    "path": "/api/auth/admin-login",
+    "line": 719,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "admin_users"
+    ],
+    "requestBodyFields": [
+      "email",
+      "password",
+      "otp",
+      "mobile",
+      "role",
+      "fullName",
+      "companyName",
+      "status = 'ACTIVE'"
+    ],
+    "responseStatuses": [
+      400,
+      401,
+      403,
+      500,
+      409
+    ]
+  },
+  {
+    "id": "EP-002",
+    "domain": "Auth & Admin Access",
+    "method": "POST",
+    "path": "/api/auth/check-registration",
+    "line": 805,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "otp_verifications"
+    ],
+    "requestBodyFields": [
+      "mobile",
+      "role",
+      "fullName",
+      "email",
+      "companyName",
+      "status = 'ACTIVE'",
+      "purpose = 'LOGIN'"
+    ],
+    "responseStatuses": [
+      400,
+      409,
+      403
+    ]
+  },
+  {
+    "id": "EP-003",
+    "domain": "Auth & Admin Access",
+    "method": "POST",
+    "path": "/api/auth/register-sync",
+    "line": 816,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "otp_verifications"
+    ],
+    "requestBodyFields": [
+      "fullName",
+      "mobile",
+      "role",
+      "email",
+      "companyName",
+      "status = 'ACTIVE'",
+      "purpose = 'LOGIN'"
+    ],
+    "responseStatuses": [
+      400,
+      409,
+      403
+    ]
+  },
+  {
+    "id": "EP-004",
+    "domain": "Auth & Admin Access",
+    "method": "POST",
+    "path": "/api/auth/send-otp",
+    "line": 860,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "otp_verifications"
+    ],
+    "requestBodyFields": [
+      "mobile",
+      "role",
+      "purpose = 'LOGIN'",
+      "code",
+      "otp"
+    ],
+    "responseStatuses": [
+      400,
+      409,
+      403
+    ]
+  },
+  {
+    "id": "EP-005",
+    "domain": "Auth & Admin Access",
+    "method": "POST",
+    "path": "/api/auth/verify-otp",
+    "line": 968,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "otp_verifications"
+    ],
+    "requestBodyFields": [
+      "mobile",
+      "role",
+      "code",
+      "otp",
+      "purpose = 'LOGIN'"
+    ],
+    "responseStatuses": [
+      400,
+      401
+    ]
+  },
+  {
+    "id": "EP-006",
+    "domain": "Auth & Admin Access",
+    "method": "GET",
+    "path": "/api/auth/registration-status",
+    "line": 1087,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [],
+    "requestBodyFields": [
+      "fullName",
+      "mobile",
+      "companyPhone",
+      "email",
+      "designation",
+      "department",
+      "companyName",
+      "businessType",
+      "gstin",
+      "pan",
+      "registeredAddress",
+      "city",
+      "state",
+      "pincode",
+      "documents = []"
+    ],
+    "responseStatuses": [
+      400,
+      401,
+      403
+    ]
+  },
+  {
+    "id": "EP-007",
+    "domain": "Auth & Admin Access",
+    "method": "GET",
+    "path": "/api/auth/me",
+    "line": 1123,
+    "middleware": "authenticateToken",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "client_users",
+      "client_companies"
+    ],
+    "requestBodyFields": [
+      "fullName",
+      "mobile",
+      "companyPhone",
+      "email",
+      "designation",
+      "department",
+      "companyName",
+      "businessType",
+      "gstin",
+      "pan",
+      "registeredAddress",
+      "city",
+      "state",
+      "pincode",
+      "documents = []"
+    ],
+    "responseStatuses": [
+      401,
+      403,
+      400,
+      409
+    ]
+  },
+  {
+    "id": "EP-008",
+    "domain": "Auth & Admin Access",
+    "method": "POST",
+    "path": "/api/auth/admin-review-client",
+    "line": 1592,
+    "middleware": "authenticateAdmin",
+    "role": "ADMIN, SUPER_ADMIN",
+    "consumers": [],
+    "databaseOperations": [
+      "regional_hubs"
+    ],
+    "requestBodyFields": [
+      "name",
+      "city",
+      "state",
+      "region"
+    ],
+    "responseStatuses": [
+      400,
+      200,
+      201
+    ]
+  },
+  {
+    "id": "EP-009",
+    "domain": "System Health",
+    "method": "GET",
+    "path": "/api/health",
+    "line": 1118,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "client_users"
+    ],
+    "requestBodyFields": [
+      "fullName",
+      "mobile",
+      "companyPhone",
+      "email",
+      "designation",
+      "department",
+      "companyName",
+      "businessType",
+      "gstin",
+      "pan",
+      "registeredAddress",
+      "city",
+      "state",
+      "pincode",
+      "documents = []"
+    ],
+    "responseStatuses": [
+      401,
+      403,
+      400,
+      409
+    ]
+  },
+  {
+    "id": "EP-010",
+    "domain": "Client Domain",
+    "method": "POST",
+    "path": "/api/client/submit-registration",
+    "line": 1183,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "client_users",
+      "client_companies"
+    ],
+    "requestBodyFields": [
+      "fullName",
+      "mobile",
+      "companyPhone",
+      "email",
+      "designation",
+      "department",
+      "companyName",
+      "businessType",
+      "gstin",
+      "pan",
+      "registeredAddress",
+      "city",
+      "state",
+      "pincode",
+      "documents = []"
+    ],
+    "responseStatuses": [
+      400,
+      409
+    ]
+  },
+  {
+    "id": "EP-011",
+    "domain": "Client Domain",
+    "method": "GET",
+    "path": "/api/client/status/:identifier",
+    "line": 1402,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "client_companies",
+      "client_users"
+    ],
+    "requestBodyFields": [
+      "mobile",
+      "companyId",
+      "decision",
+      "reviewerName = 'TRUCKS Compliance Desk'",
+      "reason",
+      "notes"
+    ],
+    "responseStatuses": [
+      404,
+      500,
+      400
+    ]
+  },
+  {
+    "id": "EP-012",
+    "domain": "Client Domain",
+    "method": "POST",
+    "path": "/api/client/admin-review",
+    "line": 1593,
+    "middleware": "authenticateAdmin",
+    "role": "ADMIN, SUPER_ADMIN",
+    "consumers": [],
+    "databaseOperations": [
+      "regional_hubs"
+    ],
+    "requestBodyFields": [
+      "name",
+      "city",
+      "state",
+      "region"
+    ],
+    "responseStatuses": [
+      400,
+      200,
+      201
+    ]
+  },
+  {
+    "id": "EP-013",
+    "domain": "Client Domain",
+    "method": "GET",
+    "path": "/api/client/quotes/:requirementId",
+    "line": 4338,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "client_quotes",
+      "vendor_requests",
+      "vendor_quotations"
+    ],
+    "requestBodyFields": [
+      "vendorId",
+      "requirementId",
+      "vehicleId",
+      "driverId",
+      "quotedRate",
+      "transitDays",
+      "remarks"
+    ],
+    "responseStatuses": [
+      500,
+      400
+    ]
+  },
+  {
+    "id": "EP-014",
+    "domain": "Client Domain",
+    "method": "POST",
+    "path": "/api/client/quotes/:quoteId/accept",
+    "line": 4776,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "bookings",
+      "client_quotes",
+      "requirements"
+    ],
+    "requestBodyFields": [
+      "clientId",
+      "notes"
+    ],
+    "responseStatuses": [
+      500,
+      400,
+      404,
+      403,
+      409
+    ]
+  },
+  {
+    "id": "EP-015",
+    "domain": "Client Domain",
+    "method": "POST",
+    "path": "/api/client/quotes/:quoteId/reject",
+    "line": 4987,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "client_quotes",
+      "auth_audit_log",
+      "requirements"
+    ],
+    "requestBodyFields": [
+      "clientId",
+      "reason",
+      "requirementId",
+      "justification",
+      "agreedRate",
+      "notes"
+    ],
+    "responseStatuses": [
+      500,
+      400,
+      404
+    ]
+  },
+  {
+    "id": "EP-017",
+    "domain": "Regional Hubs",
+    "method": "POST",
+    "path": "/api/regional-hubs",
+    "line": 1646,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [
+      {
+        "app": "Admin",
+        "file": "VendorRegistrationSteps3to7.test.ts",
+        "fullPath": "apps\\admin\\src\\components\\vendors\\VendorRegistrationSteps3to7.test.ts"
+      }
+    ],
+    "databaseOperations": [
+      "regional_hubs"
+    ],
+    "requestBodyFields": [
+      "name",
+      "city",
+      "state",
+      "region",
+      "status"
+    ],
+    "responseStatuses": [
+      400,
+      200,
+      201
+    ]
+  },
+  {
+    "id": "EP-019",
+    "domain": "Regional Hubs",
+    "method": "DELETE",
+    "path": "/api/regional-hubs/:id",
+    "line": 1769,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "regional_hubs",
+      "vendor_users",
+      "vendor_companies"
+    ],
+    "requestBodyFields": [
+      "transporterName",
+      "contactPerson",
+      "mobile",
+      "email",
+      "pan",
+      "gstin",
+      "registeredAddress",
+      "city",
+      "state",
+      "pincode",
+      "operatingHubs = []",
+      "manualOperatingLocations = []",
+      "totalFleetCount",
+      "fleetStrength",
+      "vehicleConfigs = []",
+      "truckCategories = []",
+      "servicesOffered = []",
+      "documents = []",
+      "fleetDocuments = []"
+    ],
+    "responseStatuses": [
+      400,
+      409
+    ]
+  },
+  {
+    "id": "EP-020",
+    "domain": "Vendor Domain",
+    "method": "POST",
+    "path": "/api/vendor/submit-registration",
+    "line": 1803,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "vendor_users",
+      "vendor_companies"
+    ],
+    "requestBodyFields": [
+      "transporterName",
+      "contactPerson",
+      "mobile",
+      "email",
+      "pan",
+      "gstin",
+      "registeredAddress",
+      "city",
+      "state",
+      "pincode",
+      "operatingHubs = []",
+      "manualOperatingLocations = []",
+      "totalFleetCount",
+      "fleetStrength",
+      "vehicleConfigs = []",
+      "truckCategories = []",
+      "servicesOffered = []",
+      "documents = []",
+      "fleetDocuments = []"
+    ],
+    "responseStatuses": [
+      400,
+      409
+    ]
+  },
+  {
+    "id": "EP-021",
+    "domain": "Vendor Domain",
+    "method": "GET",
+    "path": "/api/vendor/status/:identifier",
+    "line": 2200,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "vendor_users",
+      "vendor_companies"
+    ],
+    "requestBodyFields": [],
+    "responseStatuses": [
+      404,
+      500
+    ]
+  },
+  {
+    "id": "EP-022",
+    "domain": "Vendor Domain",
+    "method": "GET",
+    "path": "/api/vendors",
+    "line": 2424,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "drivers",
+      "vendor_companies"
+    ],
+    "requestBodyFields": [
+      "fullName",
+      "mobile",
+      "dateOfBirth",
+      "dob",
+      "licenceNumber",
+      "licenceExpiryDate",
+      "primaryVendorId",
+      "dlFrontUri",
+      "dlBackUri",
+      "aadhaarFrontUri",
+      "aadhaarBackUri",
+      "documents = []"
+    ],
+    "responseStatuses": [
+      400,
+      409
+    ]
+  },
+  {
+    "id": "EP-023",
+    "domain": "Vendor Domain",
+    "method": "GET",
+    "path": "/api/vendor/dashboard-data",
+    "line": 2881,
+    "middleware": "authenticateToken",
+    "role": "VENDOR",
+    "consumers": [],
+    "databaseOperations": [
+      "admin_users",
+      "audit_logs"
+    ],
+    "requestBodyFields": [
+      "name",
+      "email",
+      "permissions"
+    ],
+    "responseStatuses": [
+      500,
+      400,
+      409,
+      201
+    ]
+  },
+  {
+    "id": "EP-024",
+    "domain": "Vendor Domain",
+    "method": "GET",
+    "path": "/api/vendor/quotes/:requirementId",
+    "line": 4382,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "vendor_requests",
+      "vendor_quotations",
+      "vendor_companies",
+      "vendor_users"
+    ],
+    "requestBodyFields": [
+      "vendorId",
+      "requirementId",
+      "vehicleId",
+      "driverId",
+      "quotedRate",
+      "transitDays",
+      "remarks"
+    ],
+    "responseStatuses": [
+      500,
+      400
+    ]
+  },
+  {
+    "id": "EP-025",
+    "domain": "Vendor Domain",
+    "method": "POST",
+    "path": "/api/vendor/submit-quotation",
+    "line": 4428,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "vendor_companies",
+      "vendor_users",
+      "vehicles",
+      "vendor_vehicle_links"
+    ],
+    "requestBodyFields": [
+      "vendorId",
+      "requirementId",
+      "vehicleId",
+      "driverId",
+      "quotedRate",
+      "transitDays",
+      "remarks"
+    ],
+    "responseStatuses": [
+      500,
+      400,
+      404,
+      403
+    ]
+  },
+  {
+    "id": "EP-026",
+    "domain": "Vendor Domain",
+    "method": "GET",
+    "path": "/api/vendor/trips",
+    "line": 5615,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "trips"
+    ],
+    "requestBodyFields": [],
+    "responseStatuses": [
+      500,
+      400,
+      404
+    ]
+  },
+  {
+    "id": "EP-031",
+    "domain": "Other",
+    "method": "GET",
+    "path": "/api/database/vendors",
+    "line": 3705,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "client_companies",
+      "vendor_companies",
+      "vehicles",
+      "requirements",
+      "bookings",
+      "trips"
+    ],
+    "requestBodyFields": [],
+    "responseStatuses": [
+      500
+    ]
+  },
+  {
+    "id": "EP-028",
+    "domain": "Other",
+    "method": "GET",
+    "path": "/database/vendors",
+    "line": 2425,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [
+      {
+        "app": "Mobile",
+        "file": "driverService.ts",
+        "fullPath": "apps\\mobile\\src\\services\\driverService.ts"
+      }
+    ],
+    "databaseOperations": [
+      "drivers",
+      "vendor_companies"
+    ],
+    "requestBodyFields": [
+      "fullName",
+      "mobile",
+      "dateOfBirth",
+      "dob",
+      "licenceNumber",
+      "licenceExpiryDate",
+      "primaryVendorId",
+      "dlFrontUri",
+      "dlBackUri",
+      "aadhaarFrontUri",
+      "aadhaarBackUri",
+      "documents = []"
+    ],
+    "responseStatuses": [
+      400,
+      409
+    ]
+  },
+  {
+    "id": "EP-029",
+    "domain": "Other",
+    "method": "GET",
+    "path": "/api/database/status",
+    "line": 3656,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "audit_logs",
+      "client_companies",
+      "vendor_companies",
+      "vehicles",
+      "requirements",
+      "bookings",
+      "trips"
+    ],
+    "requestBodyFields": [],
+    "responseStatuses": [
+      500
+    ]
+  },
+  {
+    "id": "EP-030",
+    "domain": "Other",
+    "method": "GET",
+    "path": "/api/database/clients",
+    "line": 3699,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "client_companies",
+      "vendor_companies",
+      "vehicles",
+      "requirements",
+      "bookings",
+      "trips"
+    ],
+    "requestBodyFields": [],
+    "responseStatuses": [
+      500
+    ]
+  },
+  {
+    "id": "EP-032",
+    "domain": "Other",
+    "method": "GET",
+    "path": "/api/database/vehicles",
+    "line": 3711,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "client_companies",
+      "vendor_companies",
+      "vehicles",
+      "requirements",
+      "bookings",
+      "trips"
+    ],
+    "requestBodyFields": [],
+    "responseStatuses": [
+      500
+    ]
+  },
+  {
+    "id": "EP-033",
+    "domain": "Other",
+    "method": "GET",
+    "path": "/api/dashboard/stats",
+    "line": 3721,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "vendor_companies",
+      "vehicles",
+      "requirements",
+      "bookings",
+      "trips",
+      "client_companies"
+    ],
+    "requestBodyFields": [],
+    "responseStatuses": [
+      500
+    ]
+  },
+  {
+    "id": "EP-034",
+    "domain": "Other",
+    "method": "GET",
+    "path": "/api/search",
+    "line": 3784,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "client_companies",
+      "vendor_companies",
+      "bookings",
+      "vehicles"
+    ],
+    "requestBodyFields": [],
+    "responseStatuses": [
+      500
+    ]
+  },
+  {
+    "id": "EP-035",
+    "domain": "Other",
+    "method": "POST",
+    "path": "/api/search/recent/clear",
+    "line": 3887,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "audit_logs"
+    ],
+    "requestBodyFields": [
+      "pushToken",
+      "userId",
+      "role",
+      "platform",
+      "to",
+      "title",
+      "body",
+      "data",
+      "targetRole",
+      "targetUserId",
+      "icon"
+    ],
+    "responseStatuses": [
+      500,
+      400,
+      404
+    ]
+  },
+  {
+    "id": "EP-036",
+    "domain": "Other",
+    "method": "POST",
+    "path": "/api/quick-actions/create-booking",
+    "line": 4122,
+    "middleware": "authenticateAdmin",
+    "role": "ADMIN, SUPER_ADMIN",
+    "consumers": [],
+    "databaseOperations": [
+      "client_companies",
+      "requirements",
+      "bookings",
+      "vendor_quotations"
+    ],
+    "requestBodyFields": [
+      "client",
+      "origin",
+      "destination",
+      "lorry",
+      "rate",
+      "requirementId",
+      "vendorQuotationId",
+      "vendorCost",
+      "marginType = 'FIXED'",
+      "marginValue = 0",
+      "extraCharges = 0",
+      "gstRatePercent = 18",
+      "validityDays = 7",
+      "status = 'SENT'",
+      "terms"
+    ],
+    "responseStatuses": [
+      400,
+      500
+    ]
+  },
+  {
+    "id": "EP-037",
+    "domain": "Other",
+    "method": "POST",
+    "path": "/api/pricing/create-client-quote",
+    "line": 4185,
+    "middleware": "authenticateAdmin",
+    "role": "ADMIN, SUPER_ADMIN",
+    "consumers": [],
+    "databaseOperations": [
+      "vendor_quotations",
+      "client_quotes",
+      "requirements"
+    ],
+    "requestBodyFields": [
+      "requirementId",
+      "vendorQuotationId",
+      "vendorCost",
+      "marginType = 'FIXED'",
+      "marginValue = 0",
+      "extraCharges = 0",
+      "gstRatePercent = 18",
+      "validityDays = 7",
+      "status = 'SENT'",
+      "terms"
+    ],
+    "responseStatuses": [
+      500,
+      400
+    ]
+  },
+  {
+    "id": "EP-038",
+    "domain": "Other",
+    "method": "POST",
+    "path": "/api/pricing/override-margin",
+    "line": 4683,
+    "middleware": "authenticateAdmin",
+    "role": "ADMIN, SUPER_ADMIN",
+    "consumers": [],
+    "databaseOperations": [
+      "client_quotes",
+      "auth_audit_log"
+    ],
+    "requestBodyFields": [
+      "quoteId",
+      "newMargin",
+      "justification"
+    ],
+    "responseStatuses": [
+      500,
+      400,
+      404
+    ]
+  },
+  {
+    "id": "EP-039",
+    "domain": "Other",
+    "method": "GET",
+    "path": "/api/audit-logs",
+    "line": 6497,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "auth_audit_log",
+      "trips"
+    ],
+    "requestBodyFields": [
+      "latitude",
+      "longitude",
+      "speed",
+      "heading",
+      "accuracy",
+      "batteryLevel",
+      "recordedAt",
+      "isMock"
+    ],
+    "responseStatuses": [
+      400,
+      404
+    ]
+  },
+  {
+    "id": "EP-040",
+    "domain": "Driver Domain",
+    "method": "POST",
+    "path": "/api/driver/submit-registration",
+    "line": 2430,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [
+      {
+        "app": "Admin",
+        "file": "SingleScreenDriverRegistration.test.ts",
+        "fullPath": "apps\\admin\\src\\components\\drivers\\SingleScreenDriverRegistration.test.ts"
+      }
+    ],
+    "databaseOperations": [
+      "drivers",
+      "vendor_companies"
+    ],
+    "requestBodyFields": [
+      "fullName",
+      "mobile",
+      "dateOfBirth",
+      "dob",
+      "licenceNumber",
+      "licenceExpiryDate",
+      "primaryVendorId",
+      "dlFrontUri",
+      "dlBackUri",
+      "aadhaarFrontUri",
+      "aadhaarBackUri",
+      "documents = []"
+    ],
+    "responseStatuses": [
+      400,
+      409
+    ]
+  },
+  {
+    "id": "EP-041",
+    "domain": "Driver Domain",
+    "method": "GET",
+    "path": "/api/driver/status/:identifier",
+    "line": 2663,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "drivers",
+      "vendor_companies"
+    ],
+    "requestBodyFields": [
+      "vendorId",
+      "decision",
+      "reviewerName = 'TRUCKS Admin Compliance Desk'"
+    ],
+    "responseStatuses": [
+      404,
+      500,
+      400
+    ]
+  },
+  {
+    "id": "EP-042",
+    "domain": "Driver Domain",
+    "method": "GET",
+    "path": "/api/drivers",
+    "line": 2735,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "vendor_companies",
+      "drivers",
+      "vendor_users"
+    ],
+    "requestBodyFields": [
+      "vendorId",
+      "decision",
+      "reviewerName = 'TRUCKS Admin Compliance Desk'",
+      "driverId",
+      "reason"
+    ],
+    "responseStatuses": [
+      500,
+      400
+    ]
+  },
+  {
+    "id": "EP-043",
+    "domain": "Driver Domain",
+    "method": "GET",
+    "path": "/api/driver/dashboard-data",
+    "line": 2885,
+    "middleware": "authenticateToken",
+    "role": "DRIVER",
+    "consumers": [],
+    "databaseOperations": [
+      "admin_users",
+      "audit_logs"
+    ],
+    "requestBodyFields": [
+      "name",
+      "email",
+      "permissions",
+      "is_active",
+      "reason"
+    ],
+    "responseStatuses": [
+      500,
+      400,
+      409,
+      201
+    ]
+  },
+  {
+    "id": "EP-044",
+    "domain": "Driver Domain",
+    "method": "POST",
+    "path": "/api/driver/trips/:tripId/acknowledge-dispatch",
+    "line": 5768,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "trips",
+      "bookings",
+      "auth_audit_log"
+    ],
+    "requestBodyFields": [
+      "driverId"
+    ],
+    "responseStatuses": [
+      500,
+      400,
+      404,
+      403
+    ]
+  },
+  {
+    "id": "EP-045",
+    "domain": "Driver Domain",
+    "method": "GET",
+    "path": "/api/driver/trips",
+    "line": 6324,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "trips",
+      "documents"
+    ],
+    "requestBodyFields": [],
+    "responseStatuses": [
+      500,
+      400
+    ]
+  },
+  {
+    "id": "EP-046",
+    "domain": "Admin Staff & System",
+    "method": "GET",
+    "path": "/api/admin/drivers",
+    "line": 2716,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "drivers",
+      "vendor_companies",
+      "vendor_users"
+    ],
+    "requestBodyFields": [
+      "vendorId",
+      "decision",
+      "reviewerName = 'TRUCKS Admin Compliance Desk'",
+      "driverId",
+      "reason"
+    ],
+    "responseStatuses": [
+      500,
+      400
+    ]
+  },
+  {
+    "id": "EP-047",
+    "domain": "Admin Staff & System",
+    "method": "POST",
+    "path": "/api/admin/vendor-approval",
+    "line": 2753,
+    "middleware": "authenticateAdmin",
+    "role": "ADMIN, SUPER_ADMIN",
+    "consumers": [],
+    "databaseOperations": [
+      "drivers",
+      "vendor_companies",
+      "vendor_users"
+    ],
+    "requestBodyFields": [
+      "vendorId",
+      "decision",
+      "reviewerName = 'TRUCKS Admin Compliance Desk'",
+      "driverId",
+      "reason"
+    ],
+    "responseStatuses": [
+      500,
+      400
+    ]
+  },
+  {
+    "id": "EP-048",
+    "domain": "Admin Staff & System",
+    "method": "POST",
+    "path": "/api/admin/driver-approval",
+    "line": 2809,
+    "middleware": "authenticateAdmin",
+    "role": "ADMIN, SUPER_ADMIN",
+    "consumers": [],
+    "databaseOperations": [
+      "drivers",
+      "audit_logs",
+      "admin_users"
+    ],
+    "requestBodyFields": [
+      "driverId",
+      "decision",
+      "reviewerName = 'TRUCKS Admin Compliance Desk'",
+      "reason"
+    ],
+    "responseStatuses": [
+      500,
+      400
+    ]
+  },
+  {
+    "id": "EP-050",
+    "domain": "Admin Staff & System",
+    "method": "POST",
+    "path": "/api/admin/users",
+    "line": 2916,
+    "middleware": "authenticateAdmin",
+    "role": "ADMIN, SUPER_ADMIN",
+    "consumers": [],
+    "databaseOperations": [
+      "admin_users",
+      "audit_logs"
+    ],
+    "requestBodyFields": [
+      "name",
+      "email",
+      "permissions",
+      "is_active",
+      "reason"
+    ],
+    "responseStatuses": [
+      500,
+      400,
+      409,
+      201,
+      404
+    ]
+  },
+  {
+    "id": "EP-051",
+    "domain": "Admin Staff & System",
+    "method": "PATCH",
+    "path": "/api/admin/users/:id/status",
+    "line": 2983,
+    "middleware": "authenticateAdmin",
+    "role": "ADMIN, SUPER_ADMIN",
+    "consumers": [],
+    "databaseOperations": [
+      "admin_users",
+      "audit_logs"
+    ],
+    "requestBodyFields": [
+      "is_active",
+      "reason",
+      "permissions"
+    ],
+    "responseStatuses": [
+      201,
+      500,
+      400,
+      404
+    ]
+  },
+  {
+    "id": "EP-053",
+    "domain": "Admin Staff & System",
+    "method": "PUT",
+    "path": "/api/admin/users/:id/permissions",
+    "line": 3066,
+    "middleware": "authenticateAdmin",
+    "role": "ADMIN, SUPER_ADMIN",
+    "consumers": [],
+    "databaseOperations": [
+      "admin_users",
+      "client_users"
+    ],
+    "requestBodyFields": [
+      "permissions",
+      "userId",
+      "role",
+      "mobile",
+      "companyId",
+      "reason"
+    ],
+    "responseStatuses": [
+      404,
+      500,
+      400,
+      401
+    ]
+  },
+  {
+    "id": "EP-054",
+    "domain": "Admin Staff & System",
+    "method": "GET",
+    "path": "/api/admin/current-user-permissions",
+    "line": 3112,
+    "middleware": "authenticateAdmin",
+    "role": "ADMIN, SUPER_ADMIN",
+    "consumers": [],
+    "databaseOperations": [
+      "client_users",
+      "client_companies",
+      "requirements",
+      "client_quotations",
+      "client_quotes",
+      "vendor_quotations",
+      "vendor_requests",
+      "documents"
+    ],
+    "requestBodyFields": [
+      "userId",
+      "role",
+      "mobile",
+      "companyId",
+      "reason"
+    ],
+    "responseStatuses": [
+      500,
+      401,
+      400
+    ]
+  },
+  {
+    "id": "EP-055",
+    "domain": "Admin Staff & System",
+    "method": "POST",
+    "path": "/api/admin/delete-user",
+    "line": 3127,
+    "middleware": "authenticateAdmin",
+    "role": "ADMIN, SUPER_ADMIN",
+    "consumers": [],
+    "databaseOperations": [
+      "client_users",
+      "client_companies",
+      "requirements",
+      "client_quotations",
+      "client_quotes",
+      "vendor_quotations",
+      "vendor_requests",
+      "documents"
+    ],
+    "requestBodyFields": [
+      "userId",
+      "role",
+      "mobile",
+      "companyId",
+      "reason"
+    ],
+    "responseStatuses": [
+      401,
+      400
+    ]
+  },
+  {
+    "id": "EP-058",
+    "domain": "Admin Staff & System",
+    "method": "POST",
+    "path": "/api/admin/drafts",
+    "line": 3469,
+    "middleware": "authenticateAdmin",
+    "role": "ADMIN, SUPER_ADMIN",
+    "consumers": [],
+    "databaseOperations": [
+      "admin_registration_drafts"
+    ],
+    "requestBodyFields": [],
+    "responseStatuses": [
+      404,
+      400
+    ]
+  },
+  {
+    "id": "EP-059",
+    "domain": "Admin Staff & System",
+    "method": "DELETE",
+    "path": "/api/admin/drafts/:id",
+    "line": 3597,
+    "middleware": "authenticateAdmin",
+    "role": "ADMIN, SUPER_ADMIN",
+    "consumers": [],
+    "databaseOperations": [
+      "admin_registration_drafts",
+      "audit_logs",
+      "client_companies"
+    ],
+    "requestBodyFields": [],
+    "responseStatuses": [
+      500
+    ]
+  },
+  {
+    "id": "EP-060",
+    "domain": "Admin Staff & System",
+    "method": "POST",
+    "path": "/api/admin/drafts/:id/complete",
+    "line": 3617,
+    "middleware": "authenticateAdmin",
+    "role": "ADMIN, SUPER_ADMIN",
+    "consumers": [],
+    "databaseOperations": [
+      "admin_registration_drafts",
+      "audit_logs",
+      "client_companies",
+      "vendor_companies",
+      "vehicles"
+    ],
+    "requestBodyFields": [],
+    "responseStatuses": [
+      500
+    ]
+  },
+  {
+    "id": "EP-061",
+    "domain": "Admin Staff & System",
+    "method": "GET",
+    "path": "/api/admin/audit-logs",
+    "line": 3639,
+    "middleware": "authenticateAdmin",
+    "role": "ADMIN, SUPER_ADMIN",
+    "consumers": [],
+    "databaseOperations": [
+      "admin_registration_drafts",
+      "audit_logs",
+      "client_companies",
+      "vendor_companies",
+      "vehicles",
+      "requirements",
+      "bookings",
+      "trips"
+    ],
+    "requestBodyFields": [],
+    "responseStatuses": [
+      500
+    ]
+  },
+  {
+    "id": "EP-062",
+    "domain": "Notifications",
+    "method": "GET",
+    "path": "/api/notifications",
+    "line": 3893,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [
+      {
+        "app": "Admin",
+        "file": "DocumentClearanceModule.tsx",
+        "fullPath": "apps\\admin\\src\\components\\documents\\DocumentClearanceModule.tsx"
+      },
+      {
+        "app": "Admin",
+        "file": "RequirementsModule.tsx",
+        "fullPath": "apps\\admin\\src\\components\\requirements\\RequirementsModule.tsx"
+      },
+      {
+        "app": "Admin",
+        "file": "DocumentRejectionModal.tsx",
+        "fullPath": "apps\\admin\\src\\components\\vendors\\DocumentRejectionModal.tsx"
+      },
+      {
+        "app": "Admin",
+        "file": "documentWorkflowService.ts",
+        "fullPath": "apps\\admin\\src\\services\\documentWorkflowService.ts"
+      }
+    ],
+    "databaseOperations": [
+      "audit_logs"
+    ],
+    "requestBodyFields": [
+      "pushToken",
+      "userId",
+      "role",
+      "platform",
+      "to",
+      "title",
+      "body",
+      "data",
+      "targetRole",
+      "targetUserId",
+      "icon"
+    ],
+    "responseStatuses": [
+      500,
+      400,
+      404
+    ]
+  },
+  {
+    "id": "EP-063",
+    "domain": "Notifications",
+    "method": "POST",
+    "path": "/api/notifications/:id/read",
+    "line": 3923,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [],
+    "requestBodyFields": [
+      "pushToken",
+      "userId",
+      "role",
+      "platform",
+      "to",
+      "title",
+      "body",
+      "data",
+      "targetRole",
+      "targetUserId",
+      "icon"
+    ],
+    "responseStatuses": [
+      500,
+      400,
+      404
+    ]
+  },
+  {
+    "id": "EP-064",
+    "domain": "Notifications",
+    "method": "POST",
+    "path": "/api/notifications/read-all",
+    "line": 3928,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [],
+    "requestBodyFields": [
+      "pushToken",
+      "userId",
+      "role",
+      "platform",
+      "to",
+      "title",
+      "body",
+      "data",
+      "targetRole",
+      "targetUserId",
+      "icon"
+    ],
+    "responseStatuses": [
+      500,
+      400,
+      404
+    ]
+  },
+  {
+    "id": "EP-065",
+    "domain": "Notifications",
+    "method": "POST",
+    "path": "/api/notifications/register-token",
+    "line": 3933,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [],
+    "requestBodyFields": [
+      "pushToken",
+      "userId",
+      "role",
+      "platform",
+      "to",
+      "title",
+      "body",
+      "data",
+      "targetRole",
+      "targetUserId",
+      "icon"
+    ],
+    "responseStatuses": [
+      500,
+      400,
+      404
+    ]
+  },
+  {
+    "id": "EP-066",
+    "domain": "Notifications",
+    "method": "POST",
+    "path": "/api/notifications/send-push",
+    "line": 3950,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [
+      {
+        "app": "Admin",
+        "file": "DocumentClearanceModule.tsx",
+        "fullPath": "apps\\admin\\src\\components\\documents\\DocumentClearanceModule.tsx"
+      },
+      {
+        "app": "Admin",
+        "file": "RequirementsModule.tsx",
+        "fullPath": "apps\\admin\\src\\components\\requirements\\RequirementsModule.tsx"
+      },
+      {
+        "app": "Admin",
+        "file": "DocumentRejectionModal.tsx",
+        "fullPath": "apps\\admin\\src\\components\\vendors\\DocumentRejectionModal.tsx"
+      },
+      {
+        "app": "Admin",
+        "file": "documentWorkflowService.ts",
+        "fullPath": "apps\\admin\\src\\services\\documentWorkflowService.ts"
+      }
+    ],
+    "databaseOperations": [],
+    "requestBodyFields": [
+      "pushToken",
+      "userId",
+      "role",
+      "platform",
+      "to",
+      "title",
+      "body",
+      "data",
+      "targetRole",
+      "targetUserId",
+      "icon"
+    ],
+    "responseStatuses": [
+      400,
+      404
+    ]
+  },
+  {
+    "id": "EP-067",
+    "domain": "Notifications",
+    "method": "POST",
+    "path": "/api/notifications/test-fcm",
+    "line": 3984,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [],
+    "requestBodyFields": [
+      "targetRole",
+      "role",
+      "targetUserId",
+      "title",
+      "body",
+      "icon"
+    ],
+    "responseStatuses": [
+      200
+    ]
+  },
+  {
+    "id": "EP-068",
+    "domain": "Notifications",
+    "method": "POST",
+    "path": "/api/notifications/test-vendor",
+    "line": 4044,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "client_companies",
+      "requirements"
+    ],
+    "requestBodyFields": [
+      "title",
+      "body",
+      "targetUserId",
+      "client",
+      "origin",
+      "destination",
+      "lorry",
+      "rate"
+    ],
+    "responseStatuses": [
+      400
+    ]
+  },
+  {
+    "id": "EP-069",
+    "domain": "Notifications",
+    "method": "POST",
+    "path": "/api/notifications/test-driver",
+    "line": 4078,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "client_companies",
+      "requirements",
+      "bookings"
+    ],
+    "requestBodyFields": [
+      "title",
+      "body",
+      "targetUserId",
+      "client",
+      "origin",
+      "destination",
+      "lorry",
+      "rate"
+    ],
+    "responseStatuses": [
+      400,
+      500
+    ]
+  },
+  {
+    "id": "EP-070",
+    "domain": "Notifications",
+    "method": "GET",
+    "path": "/api/notifications/device-tokens",
+    "line": 4112,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "client_companies",
+      "requirements",
+      "bookings",
+      "vendor_quotations"
+    ],
+    "requestBodyFields": [
+      "client",
+      "origin",
+      "destination",
+      "lorry",
+      "rate",
+      "requirementId",
+      "vendorQuotationId",
+      "vendorCost",
+      "marginType = 'FIXED'",
+      "marginValue = 0",
+      "extraCharges = 0",
+      "gstRatePercent = 18",
+      "validityDays = 7",
+      "status = 'SENT'",
+      "terms"
+    ],
+    "responseStatuses": [
+      400,
+      500
+    ]
+  },
+  {
+    "id": "EP-071",
+    "domain": "Bookings Operations",
+    "method": "POST",
+    "path": "/api/bookings/emergency-direct-create",
+    "line": 5052,
+    "middleware": "authenticateAdmin",
+    "role": "ADMIN, SUPER_ADMIN",
+    "consumers": [
+      {
+        "app": "Admin",
+        "file": "BookingsModule.tsx",
+        "fullPath": "apps\\admin\\src\\components\\bookings\\BookingsModule.tsx"
+      }
+    ],
+    "databaseOperations": [
+      "requirements",
+      "bookings",
+      "client_quotes"
+    ],
+    "requestBodyFields": [
+      "requirementId",
+      "clientId",
+      "justification",
+      "agreedRate",
+      "notes"
+    ],
+    "responseStatuses": [
+      500,
+      400,
+      404,
+      409
+    ]
+  },
+  {
+    "id": "EP-072",
+    "domain": "Bookings Operations",
+    "method": "GET",
+    "path": "/api/bookings/:bookingId",
+    "line": 5186,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [
+      {
+        "app": "Admin",
+        "file": "BookingsModule.tsx",
+        "fullPath": "apps\\admin\\src\\components\\bookings\\BookingsModule.tsx"
+      }
+    ],
+    "databaseOperations": [
+      "bookings",
+      "requirements",
+      "trips"
+    ],
+    "requestBodyFields": [
+      "bookingId",
+      "vendorId",
+      "vendorRate",
+      "vehicleId",
+      "driverId"
+    ],
+    "responseStatuses": [
+      500,
+      404,
+      400
+    ]
+  },
+  {
+    "id": "EP-073",
+    "domain": "Trip Execution & Tracking",
+    "method": "POST",
+    "path": "/api/trips/generate-from-booking",
+    "line": 5248,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "trips",
+      "bookings",
+      "client_quotes",
+      "vendor_quotations",
+      "vendor_requests",
+      "vendor_companies"
+    ],
+    "requestBodyFields": [
+      "bookingId",
+      "vendorId",
+      "vendorRate",
+      "vehicleId",
+      "driverId"
+    ],
+    "responseStatuses": [
+      500,
+      400,
+      404
+    ]
+  },
+  {
+    "id": "EP-074",
+    "domain": "Trip Execution & Tracking",
+    "method": "POST",
+    "path": "/api/trips/:tripId/assign",
+    "line": 5445,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "trips",
+      "vehicles",
+      "drivers"
+    ],
+    "requestBodyFields": [
+      "vendorId",
+      "vehicleId",
+      "driverId"
+    ],
+    "responseStatuses": [
+      500,
+      400,
+      404,
+      403,
+      409
+    ]
+  },
+  {
+    "id": "EP-075",
+    "domain": "Trip Execution & Tracking",
+    "method": "GET",
+    "path": "/api/trips/:tripId",
+    "line": 5678,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [
+      {
+        "app": "Mobile",
+        "file": "driverService.ts",
+        "fullPath": "apps\\mobile\\src\\services\\driverService.ts"
+      }
+    ],
+    "databaseOperations": [
+      "trips"
+    ],
+    "requestBodyFields": [],
+    "responseStatuses": [
+      500,
+      404
+    ]
+  },
+  {
+    "id": "EP-076",
+    "domain": "Trip Execution & Tracking",
+    "method": "POST",
+    "path": "/api/trips/:tripId/generate-lr",
+    "line": 5873,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "trips",
+      "documents"
+    ],
+    "requestBodyFields": [
+      "createdBy"
+    ],
+    "responseStatuses": [
+      500,
+      400,
+      404
+    ]
+  },
+  {
+    "id": "EP-077",
+    "domain": "Trip Execution & Tracking",
+    "method": "POST",
+    "path": "/api/trips/:tripId/link-ewaybill",
+    "line": 6077,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "trips",
+      "documents",
+      "auth_audit_log"
+    ],
+    "requestBodyFields": [
+      "ewaybillNumber",
+      "validUntil",
+      "linkedBy"
+    ],
+    "responseStatuses": [
+      500,
+      400,
+      404
+    ]
+  },
+  {
+    "id": "EP-078",
+    "domain": "Trip Execution & Tracking",
+    "method": "GET",
+    "path": "/api/trips/:tripId/lr",
+    "line": 6186,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "trips",
+      "documents"
+    ],
+    "requestBodyFields": [],
+    "responseStatuses": [
+      500,
+      400,
+      404
+    ]
+  },
+  {
+    "id": "EP-079",
+    "domain": "Trip Execution & Tracking",
+    "method": "POST",
+    "path": "/api/trips/:tripId/location-ping",
+    "line": 6516,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "auth_audit_log",
+      "trips"
+    ],
+    "requestBodyFields": [
+      "latitude",
+      "longitude",
+      "speed",
+      "heading",
+      "accuracy",
+      "batteryLevel",
+      "recordedAt",
+      "isMock"
+    ],
+    "responseStatuses": [
+      400,
+      404
+    ]
+  },
+  {
+    "id": "EP-080",
+    "domain": "Trip Execution & Tracking",
+    "method": "POST",
+    "path": "/api/trips/:tripId/milestone",
+    "line": 6791,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "trips",
+      "bookings",
+      "trip_waypoint_events"
+    ],
+    "requestBodyFields": [
+      "newStatus",
+      "notes",
+      "updatedBy"
+    ],
+    "responseStatuses": [
+      500,
+      400,
+      404
+    ]
+  },
+  {
+    "id": "EP-081",
+    "domain": "Trip Execution & Tracking",
+    "method": "POST",
+    "path": "/api/trips/:tripId/geofence-check",
+    "line": 6922,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "trips",
+      "trip_location_logs"
+    ],
+    "requestBodyFields": [
+      "latitude",
+      "longitude",
+      "targetType"
+    ],
+    "responseStatuses": [
+      500,
+      400,
+      404
+    ]
+  },
+  {
+    "id": "EP-082",
+    "domain": "Trip Execution & Tracking",
+    "method": "GET",
+    "path": "/api/trips/:tripId/tracking",
+    "line": 6979,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "trips",
+      "trip_location_logs",
+      "trip_waypoint_events"
+    ],
+    "requestBodyFields": [],
+    "responseStatuses": [
+      500,
+      400,
+      404
+    ]
+  },
+  {
+    "id": "EP-084",
+    "domain": "Trip Execution & Tracking",
+    "method": "GET",
+    "path": "/api/trips/:tripId/pod",
+    "line": 7260,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "trips",
+      "trip_pod_submissions",
+      "documents"
+    ],
+    "requestBodyFields": [
+      "action",
+      "rejectionReason",
+      "adminNotes",
+      "adminId"
+    ],
+    "responseStatuses": [
+      500,
+      400,
+      404
+    ]
+  },
+  {
+    "id": "EP-085",
+    "domain": "Trip Execution & Tracking",
+    "method": "POST",
+    "path": "/api/trips/:tripId/pod/review",
+    "line": 7330,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "trips",
+      "bookings",
+      "trip_pod_submissions",
+      "documents"
+    ],
+    "requestBodyFields": [
+      "action",
+      "rejectionReason",
+      "adminNotes",
+      "adminId"
+    ],
+    "responseStatuses": [
+      500,
+      400,
+      404
+    ]
+  },
+  {
+    "id": "EP-087",
+    "domain": "Trip Execution & Tracking",
+    "method": "GET",
+    "path": "/api/trips/:tripId/weighbridge",
+    "line": 7796,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "weighments",
+      "trips"
+    ],
+    "requestBodyFields": [
+      "claimType",
+      "claimedAmount",
+      "itemDescription",
+      "damagedQuantity",
+      "evidenceUrls = []",
+      "submittedBy"
+    ],
+    "responseStatuses": [
+      500,
+      400,
+      404
+    ]
+  },
+  {
+    "id": "EP-089",
+    "domain": "Trip Execution & Tracking",
+    "method": "GET",
+    "path": "/api/trips/:tripId/claims",
+    "line": 7965,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "trip_claims"
+    ],
+    "requestBodyFields": [
+      "action",
+      "approvedAmount = 0",
+      "settlementNotes",
+      "reviewedBy"
+    ],
+    "responseStatuses": [
+      500,
+      400
+    ]
+  },
+  {
+    "id": "EP-090",
+    "domain": "Claims & Exceptions",
+    "method": "POST",
+    "path": "/api/claims/:claimId/resolve",
+    "line": 8003,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "trip_claims",
+      "trips",
+      "auth_audit_log"
+    ],
+    "requestBodyFields": [
+      "action",
+      "approvedAmount = 0",
+      "settlementNotes",
+      "reviewedBy"
+    ],
+    "responseStatuses": [
+      500,
+      400
+    ]
+  },
+  {
+    "id": "EP-091",
+    "domain": "Invoicing & Finance",
+    "method": "POST",
+    "path": "/api/invoices/client/generate",
+    "line": 8126,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [
+      {
+        "app": "Mobile",
+        "file": "clientService.ts",
+        "fullPath": "apps\\mobile\\src\\services\\clientService.ts"
+      }
+    ],
+    "databaseOperations": [
+      "client_invoices",
+      "bookings",
+      "requirements",
+      "client_companies"
+    ],
+    "requestBodyFields": [
+      "bookingId",
+      "loadingDetention = 0",
+      "unloadingDetention = 0",
+      "platformFee = 0",
+      "creditDays = 30",
+      "generatedBy"
+    ],
+    "responseStatuses": [
+      500,
+      400,
+      404
+    ]
+  },
+  {
+    "id": "EP-092",
+    "domain": "Invoicing & Finance",
+    "method": "GET",
+    "path": "/api/invoices/client/:invoiceId",
+    "line": 8375,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [
+      {
+        "app": "Mobile",
+        "file": "clientService.ts",
+        "fullPath": "apps\\mobile\\src\\services\\clientService.ts"
+      }
+    ],
+    "databaseOperations": [
+      "client_invoices"
+    ],
+    "requestBodyFields": [
+      "amount",
+      "paymentMode = 'NEFT'",
+      "transactionReference",
+      "paymentDate",
+      "notes",
+      "recordedBy"
+    ],
+    "responseStatuses": [
+      500,
+      400,
+      404
+    ]
+  },
+  {
+    "id": "EP-093",
+    "domain": "Invoicing & Finance",
+    "method": "POST",
+    "path": "/api/invoices/client/:invoiceId/record-payment",
+    "line": 8436,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "client_invoices",
+      "bookings"
+    ],
+    "requestBodyFields": [
+      "amount",
+      "paymentMode = 'NEFT'",
+      "transactionReference",
+      "paymentDate",
+      "notes",
+      "recordedBy"
+    ],
+    "responseStatuses": [
+      500,
+      400,
+      404
+    ]
+  },
+  {
+    "id": "EP-094",
+    "domain": "Invoicing & Finance",
+    "method": "POST",
+    "path": "/api/payouts/transporter/generate",
+    "line": 8596,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [
+      {
+        "app": "Mobile",
+        "file": "vendorService.ts",
+        "fullPath": "apps\\mobile\\src\\services\\vendorService.ts"
+      }
+    ],
+    "databaseOperations": [
+      "transporter_payouts",
+      "trips",
+      "vendor_companies"
+    ],
+    "requestBodyFields": [
+      "tripId",
+      "advancePaid = 0",
+      "claimDeduction = 0",
+      "otherDeductions = 0",
+      "generatedBy"
+    ],
+    "responseStatuses": [
+      500,
+      400,
+      404
+    ]
+  },
+  {
+    "id": "EP-095",
+    "domain": "Invoicing & Finance",
+    "method": "GET",
+    "path": "/api/payouts/transporter/:payoutId",
+    "line": 8804,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [
+      {
+        "app": "Mobile",
+        "file": "vendorService.ts",
+        "fullPath": "apps\\mobile\\src\\services\\vendorService.ts"
+      }
+    ],
+    "databaseOperations": [
+      "transporter_payouts"
+    ],
+    "requestBodyFields": [
+      "bankReferenceUtr",
+      "paymentMethod = 'NEFT'",
+      "amountDisbursed",
+      "disbursedBy"
+    ],
+    "responseStatuses": [
+      500,
+      400,
+      404
+    ]
+  },
+  {
+    "id": "EP-096",
+    "domain": "Invoicing & Finance",
+    "method": "POST",
+    "path": "/api/payouts/transporter/:payoutId/record-disbursal",
+    "line": 8861,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [],
+    "databaseOperations": [
+      "transporter_payouts",
+      "auth_audit_log"
+    ],
+    "requestBodyFields": [
+      "bankReferenceUtr",
+      "paymentMethod = 'NEFT'",
+      "amountDisbursed",
+      "disbursedBy"
+    ],
+    "responseStatuses": [
+      500,
+      400,
+      404
+    ]
+  },
+  {
+    "id": "EP-097",
+    "domain": "Invoicing & Finance",
+    "method": "GET",
+    "path": "/api/finance/reconciliation",
+    "line": 8977,
+    "middleware": "NONE",
+    "role": "ALL / PUBLIC",
+    "consumers": [
+      {
+        "app": "Mobile",
+        "file": "clientService.ts",
+        "fullPath": "apps\\mobile\\src\\services\\clientService.ts"
+      }
+    ],
+    "databaseOperations": [
+      "client_invoices",
+      "transporter_payouts",
+      "auth_audit_log"
+    ],
+    "requestBodyFields": [],
+    "responseStatuses": [
+      500
+    ]
+  }
+]

@@ -1,0 +1,710 @@
+{
+  "total": 97,
+  "domains": {
+    "Auth & Admin Access": [
+      {
+        "line": 719,
+        "method": "POST",
+        "path": "/api/auth/admin-login",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 805,
+        "method": "POST",
+        "path": "/api/auth/check-registration",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 816,
+        "method": "POST",
+        "path": "/api/auth/register-sync",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 860,
+        "method": "POST",
+        "path": "/api/auth/send-otp",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 968,
+        "method": "POST",
+        "path": "/api/auth/verify-otp",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 1087,
+        "method": "GET",
+        "path": "/api/auth/registration-status",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 1123,
+        "method": "GET",
+        "path": "/api/auth/me",
+        "middleware": "authenticateToken",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 1592,
+        "method": "POST",
+        "path": "/api/auth/admin-review-client",
+        "middleware": "authenticateAdmin",
+        "role": "ADMIN, SUPER_ADMIN"
+      }
+    ],
+    "System Health": [
+      {
+        "line": 1118,
+        "method": "GET",
+        "path": "/api/health",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      }
+    ],
+    "Client Domain": [
+      {
+        "line": 1183,
+        "method": "POST",
+        "path": "/api/client/submit-registration",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 1402,
+        "method": "GET",
+        "path": "/api/client/status/:identifier",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 1593,
+        "method": "POST",
+        "path": "/api/client/admin-review",
+        "middleware": "authenticateAdmin",
+        "role": "ADMIN, SUPER_ADMIN"
+      },
+      {
+        "line": 4338,
+        "method": "GET",
+        "path": "/api/client/quotes/:requirementId",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 4776,
+        "method": "POST",
+        "path": "/api/client/quotes/:quoteId/accept",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 4987,
+        "method": "POST",
+        "path": "/api/client/quotes/:quoteId/reject",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      }
+    ],
+    "Regional Hubs": [
+      {
+        "line": 1620,
+        "method": "GET",
+        "path": "/api/regional-hubs",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 1646,
+        "method": "POST",
+        "path": "/api/regional-hubs",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 1724,
+        "method": "PUT",
+        "path": "/api/regional-hubs/:id",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 1769,
+        "method": "DELETE",
+        "path": "/api/regional-hubs/:id",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      }
+    ],
+    "Vendor Domain": [
+      {
+        "line": 1803,
+        "method": "POST",
+        "path": "/api/vendor/submit-registration",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 2200,
+        "method": "GET",
+        "path": "/api/vendor/status/:identifier",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 2424,
+        "method": "GET",
+        "path": "/api/vendors",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 2881,
+        "method": "GET",
+        "path": "/api/vendor/dashboard-data",
+        "middleware": "authenticateToken",
+        "role": "VENDOR"
+      },
+      {
+        "line": 4382,
+        "method": "GET",
+        "path": "/api/vendor/quotes/:requirementId",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 4428,
+        "method": "POST",
+        "path": "/api/vendor/submit-quotation",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 5615,
+        "method": "GET",
+        "path": "/api/vendor/trips",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      }
+    ],
+    "Other": [
+      {
+        "line": 2423,
+        "method": "GET",
+        "path": "/api/database/vendors",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 2425,
+        "method": "GET",
+        "path": "/database/vendors",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 3656,
+        "method": "GET",
+        "path": "/api/database/status",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 3699,
+        "method": "GET",
+        "path": "/api/database/clients",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 3705,
+        "method": "GET",
+        "path": "/api/database/vendors",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 3711,
+        "method": "GET",
+        "path": "/api/database/vehicles",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 3721,
+        "method": "GET",
+        "path": "/api/dashboard/stats",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 3784,
+        "method": "GET",
+        "path": "/api/search",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 3887,
+        "method": "POST",
+        "path": "/api/search/recent/clear",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 4122,
+        "method": "POST",
+        "path": "/api/quick-actions/create-booking",
+        "middleware": "authenticateAdmin",
+        "role": "ADMIN, SUPER_ADMIN"
+      },
+      {
+        "line": 4185,
+        "method": "POST",
+        "path": "/api/pricing/create-client-quote",
+        "middleware": "authenticateAdmin",
+        "role": "ADMIN, SUPER_ADMIN"
+      },
+      {
+        "line": 4683,
+        "method": "POST",
+        "path": "/api/pricing/override-margin",
+        "middleware": "authenticateAdmin",
+        "role": "ADMIN, SUPER_ADMIN"
+      },
+      {
+        "line": 6497,
+        "method": "GET",
+        "path": "/api/audit-logs",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      }
+    ],
+    "Driver Domain": [
+      {
+        "line": 2430,
+        "method": "POST",
+        "path": "/api/driver/submit-registration",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 2663,
+        "method": "GET",
+        "path": "/api/driver/status/:identifier",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 2735,
+        "method": "GET",
+        "path": "/api/drivers",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 2885,
+        "method": "GET",
+        "path": "/api/driver/dashboard-data",
+        "middleware": "authenticateToken",
+        "role": "DRIVER"
+      },
+      {
+        "line": 5768,
+        "method": "POST",
+        "path": "/api/driver/trips/:tripId/acknowledge-dispatch",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 6324,
+        "method": "GET",
+        "path": "/api/driver/trips",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      }
+    ],
+    "Admin Staff & System": [
+      {
+        "line": 2716,
+        "method": "GET",
+        "path": "/api/admin/drivers",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 2753,
+        "method": "POST",
+        "path": "/api/admin/vendor-approval",
+        "middleware": "authenticateAdmin",
+        "role": "ADMIN, SUPER_ADMIN"
+      },
+      {
+        "line": 2809,
+        "method": "POST",
+        "path": "/api/admin/driver-approval",
+        "middleware": "authenticateAdmin",
+        "role": "ADMIN, SUPER_ADMIN"
+      },
+      {
+        "line": 2894,
+        "method": "GET",
+        "path": "/api/admin/users",
+        "middleware": "authenticateAdmin",
+        "role": "ADMIN, SUPER_ADMIN"
+      },
+      {
+        "line": 2916,
+        "method": "POST",
+        "path": "/api/admin/users",
+        "middleware": "authenticateAdmin",
+        "role": "ADMIN, SUPER_ADMIN"
+      },
+      {
+        "line": 2983,
+        "method": "PATCH",
+        "path": "/api/admin/users/:id/status",
+        "middleware": "authenticateAdmin",
+        "role": "ADMIN, SUPER_ADMIN"
+      },
+      {
+        "line": 3042,
+        "method": "GET",
+        "path": "/api/admin/users/:id/permissions",
+        "middleware": "authenticateAdmin",
+        "role": "ADMIN, SUPER_ADMIN"
+      },
+      {
+        "line": 3066,
+        "method": "PUT",
+        "path": "/api/admin/users/:id/permissions",
+        "middleware": "authenticateAdmin",
+        "role": "ADMIN, SUPER_ADMIN"
+      },
+      {
+        "line": 3112,
+        "method": "GET",
+        "path": "/api/admin/current-user-permissions",
+        "middleware": "authenticateAdmin",
+        "role": "ADMIN, SUPER_ADMIN"
+      },
+      {
+        "line": 3127,
+        "method": "POST",
+        "path": "/api/admin/delete-user",
+        "middleware": "authenticateAdmin",
+        "role": "ADMIN, SUPER_ADMIN"
+      },
+      {
+        "line": 3368,
+        "method": "GET",
+        "path": "/api/admin/drafts",
+        "middleware": "authenticateAdmin",
+        "role": "ADMIN, SUPER_ADMIN"
+      },
+      {
+        "line": 3428,
+        "method": "GET",
+        "path": "/api/admin/drafts/:id",
+        "middleware": "authenticateAdmin",
+        "role": "ADMIN, SUPER_ADMIN"
+      },
+      {
+        "line": 3469,
+        "method": "POST",
+        "path": "/api/admin/drafts",
+        "middleware": "authenticateAdmin",
+        "role": "ADMIN, SUPER_ADMIN"
+      },
+      {
+        "line": 3597,
+        "method": "DELETE",
+        "path": "/api/admin/drafts/:id",
+        "middleware": "authenticateAdmin",
+        "role": "ADMIN, SUPER_ADMIN"
+      },
+      {
+        "line": 3617,
+        "method": "POST",
+        "path": "/api/admin/drafts/:id/complete",
+        "middleware": "authenticateAdmin",
+        "role": "ADMIN, SUPER_ADMIN"
+      },
+      {
+        "line": 3639,
+        "method": "GET",
+        "path": "/api/admin/audit-logs",
+        "middleware": "authenticateAdmin",
+        "role": "ADMIN, SUPER_ADMIN"
+      }
+    ],
+    "Notifications": [
+      {
+        "line": 3893,
+        "method": "GET",
+        "path": "/api/notifications",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 3923,
+        "method": "POST",
+        "path": "/api/notifications/:id/read",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 3928,
+        "method": "POST",
+        "path": "/api/notifications/read-all",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 3933,
+        "method": "POST",
+        "path": "/api/notifications/register-token",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 3950,
+        "method": "POST",
+        "path": "/api/notifications/send-push",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 3984,
+        "method": "POST",
+        "path": "/api/notifications/test-fcm",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 4044,
+        "method": "POST",
+        "path": "/api/notifications/test-vendor",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 4078,
+        "method": "POST",
+        "path": "/api/notifications/test-driver",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 4112,
+        "method": "GET",
+        "path": "/api/notifications/device-tokens",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      }
+    ],
+    "Bookings Operations": [
+      {
+        "line": 5052,
+        "method": "POST",
+        "path": "/api/bookings/emergency-direct-create",
+        "middleware": "authenticateAdmin",
+        "role": "ADMIN, SUPER_ADMIN"
+      },
+      {
+        "line": 5186,
+        "method": "GET",
+        "path": "/api/bookings/:bookingId",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      }
+    ],
+    "Trip Execution & Tracking": [
+      {
+        "line": 5248,
+        "method": "POST",
+        "path": "/api/trips/generate-from-booking",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 5445,
+        "method": "POST",
+        "path": "/api/trips/:tripId/assign",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 5678,
+        "method": "GET",
+        "path": "/api/trips/:tripId",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 5873,
+        "method": "POST",
+        "path": "/api/trips/:tripId/generate-lr",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 6077,
+        "method": "POST",
+        "path": "/api/trips/:tripId/link-ewaybill",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 6186,
+        "method": "GET",
+        "path": "/api/trips/:tripId/lr",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 6516,
+        "method": "POST",
+        "path": "/api/trips/:tripId/location-ping",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 6791,
+        "method": "POST",
+        "path": "/api/trips/:tripId/milestone",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 6922,
+        "method": "POST",
+        "path": "/api/trips/:tripId/geofence-check",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 6979,
+        "method": "GET",
+        "path": "/api/trips/:tripId/tracking",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 7111,
+        "method": "POST",
+        "path": "/api/trips/:tripId/pod",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 7260,
+        "method": "GET",
+        "path": "/api/trips/:tripId/pod",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 7330,
+        "method": "POST",
+        "path": "/api/trips/:tripId/pod/review",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 7587,
+        "method": "POST",
+        "path": "/api/trips/:tripId/weighbridge",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 7796,
+        "method": "GET",
+        "path": "/api/trips/:tripId/weighbridge",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 7839,
+        "method": "POST",
+        "path": "/api/trips/:tripId/claims",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 7965,
+        "method": "GET",
+        "path": "/api/trips/:tripId/claims",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      }
+    ],
+    "Claims & Exceptions": [
+      {
+        "line": 8003,
+        "method": "POST",
+        "path": "/api/claims/:claimId/resolve",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      }
+    ],
+    "Invoicing & Finance": [
+      {
+        "line": 8126,
+        "method": "POST",
+        "path": "/api/invoices/client/generate",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 8375,
+        "method": "GET",
+        "path": "/api/invoices/client/:invoiceId",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 8436,
+        "method": "POST",
+        "path": "/api/invoices/client/:invoiceId/record-payment",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 8596,
+        "method": "POST",
+        "path": "/api/payouts/transporter/generate",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 8804,
+        "method": "GET",
+        "path": "/api/payouts/transporter/:payoutId",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 8861,
+        "method": "POST",
+        "path": "/api/payouts/transporter/:payoutId/record-disbursal",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      },
+      {
+        "line": 8977,
+        "method": "GET",
+        "path": "/api/finance/reconciliation",
+        "middleware": "NONE",
+        "role": "ALL / PUBLIC"
+      }
+    ]
+  }
+}

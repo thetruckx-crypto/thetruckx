@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
+  formatTruckxId,
+  isValidTruckxId,
+  TRUCKX_ID_REGEX,
+  TruckxEntityType,
   formatNeclId,
   isValidNeclId,
   parseNeclId,
@@ -10,7 +14,52 @@ import {
 } from './idGenerator';
 import { pincodeService } from '../services/pincodeService';
 
-describe('NECL Unique ID Generation System', () => {
+describe('THE TRUCKX Unified ID Generation System', () => {
+  const truckxEntities: { entity: TruckxEntityType; code: string }[] = [
+    { entity: 'AC', code: 'TRUCKX-AC' },
+    { entity: 'CL', code: 'TRUCKX-CL' },
+    { entity: 'VE', code: 'TRUCKX-VE' },
+    { entity: 'DR', code: 'TRUCKX-DR' },
+    { entity: 'REQ', code: 'TRUCKX-REQ' },
+    { entity: 'QT', code: 'TRUCKX-QT' },
+    { entity: 'BK', code: 'TRUCKX-BK' },
+    { entity: 'VH', code: 'TRUCKX-VH' },
+    { entity: 'TR', code: 'TRUCKX-TR' },
+  ];
+
+  describe('0. THE TRUCKX Canonical ID Formats (Task 2)', () => {
+    it('should generate valid IDs for all 9 core THE TRUCKX entities', () => {
+      for (const { entity, code } of truckxEntities) {
+        const id = formatTruckxId(entity, 1, new Date('2026-10-30T12:00:00Z'));
+        expect(id).toMatch(TRUCKX_ID_REGEX);
+        expect(isValidTruckxId(id)).toBe(true);
+        expect(isValidTruckxId(id, entity)).toBe(true);
+        expect(id.startsWith(`${code}-`)).toBe(true);
+        expect(id.endsWith('-00001')).toBe(true);
+      }
+    });
+
+    it('should format sequence numbers with 5-digit zero-padding', () => {
+      const id1 = formatTruckxId('AC', 1, new Date('2026-10-30T00:00:00Z'));
+      expect(id1).toBe('TRUCKX-AC-30102026-00001');
+
+      const id2 = formatTruckxId('CL', 42, new Date('2026-10-30T00:00:00Z'));
+      expect(id2).toBe('TRUCKX-CL-30102026-00042');
+
+      const id3 = formatTruckxId('BK', 789, new Date('2026-10-30T00:00:00Z'));
+      expect(id3).toBe('TRUCKX-BK-30102026-00789');
+
+      const id4 = formatTruckxId('VE', 99999, new Date('2026-10-30T00:00:00Z'));
+      expect(id4).toBe('TRUCKX-VE-30102026-99999');
+    });
+
+    it('should normalize legacy aliases to canonical entity codes', () => {
+      expect(formatTruckxId('VD', 5, new Date('2026-10-30T00:00:00Z'))).toBe('TRUCKX-VE-30102026-00005');
+      expect(formatTruckxId('TRP', 12, new Date('2026-10-30T00:00:00Z'))).toBe('TRUCKX-TR-30102026-00012');
+      expect(formatTruckxId('BOK', 99, new Date('2026-10-30T00:00:00Z'))).toBe('TRUCKX-BK-30102026-00099');
+    });
+  });
+
   const entityTypes: NeclEntityType[] = [
     'CL', 'VD', 'DR', 'VH', 'BK', 'REQ', 'RFQ', 'QT',
     'PAY', 'INV', 'RFD', 'TXN', 'SHP', 'TRP', 'TKT',

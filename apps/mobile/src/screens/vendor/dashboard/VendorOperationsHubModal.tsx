@@ -134,7 +134,7 @@ export const VendorOperationsHubModal: React.FC<VendorOperationsHubModalProps> =
                   )}
                 </View>
                 <Text style={styles.cardDesc}>
-                  View and quote on open freight requirements from verified corporate shippers.
+                  View and quote on open freight requirements from verified corporate clients.
                 </Text>
               </View>
               <ChevronRight size={18} color="#94A3B8" />

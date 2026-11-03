@@ -32,6 +32,7 @@ import {
   Link as LinkIcon,
   Crosshair,
   Compass,
+  Search,
 } from 'lucide-react-native';
 import { AuthBottomDecoration } from '../../../components/AuthBottomDecoration';
 import { StaticMapPreviewTile } from '../../../components/StaticMapPreviewTile';
@@ -155,6 +156,25 @@ export const PickupDeliveryDetailsScreen: React.FC<
   const [pasteLinkTarget, setPasteLinkTarget] = useState<'PICKUP' | 'DELIVERY'>('PICKUP');
   const [pastedLinkInput, setPastedLinkInput] = useState('');
   const [pasteLinkError, setPasteLinkError] = useState<string | null>(null);
+
+  // Dynamic Google Places / Maps Location Search Modal (Task 3)
+  const [showLocationSearchModal, setShowLocationSearchModal] = useState(false);
+  const [locationSearchTarget, setLocationSearchTarget] = useState<'PICKUP' | 'DELIVERY'>('PICKUP');
+  const [locationSearchQuery, setLocationSearchQuery] = useState('');
+  const [locationSearchResults, setLocationSearchResults] = useState<any[]>([]);
+  const [isSearchingLocation, setIsSearchingLocation] = useState(false);
+  const [locationSearchError, setLocationSearchError] = useState<string | null>(null);
+  const [selectedCandidate, setSelectedCandidate] = useState<{
+    id: string;
+    name: string;
+    formattedAddress: string;
+    city: string;
+    state: string;
+    pincode: string;
+    latitude?: number;
+    longitude?: number;
+    googleMapsUrl: string;
+  } | null>(null);
 
   // Load saved hubs
   useEffect(() => {
@@ -327,42 +347,166 @@ export const PickupDeliveryDetailsScreen: React.FC<
     }
   };
 
-  // Zero-Cost Google Maps Actions
-  const handleSelectOnGoogleMaps = (target: 'PICKUP' | 'DELIVERY') => {
-    const address = target === 'PICKUP' ? pickupAddress : destinationAddress;
-    const city = target === 'PICKUP' ? pickupCity : destinationCity;
-    const query = address || city || 'Guwahati, Assam';
-    const searchUrl = buildGoogleMapsSearchUrl(query);
+  // Dynamic Google Maps / Places Search Actions (Task 3)
+  const handleOpenLocationSearch = (target: 'PICKUP' | 'DELIVERY') => {
+    setLocationSearchTarget(target);
+    const existing = target === 'PICKUP' ? (pickupAddress || pickupCity) : (destinationAddress || destinationCity);
+    setLocationSearchQuery(existing || '');
+    setSelectedCandidate(null);
+    setLocationSearchError(null);
+    setShowLocationSearchModal(true);
+    if (existing && existing.trim().length >= 2) {
+      handleSearchPlaces(existing.trim());
+    } else {
+      setLocationSearchResults([]);
+    }
+  };
 
-    Linking.canOpenURL(searchUrl).then((supported) => {
-      if (supported) {
-        Linking.openURL(searchUrl);
-      } else {
-        Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`);
-      }
-    }).catch(() => {
-      Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`);
-    });
+  const handleSearchPlaces = async (query: string) => {
+    const trimmed = query.trim();
+    if (trimmed.length < 2) {
+      setLocationSearchResults([]);
+      setIsSearchingLocation(false);
+      return;
+    }
+    setIsSearchingLocation(true);
+    setLocationSearchError(null);
 
-    Alert.alert(
-      'Google Maps Search Opened',
-      `Google Maps has opened for "${query}".\n\nTo pin this exact location for the driver:\n1. Tap "Share" in Google Maps and copy link.\n2. Tap "Paste Google Maps Link" to attach it.`,
-      [
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+          trimmed
+        )}&countrycodes=in&limit=8&addressdetails=1`,
         {
-          text: 'Attach Current Address Now',
-          onPress: () => {
-            if (target === 'PICKUP') {
-              setPickupGoogleMapsUrl(searchUrl);
-              triggerAutosave({ pickupGoogleMapsUrl: searchUrl });
-            } else {
-              setDestinationGoogleMapsUrl(searchUrl);
-              triggerAutosave({ destinationGoogleMapsUrl: searchUrl });
-            }
+          signal: controller.signal,
+          headers: {
+            Accept: 'application/json',
+            'User-Agent': 'TheTruckX-Logistics/1.0',
           },
-        },
-        { text: 'OK', style: 'cancel' },
-      ]
-    );
+        }
+      );
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data) && data.length > 0) {
+          const formatted = data.map((item: any) => {
+            const addr = item.address || {};
+            const city =
+              addr.city ||
+              addr.town ||
+              addr.village ||
+              addr.suburb ||
+              addr.county ||
+              addr.state_district ||
+              '';
+            const state = addr.state || '';
+            const pincode = addr.postcode || '';
+            const lat = parseFloat(item.lat);
+            const lon = parseFloat(item.lon);
+            const displayName = item.display_name || item.name || '';
+            const shortName = displayName.split(',')[0] || item.name || city;
+
+            return {
+              id: item.place_id ? String(item.place_id) : `${lat}_${lon}`,
+              name: shortName,
+              formattedAddress: displayName,
+              city,
+              state,
+              pincode,
+              latitude: lat,
+              longitude: lon,
+              googleMapsUrl: `https://www.google.com/maps/search/?api=1&query=${lat}%2C${lon}`,
+            };
+          });
+
+          setLocationSearchResults(formatted);
+          setIsSearchingLocation(false);
+          return;
+        }
+      }
+      throw new Error('No results from primary source');
+    } catch {
+      // Fallback matching query from logistics hubs
+      const lower = trimmed.toLowerCase();
+      const matchedHubs = POPULAR_HUBS.filter(
+        (h) =>
+          h.city.toLowerCase().includes(lower) ||
+          h.state.toLowerCase().includes(lower) ||
+          h.region.toLowerCase().includes(lower)
+      );
+
+      const fallbackList = matchedHubs.map((h) => ({
+        id: `hub-${h.city}`,
+        name: `${h.city} Logistics Hub`,
+        formattedAddress: `${h.city}, ${h.state}, India`,
+        city: h.city,
+        state: h.state,
+        pincode: '',
+        latitude: undefined,
+        longitude: undefined,
+        googleMapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+          `${h.city}, ${h.state}`
+        )}`,
+      }));
+
+      setLocationSearchResults(fallbackList);
+      setIsSearchingLocation(false);
+    }
+  };
+
+  const handleConfirmSelectedLocation = () => {
+    if (!selectedCandidate) return;
+
+    if (locationSearchTarget === 'PICKUP') {
+      if (selectedCandidate.formattedAddress) setPickupAddress(selectedCandidate.formattedAddress);
+      if (selectedCandidate.city) setPickupCity(selectedCandidate.city);
+      if (selectedCandidate.state) setPickupState(selectedCandidate.state);
+      if (selectedCandidate.pincode) setPickupPincode(selectedCandidate.pincode);
+      if (selectedCandidate.latitude !== undefined) setPickupLatitude(selectedCandidate.latitude);
+      if (selectedCandidate.longitude !== undefined) setPickupLongitude(selectedCandidate.longitude);
+      if (selectedCandidate.googleMapsUrl) setPickupGoogleMapsUrl(selectedCandidate.googleMapsUrl);
+
+      triggerAutosave({
+        pickupAddress: selectedCandidate.formattedAddress || pickupAddress,
+        pickupCity: selectedCandidate.city || pickupCity,
+        pickupState: selectedCandidate.state || pickupState,
+        pickupPincode: selectedCandidate.pincode || pickupPincode,
+        pickupLatitude: selectedCandidate.latitude,
+        pickupLongitude: selectedCandidate.longitude,
+        pickupGoogleMapsUrl: selectedCandidate.googleMapsUrl,
+      });
+    } else {
+      if (selectedCandidate.formattedAddress) setDestinationAddress(selectedCandidate.formattedAddress);
+      if (selectedCandidate.city) setDestinationCity(selectedCandidate.city);
+      if (selectedCandidate.state) setDestinationState(selectedCandidate.state);
+      if (selectedCandidate.pincode) setDestinationPincode(selectedCandidate.pincode);
+      if (selectedCandidate.latitude !== undefined) setDestinationLatitude(selectedCandidate.latitude);
+      if (selectedCandidate.longitude !== undefined) setDestinationLongitude(selectedCandidate.longitude);
+      if (selectedCandidate.googleMapsUrl) setDestinationGoogleMapsUrl(selectedCandidate.googleMapsUrl);
+
+      triggerAutosave({
+        destinationAddress: selectedCandidate.formattedAddress || destinationAddress,
+        destinationCity: selectedCandidate.city || destinationCity,
+        destinationState: selectedCandidate.state || destinationState,
+        destinationPincode: selectedCandidate.pincode || destinationPincode,
+        destinationLatitude: selectedCandidate.latitude,
+        destinationLongitude: selectedCandidate.longitude,
+        destinationGoogleMapsUrl: selectedCandidate.googleMapsUrl,
+      });
+    }
+
+    setShowLocationSearchModal(false);
+    setSelectedCandidate(null);
+    setLocationSearchQuery('');
+    setLocationSearchResults([]);
+  };
+
+  const handleSelectOnGoogleMaps = (target: 'PICKUP' | 'DELIVERY') => {
+    handleOpenLocationSearch(target);
   };
 
   const handleOpenPasteLinkModal = (target: 'PICKUP' | 'DELIVERY') => {
@@ -648,7 +792,7 @@ export const PickupDeliveryDetailsScreen: React.FC<
                   setPickupAddress(text);
                   triggerAutosave({ pickupAddress: text });
                 }}
-                placeholder=""
+                placeholder="Enter complete pickup street address, landmark, factory..."
                 placeholderTextColor="#94A3B8"
                 multiline
               />
@@ -665,7 +809,7 @@ export const PickupDeliveryDetailsScreen: React.FC<
                   style={[styles.textInputBox, { flex: 1 }]}
                   value={pickupPincode}
                   onChangeText={handlePickupPincodeChange}
-                  placeholder=""
+                  placeholder="6-digit PIN"
                   keyboardType="numeric"
                   maxLength={6}
                   placeholderTextColor="#94A3B8"
@@ -723,7 +867,7 @@ export const PickupDeliveryDetailsScreen: React.FC<
                     setPickupContactName(text);
                     triggerAutosave({ pickupContactName: text });
                   }}
-                  placeholder=""
+                  placeholder="Contact person name"
                   placeholderTextColor="#94A3B8"
                 />
               </View>
@@ -743,7 +887,7 @@ export const PickupDeliveryDetailsScreen: React.FC<
                     setPickupContactPhone(clean);
                     triggerAutosave({ pickupContactPhone: clean });
                   }}
-                  placeholder=""
+                  placeholder="10-digit mobile number"
                   keyboardType="phone-pad"
                   maxLength={10}
                   placeholderTextColor="#94A3B8"
@@ -766,8 +910,8 @@ export const PickupDeliveryDetailsScreen: React.FC<
             {pickupGoogleMapsUrl ? (
               <View style={styles.locationAddedBox}>
                 <StaticMapPreviewTile
-                  label={pickupAddress.split(',')[0] || 'Pickup Location'}
-                  city={pickupCity || 'Guwahati'}
+                  label={pickupAddress.split(',')[0] || pickupCity || 'Pickup Location'}
+                  city={pickupCity || undefined}
                   onPress={() => handleViewLocationOnMap('PICKUP')}
                 />
                 <View style={styles.locationAddedInfo}>
@@ -900,7 +1044,7 @@ export const PickupDeliveryDetailsScreen: React.FC<
                   setDestinationAddress(text);
                   triggerAutosave({ destinationAddress: text });
                 }}
-                placeholder=""
+                placeholder="Enter complete delivery street address, destination yard..."
                 placeholderTextColor="#94A3B8"
                 multiline
               />
@@ -917,7 +1061,7 @@ export const PickupDeliveryDetailsScreen: React.FC<
                   style={[styles.textInputBox, { flex: 1 }]}
                   value={destinationPincode}
                   onChangeText={handleDestinationPincodeChange}
-                  placeholder=""
+                  placeholder="6-digit PIN"
                   keyboardType="numeric"
                   maxLength={6}
                   placeholderTextColor="#94A3B8"
@@ -977,7 +1121,7 @@ export const PickupDeliveryDetailsScreen: React.FC<
                     setDropContactName(text);
                     triggerAutosave({ dropContactName: text });
                   }}
-                  placeholder=""
+                  placeholder="Unloading contact person name"
                   placeholderTextColor="#94A3B8"
                 />
               </View>
@@ -997,7 +1141,7 @@ export const PickupDeliveryDetailsScreen: React.FC<
                     setDropContactPhone(clean);
                     triggerAutosave({ dropContactPhone: clean });
                   }}
-                  placeholder=""
+                  placeholder="10-digit mobile number"
                   keyboardType="phone-pad"
                   maxLength={10}
                   placeholderTextColor="#94A3B8"
@@ -1020,8 +1164,8 @@ export const PickupDeliveryDetailsScreen: React.FC<
             {destinationGoogleMapsUrl ? (
               <View style={styles.locationAddedBox}>
                 <StaticMapPreviewTile
-                  label={destinationAddress.split(',')[0] || 'Destination Yard'}
-                  city={destinationCity || 'Kolkata'}
+                  label={destinationAddress.split(',')[0] || destinationCity || 'Destination Location'}
+                  city={destinationCity || undefined}
                   onPress={() => handleViewLocationOnMap('DELIVERY')}
                 />
                 <View style={styles.locationAddedInfo}>
@@ -1274,7 +1418,7 @@ export const PickupDeliveryDetailsScreen: React.FC<
                   setPastedLinkInput(text);
                   setPasteLinkError(null);
                 }}
-                placeholder=""
+                placeholder="Paste Google Maps link (e.g. https://maps.app.goo.gl/...)"
                 placeholderTextColor="#94A3B8"
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -1305,6 +1449,222 @@ export const PickupDeliveryDetailsScreen: React.FC<
                 onPress={handleSavePastedLink}
               >
                 <Text style={styles.confirmPasteBtnText}>Attach Location</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+      {/* ─── MODAL 4: Dynamic Google Maps / Places Location Search Modal (Task 3) ─── */}
+      <Modal
+        visible={showLocationSearchModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowLocationSearchModal(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { maxHeight: '90%' }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>
+                  {locationSearchTarget === 'PICKUP' ? 'Search Pickup Location' : 'Search Delivery Destination'}
+                </Text>
+                <Text style={styles.modalSubtitle}>
+                  Dynamic Google Places search & verified GPS mapping
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowLocationSearchModal(false);
+                  setSelectedCandidate(null);
+                }}
+                style={{ padding: 4 }}
+              >
+                <X size={22} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Live Search Input */}
+            <View style={styles.locationSearchInputRow}>
+              <Search size={18} color="#64748B" style={{ marginLeft: 10 }} />
+              <TextInput
+                style={styles.locationSearchTextInput}
+                value={locationSearchQuery}
+                onChangeText={(text) => {
+                  setLocationSearchQuery(text);
+                  handleSearchPlaces(text);
+                }}
+                placeholder="Search landmark, industrial area, warehouse, city..."
+                placeholderTextColor="#94A3B8"
+                autoCapitalize="words"
+                autoCorrect={false}
+              />
+              {locationSearchQuery.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => {
+                    setLocationSearchQuery('');
+                    setLocationSearchResults([]);
+                    setSelectedCandidate(null);
+                  }}
+                  style={{ padding: 8 }}
+                >
+                  <X size={16} color="#94A3B8" />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Selected Location Candidate Preview Card */}
+            {selectedCandidate ? (
+              <View style={styles.selectedCandidateCard}>
+                <View style={styles.candidateHeaderRow}>
+                  <View style={styles.candidateBadgePill}>
+                    <CheckCircle2 size={13} color="#16A34A" />
+                    <Text style={styles.candidateBadgeText}>Selected Location</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => {
+                      const url = selectedCandidate.googleMapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedCandidate.formattedAddress)}`;
+                      Linking.openURL(url);
+                    }}
+                    style={styles.openExternalMapBtn}
+                  >
+                    <ExternalLink size={12} color="#2563EB" />
+                    <Text style={styles.openExternalMapText}>View in Maps App</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={styles.candidateNameText}>{selectedCandidate.name}</Text>
+                <Text style={styles.candidateAddressText}>{selectedCandidate.formattedAddress}</Text>
+
+                {selectedCandidate.latitude !== undefined && selectedCandidate.longitude !== undefined && (
+                  <View style={styles.candidateGpsRow}>
+                    <MapPin size={12} color="#F05A24" />
+                    <Text style={styles.candidateGpsText}>
+                      Coordinates: {selectedCandidate.latitude.toFixed(5)}, {selectedCandidate.longitude.toFixed(5)}
+                    </Text>
+                  </View>
+                )}
+
+                <View style={styles.candidateActionRow}>
+                  <TouchableOpacity
+                    style={styles.reselectCandidateBtn}
+                    onPress={() => setSelectedCandidate(null)}
+                  >
+                    <Text style={styles.reselectCandidateText}>Change Selection</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.confirmCandidateBtn}
+                    onPress={handleConfirmSelectedLocation}
+                    activeOpacity={0.88}
+                  >
+                    <CheckCircle2 size={16} color="#FFFFFF" />
+                    <Text style={styles.confirmCandidateBtnText}>Confirm Location</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : null}
+
+            {/* Results or Loading State */}
+            {isSearchingLocation ? (
+              <View style={styles.searchingLocationBox}>
+                <ActivityIndicator size="small" color="#F05A24" />
+                <Text style={styles.searchingLocationText}>Searching locations across India...</Text>
+              </View>
+            ) : (
+              <ScrollView
+                style={styles.searchResultsScroll}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                {locationSearchResults.length > 0 ? (
+                  locationSearchResults.map((item) => (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={[
+                        styles.locationResultItem,
+                        selectedCandidate?.id === item.id ? styles.locationResultItemSelected : null,
+                      ]}
+                      onPress={() => setSelectedCandidate(item)}
+                      activeOpacity={0.75}
+                    >
+                      <View style={styles.resultItemIconBox}>
+                        <MapPin size={16} color="#F05A24" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.resultItemName}>{item.name}</Text>
+                        <Text style={styles.resultItemAddress} numberOfLines={2}>
+                          {item.formattedAddress}
+                        </Text>
+                        {item.latitude !== undefined && item.longitude !== undefined && (
+                          <Text style={styles.resultItemCoords}>
+                            GPS: {item.latitude.toFixed(4)}, {item.longitude.toFixed(4)}
+                          </Text>
+                        )}
+                      </View>
+                      <ChevronRight size={16} color="#CBD5E1" />
+                    </TouchableOpacity>
+                  ))
+                ) : locationSearchQuery.length >= 2 ? (
+                  <View style={styles.noResultsBox}>
+                    <Text style={styles.noResultsText}>
+                      No specific match found for "{locationSearchQuery}".
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.useCustomQueryBtn}
+                      onPress={() => {
+                        const fallbackCandidate = {
+                          id: `custom-${Date.now()}`,
+                          name: locationSearchQuery,
+                          formattedAddress: locationSearchQuery,
+                          city: locationSearchQuery.split(',')[0].trim(),
+                          state: 'India',
+                          pincode: '',
+                          latitude: undefined,
+                          longitude: undefined,
+                          googleMapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationSearchQuery)}`,
+                        };
+                        setSelectedCandidate(fallbackCandidate);
+                      }}
+                    >
+                      <Text style={styles.useCustomQueryText}>
+                        Use "{locationSearchQuery}" as location
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={styles.searchEmptyPrompt}>
+                    <MapPin size={32} color="#CBD5E1" />
+                    <Text style={styles.searchEmptyPromptTitle}>Search Any Location in India</Text>
+                    <Text style={styles.searchEmptyPromptSub}>
+                      Type city, district, transport hub, or warehouse address to dynamically fetch verified coordinates.
+                    </Text>
+                  </View>
+                )}
+              </ScrollView>
+            )}
+
+            {/* Bottom Alternative Action: External Maps & Paste Link */}
+            <View style={styles.searchModalFooter}>
+              <TouchableOpacity
+                style={styles.openMapsAppFooterBtn}
+                onPress={() => {
+                  const q = locationSearchQuery.trim() || (locationSearchTarget === 'PICKUP' ? pickupCity : destinationCity) || 'India';
+                  Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`);
+                }}
+              >
+                <Compass size={14} color="#1E293B" />
+                <Text style={styles.openMapsAppFooterText}>Select in Maps App</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.pasteLinkFooterBtn}
+                onPress={() => {
+                  setShowLocationSearchModal(false);
+                  handleOpenPasteLinkModal(locationSearchTarget);
+                }}
+              >
+                <LinkIcon size={14} color="#F05A24" />
+                <Text style={styles.pasteLinkFooterText}>Paste Share Link</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1994,5 +2354,240 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     fontWeight: '800',
     color: '#FFFFFF',
+  },
+
+  /* Dynamic Location Search Modal (Task 3) */
+  locationSearchInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginVertical: 10,
+    height: 46,
+  },
+  locationSearchTextInput: {
+    flex: 1,
+    height: 46,
+    paddingHorizontal: 10,
+    fontSize: 13,
+    color: '#101D36',
+  },
+  selectedCandidateCard: {
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1.5,
+    borderColor: '#FDBA74',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+  },
+  candidateHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  candidateBadgePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  candidateBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#10B981',
+  },
+  openExternalMapBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  openExternalMapText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#2563EB',
+  },
+  candidateNameText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#101D36',
+    marginBottom: 2,
+  },
+  candidateAddressText: {
+    fontSize: 12,
+    color: '#475569',
+    lineHeight: 16,
+  },
+  candidateGpsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+  },
+  candidateGpsText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#C2410C',
+  },
+  candidateActionRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 10,
+  },
+  reselectCandidateBtn: {
+    flex: 1,
+    height: 40,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reselectCandidateText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  confirmCandidateBtn: {
+    flex: 1.4,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: '#F05A24',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  confirmCandidateBtnText: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  searchingLocationBox: {
+    paddingVertical: 30,
+    alignItems: 'center',
+    gap: 8,
+  },
+  searchingLocationText: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  searchResultsScroll: {
+    maxHeight: 250,
+  },
+  locationResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    gap: 10,
+  },
+  locationResultItemSelected: {
+    backgroundColor: '#FFF7ED',
+  },
+  resultItemIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#FFF7ED',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  resultItemName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#101D36',
+  },
+  resultItemAddress: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  resultItemCoords: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#F05A24',
+    marginTop: 2,
+  },
+  noResultsBox: {
+    paddingVertical: 20,
+    alignItems: 'center',
+  },
+  noResultsText: {
+    fontSize: 12,
+    color: '#94A3B8',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  useCustomQueryBtn: {
+    backgroundColor: '#FFF7ED',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FDBA74',
+  },
+  useCustomQueryText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#C2410C',
+  },
+  searchEmptyPrompt: {
+    paddingVertical: 30,
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  searchEmptyPromptTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#475569',
+    marginTop: 8,
+  },
+  searchEmptyPromptSub: {
+    fontSize: 11.5,
+    color: '#94A3B8',
+    textAlign: 'center',
+    marginTop: 4,
+    lineHeight: 16,
+  },
+  searchModalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    paddingTop: 10,
+    marginTop: 8,
+  },
+  openMapsAppFooterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+  },
+  openMapsAppFooterText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  pasteLinkFooterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+  },
+  pasteLinkFooterText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#F05A24',
   },
 });

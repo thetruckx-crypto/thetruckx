@@ -102,7 +102,7 @@ export const DriverLicenceAudit: React.FC<DriverLicenceAuditProps> = ({
             .order('created_at', { ascending: true }),
           supabase
             .from('vendor_companies')
-            .select('id, vendor_name, vendor_code, city, status')
+            .select('id, vendor_name, vendor_code, address, status')
             .order('vendor_name', { ascending: true }),
         ]);
 
@@ -734,7 +734,7 @@ export const DriverLicenceAudit: React.FC<DriverLicenceAuditProps> = ({
                     <option value="">-- Choose Connected Vendor --</option>
                     {availableVendors.map((v) => (
                       <option key={v.id} value={v.id}>
-                        {v.vendor_name} ({v.vendor_code || formatDisplayId('VD', v.id)}) {v.city ? `• ${v.city}` : ''}
+                        {v.vendor_name} ({v.vendor_code || formatDisplayId('VD', v.id)}) {v.address ? `• ${v.address}` : ''}
                       </option>
                     ))}
                   </select>

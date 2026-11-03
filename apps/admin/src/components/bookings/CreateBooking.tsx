@@ -15,7 +15,7 @@ import {
   Calendar
 } from 'lucide-react';
 import { supabase, ensureAdminSession } from '../../utils/supabase';
-import { generateDbNeclId } from '../../utils/idGenerator';
+import { generateDbTruckxId } from '../../utils/idGenerator';
 
 interface CreateBookingProps {
   onBack: () => void;
@@ -119,7 +119,7 @@ export const CreateBooking: React.FC<CreateBookingProps> = ({
           id: r.id,
           requirement_code: r.requirement_code || r.id,
           client_id: r.client_id,
-          client_name: r.client_companies?.company_name || 'Shipper Client',
+          client_name: r.client_companies?.company_name || 'Client Enterprise',
           pickup_address: r.pickup_address,
           destination_address: r.destination_address,
           vehicle_type: r.vehicle_type,
@@ -198,8 +198,34 @@ export const CreateBooking: React.FC<CreateBookingProps> = ({
         throw new Error(`This requirement is already associated with Booking #${existingBooking.id}.`);
       }
 
-      // Generate DB NECL Booking ID
-      const bookingId = await generateDbNeclId('BK');
+      // Concurrency Overlap Guard: Check if selected vehicle is already active on an ongoing trip
+      const { data: activeVehicleTrip } = await supabase
+        .from('trips')
+        .select('id, trip_code, trip_status')
+        .eq('vehicle_id', selectedVehicleId)
+        .not('trip_status', 'in', '("DELIVERED","COMPLETED","CANCELLED")')
+        .limit(1)
+        .maybeSingle();
+
+      if (activeVehicleTrip) {
+        throw new Error(`Vehicle is currently engaged in active Trip #${activeVehicleTrip.trip_code || activeVehicleTrip.id} (${activeVehicleTrip.trip_status}). Please complete or reassign the previous trip before new allocation.`);
+      }
+
+      // Concurrency Overlap Guard: Check if selected driver is already active on an ongoing trip
+      const { data: activeDriverTrip } = await supabase
+        .from('trips')
+        .select('id, trip_code, trip_status')
+        .eq('driver_id', selectedDriverId)
+        .not('trip_status', 'in', '("DELIVERED","COMPLETED","CANCELLED")')
+        .limit(1)
+        .maybeSingle();
+
+      if (activeDriverTrip) {
+        throw new Error(`Driver is currently engaged in active Trip #${activeDriverTrip.trip_code || activeDriverTrip.id} (${activeDriverTrip.trip_status}). Please complete or reassign the previous trip before new allocation.`);
+      }
+
+      // Generate DB TRUCKX Booking ID
+      const bookingId = await generateDbTruckxId('BK');
 
       const vRateNum = vendorRate ? parseFloat(vendorRate) : 80000;
       const cAmountNum = clientAmount ? parseFloat(clientAmount) : vRateNum * 1.15;
@@ -208,6 +234,7 @@ export const CreateBooking: React.FC<CreateBookingProps> = ({
       const bookingPayload = {
         id: bookingId,
         booking_code: bookingId,
+        booking_number: bookingId,
         requirement_id: selectedReqId,
         client_id: selectedRequirement?.client_id,
         booking_status: 'CONFIRMED',
@@ -232,9 +259,11 @@ export const CreateBooking: React.FC<CreateBookingProps> = ({
         .eq('id', selectedReqId);
 
       // 3. Initialize active trip assignment record
-      const tripId = await generateDbNeclId('TRP');
+      const tripId = await generateDbTruckxId('TR');
       const tripPayload = {
         id: tripId,
+        trip_code: tripId,
+        trip_number: tripId,
         booking_id: bookingId,
         vehicle_id: selectedVehicleId,
         driver_id: selectedDriverId,
@@ -283,15 +312,16 @@ export const CreateBooking: React.FC<CreateBookingProps> = ({
       {/* Header Banner */}
       <div
         style={{
-          background: 'linear-gradient(135deg, #0B192C 0%, #172B4D 100%)',
+          background: '#FFFFFF',
           borderRadius: '16px',
           padding: '24px 28px',
-          color: '#FFFFFF',
+          color: '#111827',
           marginBottom: '24px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          boxShadow: '0 4px 20px rgba(11, 25, 44, 0.15)',
+          boxShadow: '0 1px 3px rgba(17, 24, 39, 0.05)',
+          border: '1px solid #E5EAF1',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
@@ -300,20 +330,20 @@ export const CreateBooking: React.FC<CreateBookingProps> = ({
               width: '48px',
               height: '48px',
               borderRadius: '12px',
-              background: 'rgba(37, 99, 235, 0.2)',
-              border: '1px solid rgba(37, 99, 235, 0.4)',
+              background: '#FFF3EC',
+              border: '1px solid #FFE8DF',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <Truck size={26} color="#3B82F6" />
+            <Truck size={26} color="#F4510B" />
           </div>
           <div>
-            <h1 style={{ fontSize: '22px', fontWeight: 800, margin: '0 0 4px 0', letterSpacing: '-0.01em' }}>
+            <h1 style={{ fontSize: '22px', fontWeight: 800, margin: '0 0 4px 0', letterSpacing: '-0.01em', color: '#111827' }}>
               Confirm Transport Booking
             </h1>
-            <p style={{ fontSize: '13.5px', color: '#94A3B8', margin: 0 }}>
+            <p style={{ fontSize: '13.5px', color: '#64748B', margin: 0 }}>
               Convert client freight requirement into an official confirmed booking with fleet and driver allocation.
             </p>
           </div>
@@ -323,9 +353,9 @@ export const CreateBooking: React.FC<CreateBookingProps> = ({
           type="button"
           onClick={onBack}
           style={{
-            background: 'rgba(255, 255, 255, 0.1)',
-            color: '#FFFFFF',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
+            background: '#FFFFFF',
+            color: '#475569',
+            border: '1px solid #D9E1EC',
             padding: '8px 16px',
             borderRadius: '8px',
             fontSize: '13px',
@@ -405,10 +435,11 @@ export const CreateBooking: React.FC<CreateBookingProps> = ({
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
+                  <label htmlFor="field-select-requirement" style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
                     Select Open Requirement *
                   </label>
                   <select
+                    id="field-select-requirement"
                     value={selectedReqId}
                     onChange={(e) => setSelectedReqId(e.target.value)}
                     required
@@ -420,7 +451,6 @@ export const CreateBooking: React.FC<CreateBookingProps> = ({
                       border: '1px solid #CBD5E1',
                       fontSize: '14px',
                       background: '#FFFFFF',
-                      outline: 'none',
                     }}
                   >
                     {requirements.map((r) => (
@@ -467,10 +497,11 @@ export const CreateBooking: React.FC<CreateBookingProps> = ({
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
+                <label htmlFor="field-select-vendor" style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
                   Assign Transporter Vendor *
                 </label>
                 <select
+                  id="field-select-vendor"
                   value={selectedVendorId}
                   onChange={(e) => setSelectedVendorId(e.target.value)}
                   required
@@ -482,7 +513,6 @@ export const CreateBooking: React.FC<CreateBookingProps> = ({
                     border: '1px solid #CBD5E1',
                     fontSize: '14px',
                     background: '#FFFFFF',
-                    outline: 'none',
                   }}
                 >
                   {vendors.map((v) => (
@@ -494,10 +524,11 @@ export const CreateBooking: React.FC<CreateBookingProps> = ({
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
+                <label htmlFor="field-vendor-rate" style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
                   Agreed Vendor Cost (₹) *
                 </label>
                 <input
+                  id="field-vendor-rate"
                   type="number"
                   placeholder="e.g. 75000"
                   value={vendorRate}
@@ -509,16 +540,16 @@ export const CreateBooking: React.FC<CreateBookingProps> = ({
                     borderRadius: '8px',
                     border: '1px solid #CBD5E1',
                     fontSize: '14px',
-                    outline: 'none',
                   }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
+                <label htmlFor="field-client-amount" style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
                   Client Grand Total (₹) *
                 </label>
                 <input
+                  id="field-client-amount"
                   type="number"
                   placeholder="e.g. 88500"
                   value={clientAmount}
@@ -530,7 +561,6 @@ export const CreateBooking: React.FC<CreateBookingProps> = ({
                     borderRadius: '8px',
                     border: '1px solid #CBD5E1',
                     fontSize: '14px',
-                    outline: 'none',
                   }}
                 />
               </div>
@@ -548,10 +578,11 @@ export const CreateBooking: React.FC<CreateBookingProps> = ({
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
+                <label htmlFor="field-select-vehicle" style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
                   Allocate Active Vehicle *
                 </label>
                 <select
+                  id="field-select-vehicle"
                   value={selectedVehicleId}
                   onChange={(e) => setSelectedVehicleId(e.target.value)}
                   required
@@ -563,7 +594,6 @@ export const CreateBooking: React.FC<CreateBookingProps> = ({
                     border: '1px solid #CBD5E1',
                     fontSize: '14px',
                     background: '#FFFFFF',
-                    outline: 'none',
                   }}
                 >
                   {vehicles.map((vh) => (
@@ -575,10 +605,11 @@ export const CreateBooking: React.FC<CreateBookingProps> = ({
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
+                <label htmlFor="field-select-driver" style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#475569', marginBottom: '6px' }}>
                   Allocate Verified Driver *
                 </label>
                 <select
+                  id="field-select-driver"
                   value={selectedDriverId}
                   onChange={(e) => setSelectedDriverId(e.target.value)}
                   required
@@ -590,7 +621,6 @@ export const CreateBooking: React.FC<CreateBookingProps> = ({
                     border: '1px solid #CBD5E1',
                     fontSize: '14px',
                     background: '#FFFFFF',
-                    outline: 'none',
                   }}
                 >
                   {drivers.map((dr) => (

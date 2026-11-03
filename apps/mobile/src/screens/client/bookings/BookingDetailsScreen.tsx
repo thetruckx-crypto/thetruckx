@@ -216,9 +216,29 @@ export const BookingDetailsScreen: React.FC<BookingDetailsScreenProps> = ({
   const driver = trip?.drivers;
 
   const displayBookingId =
-    data?.booking_reference || formatDisplayId('BK', data.id, data.confirmed_at || data.created_at);
+    data?.booking_code && data.booking_code.startsWith('TRUCKX-BK-')
+      ? data.booking_code
+      : (data?.booking_reference || formatDisplayId('BK', data?.booking_code || data.id, data.confirmed_at || data.created_at));
 
-  const lrNumber = trip?.lr_number || (trip?.id ? formatDisplayId('TRP', trip.id, trip.created_at) : null);
+  const lrNumber = trip?.lr_number ||
+    ((trip as any)?.trip_code && (trip as any).trip_code.startsWith('TRUCKX-TR-')
+      ? (trip as any).trip_code
+      : (trip?.id ? formatDisplayId('TR', trip.id, trip.created_at) : null));
+
+  const displayReqId =
+    data?.requirements?.requirement_code && data.requirements.requirement_code.startsWith('TRUCKX-REQ-')
+      ? data.requirements.requirement_code
+      : (data?.requirement_id ? formatDisplayId('REQ', data?.requirements?.requirement_code || data.requirement_id, data?.created_at) : null);
+
+  const displayClientId =
+    data?.client_companies?.client_code && data.client_companies.client_code.startsWith('TRUCKX-CL-')
+      ? data.client_companies.client_code
+      : (data?.client_id ? formatDisplayId('CL', data.client_id, data?.created_at) : null);
+
+  const displayVendorId =
+    trip?.vendors?.vendor_code && trip.vendors.vendor_code.startsWith('TRUCKX-VE-')
+      ? trip.vendors.vendor_code
+      : ((data?.vendor_id || trip?.vendor_id) ? formatDisplayId('VE', data?.vendor_id || trip?.vendor_id, data?.created_at) : null);
 
   const statusRaw = (trip?.trip_status || data?.booking_status || 'CONFIRMED').toUpperCase();
   const isDelivered = statusRaw === 'DELIVERED';
@@ -347,6 +367,43 @@ export const BookingDetailsScreen: React.FC<BookingDetailsScreenProps> = ({
               </TouchableOpacity>
             </View>
           )}
+
+          {/* Associated System Record Identifiers */}
+          <View style={styles.associatedIdsWrap}>
+            {displayReqId && (
+              <View style={styles.associatedIdItem}>
+                <Text style={styles.associatedIdLabel}>REQUIREMENT ID</Text>
+                <View style={styles.associatedIdValRow}>
+                  <Text style={styles.associatedIdValue} numberOfLines={1}>{displayReqId}</Text>
+                  <TouchableOpacity onPress={() => handleCopy(displayReqId)} style={styles.copyBtnTiny} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                    <Copy size={11} color="#64748B" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+            {displayClientId && (
+              <View style={styles.associatedIdItem}>
+                <Text style={styles.associatedIdLabel}>CLIENT ID</Text>
+                <View style={styles.associatedIdValRow}>
+                  <Text style={styles.associatedIdValue} numberOfLines={1}>{displayClientId}</Text>
+                  <TouchableOpacity onPress={() => handleCopy(displayClientId)} style={styles.copyBtnTiny} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                    <Copy size={11} color="#64748B" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+            {displayVendorId && (
+              <View style={styles.associatedIdItem}>
+                <Text style={styles.associatedIdLabel}>VENDOR ID</Text>
+                <View style={styles.associatedIdValRow}>
+                  <Text style={styles.associatedIdValue} numberOfLines={1}>{displayVendorId}</Text>
+                  <TouchableOpacity onPress={() => handleCopy(displayVendorId)} style={styles.copyBtnTiny} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                    <Copy size={11} color="#64748B" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </View>
         </View>
 
         {/* ── 3. Quick Actions (3 Compact Horizontal Buttons) ── */}
@@ -567,7 +624,7 @@ export const BookingDetailsScreen: React.FC<BookingDetailsScreenProps> = ({
               <View style={{ flex: 1 }}>
                 <Text style={styles.linkedReqLabel}>ORIGINATING REQUIREMENT</Text>
                 <Text style={styles.linkedReqValue}>
-                  {req?.id || data?.requirement_id}
+                  {displayReqId || req?.id || data?.requirement_id}
                 </Text>
               </View>
               {onViewRequirement && (
@@ -1130,6 +1187,43 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#F15A24',
+  },
+  associatedIdsWrap: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    gap: 8,
+  },
+  associatedIdItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#EEF2F6',
+  },
+  associatedIdLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+    letterSpacing: 0.4,
+  },
+  associatedIdValRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  associatedIdValue: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#0C1A34',
+  },
+  copyBtnTiny: {
+    padding: 3,
   },
   actionStrip: {
     flexDirection: 'row',

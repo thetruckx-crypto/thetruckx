@@ -10,6 +10,7 @@ import {
   Alert,
   Clipboard,
   Linking,
+  Modal,
 } from 'react-native';
 import {
   ArrowLeft,
@@ -56,6 +57,7 @@ export const RequirementReviewScreen: React.FC<RequirementReviewScreenProps> = (
   onNavigateToFeature,
 }) => {
   const [submitting, setSubmitting] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   // Read directly from draft (Task 7: clean draft isolation, no hardcoded fallbacks)
   const originCity = draft.pickupCity || (draft.pickupAddress ? draft.pickupAddress.split(',')[0].trim() : 'Pickup Location');
@@ -79,7 +81,11 @@ export const RequirementReviewScreen: React.FC<RequirementReviewScreenProps> = (
   const vehicleName = draft.vehicleTypeRequired || (draft.vehicleGroups && draft.vehicleGroups.length > 0
     ? draft.vehicleGroups.map((g) => `${g.quantity}x ${g.vehicleTypeName}`).join(', ')
     : 'Vehicle Not Selected');
-  const targetBudget = draft.targetBudget ? `₹${draft.targetBudget}` : 'Competitive Market RFQ';
+
+  const isBudgetEnabled = draft.isBudgetEnabled ?? Boolean(draft.targetBudget || (draft.vehicleGroups && draft.vehicleGroups.some(g => g.vehicleBudget)));
+  const targetBudget = isBudgetEnabled
+    ? (draft.targetBudget ? `₹${draft.targetBudget}` : 'Competitive Market RFQ')
+    : 'Not Specified (Competitive Market RFQ)';
 
   // Commodity commodity category (e.g. Steel, Pipes and Structural Materials or general cargo)
   const materialName = draft.materialType || 'General Cargo';
@@ -112,20 +118,7 @@ export const RequirementReviewScreen: React.FC<RequirementReviewScreenProps> = (
   };
 
   const handleConfirmSubmit = () => {
-    Alert.alert(
-      'Confirm Freight Requirement',
-      `Submit requirement from ${originCity} to ${destCity} for ${vehicleName}?\n\nEligible carriers will be notified to quote.`,
-      [
-        { text: 'Review Again', style: 'cancel' },
-        { text: 'Submit RFQ', style: 'default', onPress: handleSubmit },
-      ]
-    );
-  };
-
-  const handleSubmit = async () => {
-    if (submitting) return;
-
-    // Validate required fields before submitting
+    // Validate required fields before opening confirmation modal
     const missing: string[] = [];
     if (!pickupAddressFull.trim() && !originPin) missing.push('Pickup Address / PIN');
     if (!destAddressFull.trim() && !destPin) missing.push('Delivery Address / PIN');
@@ -143,23 +136,35 @@ export const RequirementReviewScreen: React.FC<RequirementReviewScreenProps> = (
       return;
     }
 
+    setShowConfirmModal(true);
+  };
+
+  const handleSubmit = async () => {
+    if (submitting) return;
+
     setSubmitting(true);
     try {
       const res = await clientService.createTransportRequirement({
         clientId: clientId || 'ca111111-1111-1111-1111-111111111111',
         pickupAddress: pickupAddressFull || `${originCity} - ${originPin}`,
-        pickupPincode: originPin || '781028',
+        pickupPincode: originPin || '',
         pickupCity: originCity,
         destinationAddress: destAddressFull || `${destCity} - ${destPin}`,
-        destinationPincode: destPin || '700024',
+        destinationPincode: destPin || '',
         destinationCity: destCity,
+        pickupGoogleMapsUrl: draft.pickupGoogleMapsUrl,
+        pickupLatitude: draft.pickupLatitude,
+        pickupLongitude: draft.pickupLongitude,
+        destinationGoogleMapsUrl: draft.destinationGoogleMapsUrl,
+        destinationLatitude: draft.destinationLatitude,
+        destinationLongitude: draft.destinationLongitude,
         vehicleTypeRequired: vehicleName,
         materialType: materialName,
         requiredCapacityMt: cargoWeightMt || 1,
         packagingType: packagingMode,
         numberOfUnits: draft.numberOfUnits ? Number(draft.numberOfUnits) : undefined,
         loadingDatetime: `${pickupDate} ${pickupTime}`.trim() || new Date(Date.now() + 86400000).toISOString(),
-        targetBudget: draft.targetBudget,
+        targetBudget: isBudgetEnabled ? draft.targetBudget : undefined,
         transitInsuranceNeeded: hasInsurance,
         declaredCargoValue: draft.declaredCargoValue,
         specialInstructions: draft.specialInstructions,
@@ -198,14 +203,17 @@ export const RequirementReviewScreen: React.FC<RequirementReviewScreenProps> = (
       });
 
       if (res.success && res.requirementId) {
+        setShowConfirmModal(false);
         onSubmitSuccess(res.requirementId);
       } else {
+        setShowConfirmModal(false);
         Alert.alert(
           'Submission Failed',
           res.error || 'Unable to record your transport requirement. Your details have been preserved. Please check your connection and retry.'
         );
       }
     } catch (e: any) {
+      setShowConfirmModal(false);
       Alert.alert('Submission Error', e?.message || 'Error creating transport requirement. Please try again.');
     } finally {
       setSubmitting(false);
@@ -558,6 +566,15 @@ export const RequirementReviewScreen: React.FC<RequirementReviewScreenProps> = (
                 {pickupAddressFull}
               </Text>
 
+              {draft.pickupLatitude !== undefined && draft.pickupLongitude !== undefined && (
+                <View style={styles.coordinatesPillRow}>
+                  <MapPin size={11} color="#F15A24" />
+                  <Text style={styles.coordinatesPillText}>
+                    GPS: {Number(draft.pickupLatitude).toFixed(4)}, {Number(draft.pickupLongitude).toFixed(4)}
+                  </Text>
+                </View>
+              )}
+
               <View style={styles.contactBottomBar}>
                 <View style={styles.contactPersonWrap}>
                   <Phone size={13} color="#64748B" />
@@ -596,6 +613,15 @@ export const RequirementReviewScreen: React.FC<RequirementReviewScreenProps> = (
               <Text style={styles.contactAddressText} numberOfLines={3}>
                 {destAddressFull}
               </Text>
+
+              {draft.destinationLatitude !== undefined && draft.destinationLongitude !== undefined && (
+                <View style={styles.coordinatesPillRow}>
+                  <MapPin size={11} color="#169B75" />
+                  <Text style={styles.coordinatesPillText}>
+                    GPS: {Number(draft.destinationLatitude).toFixed(4)}, {Number(draft.destinationLongitude).toFixed(4)}
+                  </Text>
+                </View>
+              )}
 
               <View style={styles.contactBottomBar}>
                 <View style={styles.contactPersonWrap}>
@@ -717,6 +743,115 @@ export const RequirementReviewScreen: React.FC<RequirementReviewScreenProps> = (
           )}
         </TouchableOpacity>
       </View>
+
+      {/* ── THE TRUCKX Confirm Freight Requirement Popup Modal ── */}
+      <Modal
+        visible={showConfirmModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!submitting) setShowConfirmModal(false);
+        }}
+      >
+        <View style={styles.confirmModalOverlay}>
+          <View style={styles.confirmModalCard}>
+            {/* Orange Brand Header Pill */}
+            <View style={styles.confirmBadgeCircle}>
+              <Truck size={24} color="#F15A24" />
+            </View>
+
+            <Text style={styles.confirmModalTitle}>Confirm Freight Requirement</Text>
+            <Text style={styles.confirmModalSubtitle}>
+              Please verify your shipment dispatch summary before broadcasting to verified carriers.
+            </Text>
+
+            {/* Route Summary Box */}
+            <View style={styles.confirmRouteBox}>
+              <View style={styles.confirmRouteRow}>
+                <View style={[styles.confirmDot, { backgroundColor: '#10B981' }]} />
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <Text style={styles.confirmRouteLabel}>PICKUP LOCATION</Text>
+                  <Text style={styles.confirmRouteValue} numberOfLines={1}>
+                    {originCity} {originPin ? `(${originPin})` : ''}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.confirmRouteDivider} />
+
+              <View style={styles.confirmRouteRow}>
+                <View style={[styles.confirmDot, { backgroundColor: '#EF4444' }]} />
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <Text style={styles.confirmRouteLabel}>DELIVERY LOCATION</Text>
+                  <Text style={styles.confirmRouteValue} numberOfLines={1}>
+                    {destCity} {destPin ? `(${destPin})` : ''}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Shipment Specs Grid */}
+            <View style={styles.confirmSpecsGrid}>
+              <View style={styles.confirmSpecItem}>
+                <Text style={styles.confirmSpecLabel}>VEHICLE TYPE</Text>
+                <Text style={styles.confirmSpecValue} numberOfLines={1}>{vehicleName}</Text>
+              </View>
+              <View style={styles.confirmSpecItem}>
+                <Text style={styles.confirmSpecLabel}>CARGO & WEIGHT</Text>
+                <Text style={styles.confirmSpecValue} numberOfLines={1}>
+                  {materialName} {cargoWeightMt > 0 ? `(${cargoWeightMt} MT)` : ''}
+                </Text>
+              </View>
+              <View style={styles.confirmSpecItem}>
+                <Text style={styles.confirmSpecLabel}>LOADING DATE</Text>
+                <Text style={styles.confirmSpecValue} numberOfLines={1}>{pickupDate}</Text>
+              </View>
+              <View style={styles.confirmSpecItem}>
+                <Text style={styles.confirmSpecLabel}>BUDGET RFQ</Text>
+                <Text style={[styles.confirmSpecValue, { color: '#F15A24' }]} numberOfLines={1}>
+                  {targetBudget}
+                </Text>
+              </View>
+            </View>
+
+            {/* Operations Trust Notice */}
+            <View style={styles.confirmTrustBanner}>
+              <ShieldCheck size={16} color="#15803D" style={{ marginTop: 1 }} />
+              <Text style={styles.confirmTrustText}>
+                Verified transport vendors will receive this RFQ to submit competitive market bids.
+              </Text>
+            </View>
+
+            {/* Modal Actions */}
+            <View style={styles.confirmActionsRow}>
+              <TouchableOpacity
+                style={styles.confirmCancelBtn}
+                onPress={() => setShowConfirmModal(false)}
+                disabled={submitting}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.confirmCancelBtnText}>Review Again</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.confirmSubmitBtn}
+                onPress={handleSubmit}
+                disabled={submitting}
+                activeOpacity={0.85}
+              >
+                {submitting ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Text style={styles.confirmSubmitBtnText}>Confirm & Submit RFQ</Text>
+                    <ArrowRight size={16} color="#FFFFFF" strokeWidth={2.4} />
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -1375,6 +1510,195 @@ const styles = StyleSheet.create({
   },
   submitPrimaryBtnText: {
     fontSize: 13.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  coordinatesPillRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignSelf: 'flex-start',
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  coordinatesPillText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  /* ── Confirm Freight Requirement Modal Styles ── */
+  confirmModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(12, 26, 52, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  confirmModalCard: {
+    width: '100%',
+    maxWidth: 390,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 22,
+    alignItems: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  confirmBadgeCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#FFF5ED',
+    borderWidth: 2,
+    borderColor: '#FED7AA',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  confirmModalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0C1A34',
+    textAlign: 'center',
+    letterSpacing: -0.2,
+  },
+  confirmModalSubtitle: {
+    fontSize: 12.5,
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 16,
+    lineHeight: 18,
+  },
+  confirmRouteBox: {
+    width: '100%',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 12,
+    marginBottom: 12,
+  },
+  confirmRouteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  confirmDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+  },
+  confirmRouteLabel: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#94A3B8',
+    letterSpacing: 0.4,
+  },
+  confirmRouteValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0C1A34',
+    marginTop: 1,
+  },
+  confirmRouteDivider: {
+    height: 1,
+    backgroundColor: '#E2E8F0',
+    marginVertical: 8,
+    marginLeft: 17,
+  },
+  confirmSpecsGrid: {
+    width: '100%',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+  confirmSpecItem: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  confirmSpecLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#64748B',
+    textTransform: 'uppercase',
+  },
+  confirmSpecValue: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#0C1A34',
+    marginTop: 2,
+  },
+  confirmTrustBanner: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#F0FDF4',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    padding: 10,
+    marginBottom: 18,
+  },
+  confirmTrustText: {
+    flex: 1,
+    fontSize: 11,
+    color: '#166534',
+    fontWeight: '500',
+    lineHeight: 16,
+  },
+  confirmActionsRow: {
+    width: '100%',
+    flexDirection: 'row',
+    gap: 10,
+  },
+  confirmCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  confirmCancelBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  confirmSubmitBtn: {
+    flex: 1.3,
+    flexDirection: 'row',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#F15A24',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#F15A24',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  confirmSubmitBtnText: {
+    fontSize: 13,
     fontWeight: '800',
     color: '#FFFFFF',
   },

@@ -12,6 +12,7 @@ import {
   Platform,
   Keyboard,
   Alert,
+  Switch,
 } from 'react-native';
 import Svg, { Rect, Circle, Path, G } from 'react-native-svg';
 import {
@@ -289,23 +290,23 @@ const createDefaultVehicleGroup = (index: number = 0): VehicleRequirementGroup =
   id: `vr_${Date.now()}_${index}`,
   requirementEntryId: `ENTRY-${index + 1}`,
   transportMode: 'ROAD',
-  vehicleTypeId: 'LORRY',
-  vehicleTypeName: 'Lorry (Open Body)',
-  vehicleType: 'Lorry',
-  vehicleBodyType: 'Open Body',
-  vehicleCategory: 'Lorry',
-  capacityMt: '16',
-  payloadMt: 16,
+  vehicleTypeId: '',
+  vehicleTypeName: '',
+  vehicleType: '' as any,
+  vehicleBodyType: '' as any,
+  vehicleCategory: '',
+  capacityMt: '',
+  payloadMt: 0,
   requiresDimensions: false,
   dimensionsLength: '',
   dimensionsWidth: '',
   dimensionsHeight: '',
   dimensions: '',
-  quantity: 1,
-  handlingRequirement: 'Crane Loading',
-  handlingRequirements: ['Crane Loading'],
+  quantity: '' as any,
+  handlingRequirement: '',
+  handlingRequirements: [],
   customHandlingRequirement: '',
-  dispatchRequirement: 'Standard Dispatch',
+  dispatchRequirement: '',
   customDispatchRequirement: '',
   instructions: '',
   vehicleBudget: '',
@@ -319,18 +320,19 @@ interface CreateTransportRequirementScreenProps {
   clientId?: string;
   onBack: () => void;
   onNext: (draftUpdate: Partial<TransportRequirementDraft>) => void;
+  onClearDraft?: () => void;
 }
 
 export const CreateTransportRequirementScreen: React.FC<
   CreateTransportRequirementScreenProps
-> = ({ initialDraft, clientId, onBack, onNext }) => {
+> = ({ initialDraft, clientId, onBack, onNext, onClearDraft }) => {
   // ── 1. Dynamic Multi-Vehicle Groups State ──
   const [vehicleGroups, setVehicleGroups] = useState<VehicleRequirementGroup[]>(() => {
     if (initialDraft?.vehicleGroups && initialDraft.vehicleGroups.length > 0) {
       return initialDraft.vehicleGroups.map((g, idx) => {
-        const vType = (g.vehicleType || g.vehicleCategory || 'Lorry') as VehicleTypeOption;
-        const bType = (g.vehicleBodyType || 'Open Body') as BodyTypeOption;
-        const cap = g.capacityMt ? String(g.capacityMt).replace(/[^0-9.]/g, '') : (g.payloadMt ? String(g.payloadMt) : '16');
+        const vType = (g.vehicleType || g.vehicleCategory || '') as VehicleTypeOption;
+        const bType = (g.vehicleBodyType || '') as BodyTypeOption;
+        const cap = g.capacityMt ? String(g.capacityMt).replace(/[^0-9.]/g, '') : (g.payloadMt ? String(g.payloadMt) : '');
         return {
           ...createDefaultVehicleGroup(idx),
           ...g,
@@ -338,14 +340,14 @@ export const CreateTransportRequirementScreen: React.FC<
           requirementEntryId: g.requirementEntryId || `ENTRY-${idx + 1}`,
           vehicleType: vType,
           vehicleBodyType: bType,
-          vehicleTypeName: `${vType} (${bType})`,
-          vehicleTypeId: vType.toUpperCase(),
-          capacityMt: cap || '16',
-          payloadMt: parseFloat(cap) || g.payloadMt || 16,
-          quantity: Math.max(1, Number(g.quantity) || 1),
-          handlingRequirement: g.handlingRequirement || (g.handlingRequirements?.[0]) || 'Crane Loading',
-          handlingRequirements: g.handlingRequirements || [g.handlingRequirement || 'Crane Loading'],
-          dispatchRequirement: g.dispatchRequirement || 'Standard Dispatch',
+          vehicleTypeName: vType && bType ? `${vType} (${bType})` : (vType || ''),
+          vehicleTypeId: vType ? vType.toUpperCase() : '',
+          capacityMt: cap,
+          payloadMt: parseFloat(cap) || g.payloadMt || 0,
+          quantity: g.quantity ? Number(g.quantity) : ('' as any),
+          handlingRequirement: g.handlingRequirement || (g.handlingRequirements?.[0]) || '',
+          handlingRequirements: g.handlingRequirements || (g.handlingRequirement ? [g.handlingRequirement] : []),
+          dispatchRequirement: g.dispatchRequirement || '',
           requiresDimensions: g.requiresDimensions !== undefined ? Boolean(g.requiresDimensions) : false,
           dimensionsLength: g.dimensionsLength || '',
           dimensionsWidth: g.dimensionsWidth || '',
@@ -364,12 +366,16 @@ export const CreateTransportRequirementScreen: React.FC<
     if (initialDraft?.vehicleBodyType && (['Open Body', 'Closed Body'] as string[]).includes(initialDraft.vehicleBodyType)) {
       firstGroup.vehicleBodyType = initialDraft.vehicleBodyType;
     }
-    firstGroup.vehicleTypeName = `${firstGroup.vehicleType} (${firstGroup.vehicleBodyType})`;
+    if (firstGroup.vehicleType && firstGroup.vehicleBodyType) {
+      firstGroup.vehicleTypeName = `${firstGroup.vehicleType} (${firstGroup.vehicleBodyType})`;
+    } else {
+      firstGroup.vehicleTypeName = firstGroup.vehicleType || '';
+    }
 
     if (initialDraft?.vehicleCapacityMt || initialDraft?.requiredCapacityMt) {
       const capStr = String(initialDraft.vehicleCapacityMt || initialDraft.requiredCapacityMt).replace(/[^0-9.]/g, '');
-      firstGroup.capacityMt = capStr || '16';
-      firstGroup.payloadMt = parseFloat(capStr) || 16;
+      firstGroup.capacityMt = capStr;
+      firstGroup.payloadMt = parseFloat(capStr) || 0;
     }
     if (initialDraft?.requiresDimensions !== undefined) {
       firstGroup.requiresDimensions = Boolean(initialDraft.requiresDimensions);
@@ -397,6 +403,10 @@ export const CreateTransportRequirementScreen: React.FC<
   });
 
   // ── 2. Budget Scope & Target Freight Budget State ──
+  const [isBudgetEnabled, setIsBudgetEnabled] = useState<boolean>(() => {
+    if (initialDraft?.isBudgetEnabled !== undefined) return Boolean(initialDraft.isBudgetEnabled);
+    return Boolean(initialDraft?.targetBudget || initialDraft?.vehicleGroups?.some((g) => g.vehicleBudget));
+  });
   const [budgetScope, setBudgetScope] = useState<'OVERALL' | 'INDIVIDUAL'>(() => {
     return initialDraft?.budgetScope || 'OVERALL';
   });
@@ -408,8 +418,8 @@ export const CreateTransportRequirementScreen: React.FC<
   const [dispatchModalVisible, setDispatchModalVisible] = useState(false);
   const [calendarModalVisible, setCalendarModalVisible] = useState(false);
   const [clockModalVisible, setClockModalVisible] = useState(false);
-  const [selectedCalendarDate, setSelectedCalendarDate] = useState('2026-10-18');
-  const [selectedClockTime, setSelectedClockTime] = useState('10:30 AM');
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState(initialDraft?.preferredLoadingDate || '');
+  const [selectedClockTime, setSelectedClockTime] = useState(initialDraft?.preferredLoadingTime || '');
 
   // ── 4. Validation & Autosave Status ──
   const [inlineErrors, setInlineErrors] = useState<Record<string, string>>({});
@@ -418,20 +428,20 @@ export const CreateTransportRequirementScreen: React.FC<
   // ── 5. Computed Counts: Requirement Entries vs Physical Vehicles ──
   const totalRequirementEntriesCount = vehicleGroups.length;
   const totalVehiclesCount = useMemo(() => {
-    return vehicleGroups.reduce((acc, g) => acc + (Math.max(1, Number(g.quantity) || 1)), 0);
+    return vehicleGroups.reduce((acc, g) => acc + (Number(g.quantity) || 0), 0);
   }, [vehicleGroups]);
 
   // Backward compatible primary references for downstream steps & unit tests
   const firstGroup = vehicleGroups[0] || createDefaultVehicleGroup(0);
-  const vehicleType = (firstGroup.vehicleType || 'Lorry') as VehicleTypeOption;
-  const vehicleBodyType = (firstGroup.vehicleBodyType || 'Open Body') as BodyTypeOption;
-  const vehicleCapacityMt = `${firstGroup.capacityMt || firstGroup.payloadMt || 16} MT`;
+  const vehicleType = (firstGroup.vehicleType || '') as VehicleTypeOption;
+  const vehicleBodyType = (firstGroup.vehicleBodyType || '') as BodyTypeOption;
+  const vehicleCapacityMt = firstGroup.capacityMt ? `${firstGroup.capacityMt} MT` : '';
   const numberOfVehicles = totalVehiclesCount;
   const requiresDimensions = Boolean(firstGroup.requiresDimensions);
   const dimensionsLength = firstGroup.dimensionsLength || '';
   const dimensionsWidth = firstGroup.dimensionsWidth || '';
   const dimensionsHeight = firstGroup.dimensionsHeight || '';
-  const handlingRequirement = firstGroup.handlingRequirement || 'Crane Loading';
+  const handlingRequirement = firstGroup.handlingRequirement || '';
   const customHandlingRequirement = firstGroup.customHandlingRequirement || '';
 
   // ── 6. Group Update Handlers ──
@@ -538,10 +548,20 @@ export const CreateTransportRequirementScreen: React.FC<
   const autoSaveDraft = useCallback(
     async (override?: Partial<TransportRequirementDraft>) => {
       try {
+        const hasUserData =
+          vehicleGroups.some(
+            (g) => g.vehicleType || g.capacityMt || g.quantity || g.handlingRequirement || g.dispatchRequirement
+          ) || Boolean(targetBudget);
+        if (!hasUserData && !override) {
+          setSaveStatus('SAVED');
+          return;
+        }
+
         setSaveStatus('SAVING');
 
         const summaryVehicles = vehicleGroups
-          .map((g) => `${g.quantity}x ${g.vehicleType} (${g.vehicleBodyType}, ${g.capacityMt} MT)`)
+          .filter((g) => g.vehicleType)
+          .map((g) => `${g.quantity ? `${g.quantity}x ` : ''}${g.vehicleType} (${g.vehicleBodyType || 'Standard'}, ${g.capacityMt || '0'} MT)`)
           .join(', ');
 
         const draftToPersist: Partial<TransportRequirementDraft> = {
@@ -549,22 +569,23 @@ export const CreateTransportRequirementScreen: React.FC<
           vehicleGroups,
           totalRequirementEntriesCount: vehicleGroups.length,
           totalVehiclesCount,
-          budgetScope,
-          targetBudget: budgetScope === 'OVERALL' ? targetBudget.trim() || undefined : undefined,
+          isBudgetEnabled,
+          budgetScope: isBudgetEnabled ? budgetScope : undefined,
+          targetBudget: isBudgetEnabled && budgetScope === 'OVERALL' ? targetBudget.trim() || undefined : undefined,
           targetBudgetCurrency: 'INR',
-          vehicleTypeRequired: summaryVehicles,
-          vehicleType: firstGroup.vehicleType,
-          vehicleCategory: firstGroup.vehicleType,
-          vehicleBodyType: firstGroup.vehicleBodyType,
-          requiredCapacityMt: parseFloat(String(firstGroup.capacityMt)) || 16,
-          vehicleCapacityMt: `${firstGroup.capacityMt} MT`,
+          vehicleTypeRequired: summaryVehicles || undefined,
+          vehicleType: firstGroup.vehicleType || undefined,
+          vehicleCategory: firstGroup.vehicleType || undefined,
+          vehicleBodyType: firstGroup.vehicleBodyType || undefined,
+          requiredCapacityMt: parseFloat(String(firstGroup.capacityMt)) || undefined,
+          vehicleCapacityMt: firstGroup.capacityMt ? `${firstGroup.capacityMt} MT` : undefined,
           requiresDimensions: firstGroup.requiresDimensions,
           dimensionsLength: firstGroup.requiresDimensions ? firstGroup.dimensionsLength : undefined,
           dimensionsWidth: firstGroup.requiresDimensions ? firstGroup.dimensionsWidth : undefined,
           dimensionsHeight: firstGroup.requiresDimensions ? firstGroup.dimensionsHeight : undefined,
-          numberOfVehicles: totalVehiclesCount,
-          numberOfUnits: String(totalVehiclesCount),
-          handlingRequirements: Array.from(new Set(vehicleGroups.map((g) => g.handlingRequirement || 'Normal Loading'))),
+          numberOfVehicles: totalVehiclesCount || undefined,
+          numberOfUnits: totalVehiclesCount ? String(totalVehiclesCount) : undefined,
+          handlingRequirements: Array.from(new Set(vehicleGroups.map((g) => g.handlingRequirement).filter(Boolean) as string[])),
           customHandlingRequirement: firstGroup.customHandlingRequirement?.trim() || undefined,
           ...override,
         };
@@ -579,6 +600,7 @@ export const CreateTransportRequirementScreen: React.FC<
       initialDraft,
       vehicleGroups,
       totalVehiclesCount,
+      isBudgetEnabled,
       budgetScope,
       targetBudget,
       firstGroup,
@@ -605,6 +627,39 @@ export const CreateTransportRequirementScreen: React.FC<
     Alert.alert(
       'Draft Saved',
       'Your Step 1: Vehicle & Loading Schedule details have been saved. You can resume anytime.'
+    );
+  };
+
+  const handleClearDraft = () => {
+    Keyboard.dismiss();
+    Alert.alert(
+      'Clear Transport Requirement Draft?',
+      'Clearing this draft will permanently remove the current unsaved or saved draft data associated with this form and reset all fields. Are you sure you want to proceed?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear Draft',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await clientService.clearTransportRequirementDraft(clientId);
+            } catch {}
+            setVehicleGroups([createDefaultVehicleGroup(1)]);
+            setIsBudgetEnabled(false);
+            setBudgetScope('OVERALL');
+            setTargetBudget('');
+            setSelectedCalendarDate('');
+            setSelectedClockTime('');
+            setInlineErrors({});
+            setSaveStatus('SAVED');
+            onClearDraft?.();
+            Alert.alert(
+              'Draft Cleared',
+              'Your transport requirement form has been reset to initial empty values.'
+            );
+          },
+        },
+      ]
     );
   };
 
@@ -651,7 +706,7 @@ export const CreateTransportRequirementScreen: React.FC<
         errors[`${prefix}customDispatch`] = `Requirement ${idx + 1}: Please describe your specific dispatch requirement.`;
       }
 
-      if (budgetScope === 'INDIVIDUAL' && group.vehicleBudget?.trim()) {
+      if (isBudgetEnabled && budgetScope === 'INDIVIDUAL' && group.vehicleBudget?.trim()) {
         const bNum = parseFloat(group.vehicleBudget.replace(/,/g, ''));
         if (isNaN(bNum) || bNum <= 0) {
           errors[`${prefix}budget`] = `Requirement ${idx + 1}: Enter a valid positive numeric target budget.`;
@@ -659,7 +714,7 @@ export const CreateTransportRequirementScreen: React.FC<
       }
     });
 
-    if (budgetScope === 'OVERALL' && targetBudget.trim()) {
+    if (isBudgetEnabled && budgetScope === 'OVERALL' && targetBudget.trim()) {
       const budgetNum = parseFloat(targetBudget.replace(/,/g, ''));
       if (isNaN(budgetNum) || budgetNum <= 0) {
         errors.overallBudget = 'Please enter a valid positive numeric target budget amount.';
@@ -680,8 +735,9 @@ export const CreateTransportRequirementScreen: React.FC<
       vehicleGroups,
       totalRequirementEntriesCount: vehicleGroups.length,
       totalVehiclesCount,
-      budgetScope,
-      targetBudget: budgetScope === 'OVERALL' ? targetBudget.trim() || undefined : undefined,
+      isBudgetEnabled,
+      budgetScope: isBudgetEnabled ? budgetScope : undefined,
+      targetBudget: isBudgetEnabled && budgetScope === 'OVERALL' ? targetBudget.trim() || undefined : undefined,
       targetBudgetCurrency: 'INR',
       vehicleTypeRequired: summaryVehicles,
       vehicleType: firstGroup.vehicleType,
@@ -898,7 +954,7 @@ export const CreateTransportRequirementScreen: React.FC<
                           setInlineErrors((prev) => ({ ...prev, [`${groupErrPrefix}capacity`]: '' }));
                         }
                       }}
-                      placeholder=""
+                      placeholder="Enter capacity (e.g. 16)"
                       placeholderTextColor="#94A3B8"
                       keyboardType="decimal-pad"
                     />
@@ -913,7 +969,7 @@ export const CreateTransportRequirementScreen: React.FC<
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickCapScroll}>
                       {(CAPACITY_OPTIONS_MAP[group.vehicleType as VehicleTypeOption] || CAPACITY_OPTIONS_MAP.Lorry).map((capOption) => {
                         const numVal = capOption.replace(' MT', '');
-                        const isSelected = String(group.capacityMt) === numVal;
+                        const isSelected = Boolean(group.capacityMt) && String(group.capacityMt) === numVal;
                         return (
                           <TouchableOpacity
                             key={capOption}
@@ -976,7 +1032,7 @@ export const CreateTransportRequirementScreen: React.FC<
                                 }
                               }}
                               keyboardType="numeric"
-                              placeholder=""
+                              placeholder="Length"
                               placeholderTextColor="#94A3B8"
                             />
                           </View>
@@ -996,7 +1052,7 @@ export const CreateTransportRequirementScreen: React.FC<
                                 }
                               }}
                               keyboardType="numeric"
-                              placeholder=""
+                              placeholder="Width"
                               placeholderTextColor="#94A3B8"
                             />
                           </View>
@@ -1016,7 +1072,7 @@ export const CreateTransportRequirementScreen: React.FC<
                                 }
                               }}
                               keyboardType="numeric"
-                              placeholder=""
+                              placeholder="Height"
                               placeholderTextColor="#94A3B8"
                             />
                           </View>
@@ -1042,8 +1098,12 @@ export const CreateTransportRequirementScreen: React.FC<
                     <TouchableOpacity
                       style={styles.stepperBtn}
                       onPress={() => {
-                        const next = Math.max(1, (group.quantity || 1) - 1);
+                        const current = Number(group.quantity) || 0;
+                        const next = Math.max(1, current - 1);
                         updateVehicleGroup(index, { quantity: next });
+                        if (inlineErrors[`${groupErrPrefix}quantity`]) {
+                          setInlineErrors((prev) => ({ ...prev, [`${groupErrPrefix}quantity`]: '' }));
+                        }
                       }}
                       activeOpacity={0.7}
                       accessibilityLabel="Decrease vehicle count"
@@ -1052,12 +1112,32 @@ export const CreateTransportRequirementScreen: React.FC<
                     </TouchableOpacity>
 
                     <View style={styles.stepperValueBox}>
-                      <Text style={styles.stepperValueText}>{group.quantity || 1}</Text>
+                      <TextInput
+                        style={styles.stepperValueInput}
+                        value={group.quantity ? String(group.quantity) : ''}
+                        onChangeText={(t) => {
+                          const cleaned = t.replace(/[^0-9]/g, '');
+                          updateVehicleGroup(index, { quantity: cleaned ? parseInt(cleaned, 10) : ('' as any) });
+                          if (inlineErrors[`${groupErrPrefix}quantity`]) {
+                            setInlineErrors((prev) => ({ ...prev, [`${groupErrPrefix}quantity`]: '' }));
+                          }
+                        }}
+                        placeholder="Qty"
+                        placeholderTextColor="#94A3B8"
+                        keyboardType="numeric"
+                        textAlign="center"
+                      />
                     </View>
 
                     <TouchableOpacity
                       style={styles.stepperBtn}
-                      onPress={() => updateVehicleGroup(index, { quantity: (group.quantity || 1) + 1 })}
+                      onPress={() => {
+                        const current = Number(group.quantity) || 0;
+                        updateVehicleGroup(index, { quantity: current + 1 });
+                        if (inlineErrors[`${groupErrPrefix}quantity`]) {
+                          setInlineErrors((prev) => ({ ...prev, [`${groupErrPrefix}quantity`]: '' }));
+                        }
+                      }}
                       activeOpacity={0.7}
                       accessibilityLabel="Increase vehicle count"
                     >
@@ -1086,12 +1166,14 @@ export const CreateTransportRequirementScreen: React.FC<
                     }}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.dropdownSelectorText}>{group.handlingRequirement || 'Crane Loading'}</Text>
+                    <Text style={[styles.dropdownSelectorText, !group.handlingRequirement && styles.dropdownPlaceholderText]}>
+                      {group.handlingRequirement || 'Select Handling Requirement'}
+                    </Text>
                     <ChevronDown size={18} color="#FF6B00" strokeWidth={2.4} />
                   </TouchableOpacity>
 
                   {/* Contextual Description */}
-                  {handlingDesc && (
+                  {Boolean(group.handlingRequirement && handlingDesc) && (
                     <View style={styles.contextualInfoCard}>
                       <View style={styles.contextualIconWrap}>
                         <CraneSvgIcon size={24} color="#FF6B00" />
@@ -1114,7 +1196,7 @@ export const CreateTransportRequirementScreen: React.FC<
                             setInlineErrors((prev) => ({ ...prev, [`${groupErrPrefix}customHandling`]: '' }));
                           }
                         }}
-                        placeholder=""
+                        placeholder="Describe specific handling requirement..."
                         placeholderTextColor="#94A3B8"
                         multiline
                         numberOfLines={2}
@@ -1143,11 +1225,13 @@ export const CreateTransportRequirementScreen: React.FC<
                     }}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.dropdownSelectorText}>{group.dispatchRequirement || 'Standard Dispatch'}</Text>
+                    <Text style={[styles.dropdownSelectorText, !group.dispatchRequirement && styles.dropdownPlaceholderText]}>
+                      {group.dispatchRequirement || 'Select Dispatch Requirement'}
+                    </Text>
                     <ChevronDown size={18} color="#FF6B00" strokeWidth={2.4} />
                   </TouchableOpacity>
 
-                  {dispatchDesc && (
+                  {Boolean(group.dispatchRequirement && dispatchDesc) && (
                     <View style={styles.contextualInfoCard}>
                       <Text style={styles.contextualText}>{dispatchDesc}</Text>
                     </View>
@@ -1167,7 +1251,7 @@ export const CreateTransportRequirementScreen: React.FC<
                             setInlineErrors((prev) => ({ ...prev, [`${groupErrPrefix}customDispatch`]: '' }));
                           }
                         }}
-                        placeholder=""
+                        placeholder="Describe specific dispatch requirement..."
                         placeholderTextColor="#94A3B8"
                         multiline
                         numberOfLines={2}
@@ -1191,15 +1275,15 @@ export const CreateTransportRequirementScreen: React.FC<
                     style={styles.textAreaInput}
                     value={group.instructions || ''}
                     onChangeText={(t) => updateVehicleGroup(index, { instructions: t })}
-                    placeholder=""
+                    placeholder="Enter any special handling or vehicle instructions (optional)..."
                     placeholderTextColor="#94A3B8"
                     multiline
                     numberOfLines={2}
                   />
                 </View>
 
-                {/* Field 9: Individual Vehicle Budget (If Budget Scope is INDIVIDUAL) */}
-                {budgetScope === 'INDIVIDUAL' && (
+                {/* Field 9: Individual Vehicle Budget (If Budget Scope is INDIVIDUAL and Freight Budget is Enabled) */}
+                {isBudgetEnabled && budgetScope === 'INDIVIDUAL' && (
                   <View style={styles.fieldBlock}>
                     <View style={styles.fieldLabelRow}>
                       <Text style={styles.rupeeIcon}>₹</Text>
@@ -1217,7 +1301,7 @@ export const CreateTransportRequirementScreen: React.FC<
                             setInlineErrors((prev) => ({ ...prev, [`${groupErrPrefix}budget`]: '' }));
                           }
                         }}
-                        placeholder=""
+                        placeholder="Enter target budget (e.g. 45000)"
                         placeholderTextColor="#94A3B8"
                         keyboardType="numeric"
                       />
@@ -1242,82 +1326,107 @@ export const CreateTransportRequirementScreen: React.FC<
             <Text style={styles.addVehicleBtnText}>+ Add Vehicle Requirement</Text>
           </TouchableOpacity>
 
-          {/* ── 5. Budget Scope Selector Card ── */}
+          {/* ── 5. Budget Scope Selector Card (with ON/OFF Switch) ── */}
           <View style={styles.sectionCard}>
             <View style={styles.cardHeader}>
               <View style={styles.orangeIconCircle}>
                 <Text style={{ fontSize: 16, fontWeight: '800', color: '#FF6B00' }}>₹</Text>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>Freight Budget Scope</Text>
+              <View style={{ flex: 1, marginRight: 8 }}>
+                <Text style={styles.cardTitle}>Freight Budget (Optional)</Text>
                 <Text style={styles.cardSubtitle}>
-                  Define whether target budget applies overall or individually per vehicle specification.
+                  {isBudgetEnabled
+                    ? 'Define whether target budget applies overall or individually per vehicle.'
+                    : 'Toggle ON to specify target freight rates or spending caps.'}
                 </Text>
               </View>
+              <Switch
+                value={isBudgetEnabled}
+                onValueChange={(val) => {
+                  setIsBudgetEnabled(val);
+                  if (!val) {
+                    setTargetBudget('');
+                    setInlineErrors((prev) => {
+                      const copy = { ...prev };
+                      delete copy.overallBudget;
+                      Object.keys(copy).forEach((k) => {
+                        if (k.endsWith('_budget')) delete copy[k];
+                      });
+                      return copy;
+                    });
+                  }
+                }}
+                trackColor={{ false: '#CBD5E1', true: '#FF6B00' }}
+                thumbColor="#FFFFFF"
+              />
             </View>
 
-            <View style={styles.budgetScopeRow}>
-              <TouchableOpacity
-                style={[styles.budgetScopeOption, budgetScope === 'OVERALL' && styles.budgetScopeOptionSelected]}
-                onPress={() => setBudgetScope('OVERALL')}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.scopeRadioCircle, budgetScope === 'OVERALL' && styles.scopeRadioCircleSelected]}>
-                  {budgetScope === 'OVERALL' && <View style={styles.scopeRadioDot} />}
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.budgetScopeLabel, budgetScope === 'OVERALL' && styles.budgetScopeLabelSelected]}>
-                    Overall Transport Budget
-                  </Text>
-                  <Text style={styles.budgetScopeSub}>Single lump-sum budget for all vehicles</Text>
-                </View>
-              </TouchableOpacity>
+            {isBudgetEnabled && (
+              <>
+                <View style={styles.budgetScopeRow}>
+                  <TouchableOpacity
+                    style={[styles.budgetScopeOption, budgetScope === 'OVERALL' && styles.budgetScopeOptionSelected]}
+                    onPress={() => setBudgetScope('OVERALL')}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.scopeRadioCircle, budgetScope === 'OVERALL' && styles.scopeRadioCircleSelected]}>
+                      {budgetScope === 'OVERALL' && <View style={styles.scopeRadioDot} />}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.budgetScopeLabel, budgetScope === 'OVERALL' && styles.budgetScopeLabelSelected]}>
+                        Overall Transport Budget
+                      </Text>
+                      <Text style={styles.budgetScopeSub}>Single lump-sum budget for all vehicles</Text>
+                    </View>
+                  </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.budgetScopeOption, budgetScope === 'INDIVIDUAL' && styles.budgetScopeOptionSelected]}
-                onPress={() => setBudgetScope('INDIVIDUAL')}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.scopeRadioCircle, budgetScope === 'INDIVIDUAL' && styles.scopeRadioCircleSelected]}>
-                  {budgetScope === 'INDIVIDUAL' && <View style={styles.scopeRadioDot} />}
+                  <TouchableOpacity
+                    style={[styles.budgetScopeOption, budgetScope === 'INDIVIDUAL' && styles.budgetScopeOptionSelected]}
+                    onPress={() => setBudgetScope('INDIVIDUAL')}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.scopeRadioCircle, budgetScope === 'INDIVIDUAL' && styles.scopeRadioCircleSelected]}>
+                      {budgetScope === 'INDIVIDUAL' && <View style={styles.scopeRadioDot} />}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.budgetScopeLabel, budgetScope === 'INDIVIDUAL' && styles.budgetScopeLabelSelected]}>
+                        Individual Vehicle Budget
+                      </Text>
+                      <Text style={styles.budgetScopeSub}>Configure separate budget per vehicle requirement</Text>
+                    </View>
+                  </TouchableOpacity>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.budgetScopeLabel, budgetScope === 'INDIVIDUAL' && styles.budgetScopeLabelSelected]}>
-                    Individual Vehicle Budget
-                  </Text>
-                  <Text style={styles.budgetScopeSub}>Configure separate budget per vehicle requirement</Text>
-                </View>
-              </TouchableOpacity>
-            </View>
 
-            {/* Overall Target Freight Budget Input */}
-            {budgetScope === 'OVERALL' && (
-              <View style={{ marginTop: 16 }}>
-                <View style={styles.fieldLabelRow}>
-                  <Text style={styles.rupeeIcon}>₹</Text>
-                  <Text style={styles.fieldLabel}>
-                    Target Freight Budget (Optional) <Text style={styles.optionalTagText}>(₹ INR)</Text>
-                  </Text>
-                </View>
-                <View style={styles.budgetInputWrap}>
-                  <TextInput
-                    style={styles.budgetTextInput}
-                    value={targetBudget}
-                    onChangeText={(t) => {
-                      setTargetBudget(t.replace(/[^0-9]/g, ''));
-                      if (inlineErrors.overallBudget) {
-                        setInlineErrors((prev) => ({ ...prev, overallBudget: '' }));
-                      }
-                    }}
-                    placeholder=""
-                    placeholderTextColor="#94A3B8"
-                    keyboardType="numeric"
-                  />
-                </View>
-                {inlineErrors.overallBudget && (
-                  <Text style={styles.errorText}>{inlineErrors.overallBudget}</Text>
+                {/* Overall Target Freight Budget Input */}
+                {budgetScope === 'OVERALL' && (
+                  <View style={{ marginTop: 16 }}>
+                    <View style={styles.fieldLabelRow}>
+                      <Text style={styles.rupeeIcon}>₹</Text>
+                      <Text style={styles.fieldLabel}>
+                        Target Freight Budget (Optional) <Text style={styles.optionalTagText}>(₹ INR)</Text>
+                      </Text>
+                    </View>
+                    <View style={styles.budgetInputWrap}>
+                      <TextInput
+                        style={styles.budgetTextInput}
+                        value={targetBudget}
+                        onChangeText={(t) => {
+                          setTargetBudget(t.replace(/[^0-9]/g, ''));
+                          if (inlineErrors.overallBudget) {
+                            setInlineErrors((prev) => ({ ...prev, overallBudget: '' }));
+                          }
+                        }}
+                        placeholder="Enter overall target budget (e.g. 50000)"
+                        placeholderTextColor="#94A3B8"
+                        keyboardType="numeric"
+                      />
+                    </View>
+                    {inlineErrors.overallBudget && (
+                      <Text style={styles.errorText}>{inlineErrors.overallBudget}</Text>
+                    )}
+                  </View>
                 )}
-              </View>
+              </>
             )}
           </View>
 
@@ -1372,14 +1481,25 @@ export const CreateTransportRequirementScreen: React.FC<
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* ── 7. Bottom Action Buttons: Save as Draft & Next ── */}
+      {/* ── 7. Bottom Action Buttons: Save as Draft, Clear Draft & Next ── */}
       <View style={styles.bottomBar}>
         <TouchableOpacity
           style={styles.saveDraftBtn}
           onPress={handleSaveAsDraft}
           activeOpacity={0.8}
+          accessibilityLabel="Save as Draft"
         >
-          <Text style={styles.saveDraftBtnText}>Save as Draft</Text>
+          <Text style={styles.saveDraftBtnText}>Save Draft</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.clearDraftBtn}
+          onPress={handleClearDraft}
+          activeOpacity={0.8}
+          accessibilityLabel="Clear Draft"
+        >
+          <Trash2 size={15} color="#DC2626" />
+          <Text style={styles.clearDraftBtnText}>Clear Draft</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -1387,8 +1507,8 @@ export const CreateTransportRequirementScreen: React.FC<
           onPress={handleContinue}
           activeOpacity={0.88}
         >
-          <Text style={styles.nextStepBtnText}>Next: Cargo &amp; Route Details</Text>
-          <ArrowRight size={17} color="#FFFFFF" strokeWidth={2.6} />
+          <Text style={styles.nextStepBtnText}>Next: Cargo Details</Text>
+          <ArrowRight size={16} color="#FFFFFF" strokeWidth={2.6} />
         </TouchableOpacity>
       </View>
 
@@ -1903,6 +2023,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#0F172A',
   },
+  dropdownPlaceholderText: {
+    color: '#94A3B8',
+    fontWeight: '500',
+  },
 
   // Dimensions
   checkboxRow: {
@@ -2028,6 +2152,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
     color: '#0F172A',
+  },
+  stepperValueInput: {
+    minWidth: 42,
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+    textAlign: 'center',
+    padding: 0,
+    height: 36,
   },
 
   // Target Budget
@@ -2251,10 +2384,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderTopWidth: 1,
     borderTopColor: '#EAECF0',
-    gap: 12,
+    gap: 8,
   },
   saveDraftBtn: {
-    flex: 1,
+    paddingHorizontal: 12,
     height: 48,
     borderRadius: 10,
     borderWidth: 1.5,
@@ -2264,18 +2397,36 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   saveDraftBtnText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: '#FF6B00',
   },
+  clearDraftBtn: {
+    paddingHorizontal: 10,
+    height: 48,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#FCA5A5',
+    backgroundColor: '#FEF2F2',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  clearDraftBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
   nextStepBtn: {
-    flex: 1.8,
+    flex: 1,
     height: 48,
     borderRadius: 10,
     backgroundColor: '#FF6B00',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
     shadowColor: '#FF6B00',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
@@ -2283,10 +2434,10 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   nextStepBtnText: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '800',
     color: '#FFFFFF',
-    marginRight: 6,
+    marginRight: 4,
   },
 
   // Errors & Modals

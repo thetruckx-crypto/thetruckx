@@ -709,32 +709,51 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
     setIsSubmittingAction(true);
     setApprovalWarning(null);
     try {
-      // 1. Notify Backend API
-      try {
-        const phone = client.company_phone?.replace(/[^0-9]/g, "").slice(-10) || primaryContact?.mobile?.replace(/[^0-9]/g, "").slice(-10);
-        await apiFetch("/client/admin-review", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            companyId: client.id,
-            mobile: phone,
-            decision: "APPROVED",
-            reviewerName: adminProfile?.name || "NECL Compliance Desk"
-          })
-        });
-      } catch (apiErr) {
-        console.warn("Backend API dispatch notice:", apiErr);
-      }
+      const phone = client.company_phone?.replace(/[^0-9]/g, "").slice(-10) || primaryContact?.mobile?.replace(/[^0-9]/g, "").slice(-10);
+      const reviewer = adminProfile?.name || "NECL Compliance Desk";
+      const nowIso = new Date().toISOString();
 
-      // 2. Direct Supabase Update
-      const { data: rpcData, error: rpcErr } = await supabase.rpc("admin_review_client_registration", {
+      // 1. Direct Supabase Updates FIRST & PARALLEL (instant ~50ms execution)
+      const rpcPromise = supabase.rpc("admin_review_client_registration", {
         p_company_id: client.id,
         p_decision: "APPROVED",
-        p_reviewer_name: adminProfile?.name || "NECL Compliance Desk"
+        p_reviewer_name: reviewer
       });
 
+      const companyUpdatePromise = supabase
+        .from("client_companies")
+        .update({
+          status: "APPROVED",
+          approved_at: nowIso,
+          approved_by: reviewer,
+          rejection_reason: null,
+          correction_notes: null,
+          updated_at: nowIso
+        })
+        .eq("id", client.id);
+
+      const userUpdateFilter = phone
+        ? `client_id.eq.${client.id},client_company_id.eq.${client.id},mobile.eq.${phone}`
+        : `client_id.eq.${client.id},client_company_id.eq.${client.id}`;
+
+      const userUpdatePromise = supabase
+        .from("client_users")
+        .update({
+          status: "APPROVED",
+          updated_at: nowIso
+        })
+        .or(userUpdateFilter);
+
+      const [rpcRes, compUpdRes, userUpdRes] = await Promise.all([
+        rpcPromise,
+        companyUpdatePromise,
+        userUpdatePromise
+      ]);
+
+      const rpcData = rpcRes.data;
+      const rpcErr = rpcRes.error;
       if (rpcErr || (rpcData && !rpcData.success)) {
-        const msg = rpcData?.error || rpcErr?.message || "Failed to approve client registration";
+        const msg = rpcData?.error || rpcErr?.message || "";
         if (msg.includes("mandatory") || msg.includes("verified")) {
           setApprovalWarning(msg);
           setToastMsg(msg);
@@ -742,35 +761,42 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
           setIsSubmittingAction(false);
           return;
         }
-
-        // Direct fallback update
-        const { error: updErr } = await supabase
-          .from("client_companies")
-          .update({
-            status: "APPROVED",
-            approved_at: new Date().toISOString(),
-            approved_by: adminProfile?.name || "NECL Compliance Desk",
-            rejection_reason: null,
-            correction_notes: null,
-            updated_at: new Date().toISOString()
-          })
-          .eq("id", client.id);
-
-        if (updErr) {
-          await supabase
-            .from("client_companies")
-            .update({
-              status: "ACTIVE",
-              updated_at: new Date().toISOString()
-            })
-            .eq("id", client.id);
-        }
-
-        await supabase
-          .from("client_users")
-          .update({ status: "APPROVED" })
-          .or(`client_id.eq.${client.id},client_company_id.eq.${client.id}`);
       }
+
+      // 2. Broadcast Instant Approval Notification via Supabase Realtime channel
+      try {
+        const bcChannel = supabase.channel("client-approvals-realtime");
+        await bcChannel.subscribe();
+        await bcChannel.send({
+          type: "broadcast",
+          event: "CLIENT_APPROVED",
+          payload: {
+            companyId: client.id,
+            clientCode: client.client_code,
+            mobile: phone,
+            status: "APPROVED",
+            timestamp: Date.now()
+          }
+        });
+        supabase.removeChannel(bcChannel);
+      } catch (bcErr) {
+        console.warn("Realtime broadcast notice:", bcErr);
+      }
+
+      // 3. Notify Backend API in background (non-blocking with fast timeout)
+      apiFetch("/client/admin-review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        timeoutMs: 1500,
+        body: JSON.stringify({
+          companyId: client.id,
+          mobile: phone,
+          decision: "APPROVED",
+          reviewerName: reviewer
+        })
+      }).catch((apiErr) => {
+        console.warn("Backend API dispatch notice:", apiErr);
+      });
 
       try {
         await supabase.from("auth_audit_log").insert([{
@@ -780,7 +806,7 @@ export const ClientProfile: React.FC<ClientProfileProps> = ({ clientId, onBack }
           details: {
             companyId: client.id,
             companyName: client.company_name,
-            reviewerName: adminProfile?.name || "NECL Compliance Desk"
+            reviewerName: reviewer
           }
         }]);
       } catch {}

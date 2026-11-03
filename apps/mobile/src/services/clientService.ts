@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { supabase, ensureMobileSession } from '../supabase';
 import { authService } from './authService';
-import { formatDisplayId } from '../utils/idGenerator';
+import { formatDisplayId, generateDbTruckxId } from '../utils/idGenerator';
 import {
   TransportRequirementDraft,
   ClientInvoice,
@@ -114,9 +114,17 @@ export interface CreateRequirementInput {
   pickupAddress: string;
   pickupPincode: string;
   pickupCity?: string;
+  pickupState?: string;
+  pickupGoogleMapsUrl?: string;
+  pickupLatitude?: number;
+  pickupLongitude?: number;
   destinationAddress: string;
   destinationPincode: string;
   destinationCity?: string;
+  destinationState?: string;
+  destinationGoogleMapsUrl?: string;
+  destinationLatitude?: number;
+  destinationLongitude?: number;
   vehicleTypeRequired: string;
   materialType: string;
   requiredCapacityMt: number;
@@ -339,6 +347,7 @@ export const clientService = {
     companyId?: string;
     userId?: string;
     clientCode?: string;
+    accountId?: string;
     status?: string;
     error?: string;
     roleConflict?: boolean;
@@ -437,12 +446,35 @@ export const clientService = {
       // Check if user already exists
       const { data: existingUser } = await supabase
         .from('client_users')
-        .select('id, client_id, client_company_id')
+        .select('id, client_id, client_company_id, account_id')
         .eq('mobile', cleanContactPhone)
         .maybeSingle();
 
       let targetCompanyId = existingUser?.client_company_id || existingUser?.client_id;
-      let generatedCode = `CLI-${Math.floor(100000 + Math.random() * 900000)}`;
+      let existingCompanyCode: string | undefined;
+
+      if (targetCompanyId) {
+        const { data: compRec } = await supabase
+          .from('client_companies')
+          .select('client_code')
+          .eq('id', targetCompanyId)
+          .maybeSingle();
+        if (compRec?.client_code) {
+          existingCompanyCode = compRec.client_code;
+        }
+      }
+
+      // Generate or reuse canonical Client ID (TRUCKX-CL-DDMMYYYY-XXXXX)
+      const generatedCode =
+        existingCompanyCode && existingCompanyCode.startsWith('TRUCKX-CL-')
+          ? existingCompanyCode
+          : await generateDbTruckxId('CL');
+
+      // Generate or reuse canonical Account ID (TRUCKX-AC-DDMMYYYY-XXXXX)
+      const generatedAccountId =
+        existingUser?.account_id && existingUser.account_id.startsWith('TRUCKX-AC-')
+          ? existingUser.account_id
+          : await generateDbTruckxId('AC');
 
       if (targetCompanyId) {
         // Update existing company: try rich columns first, fall back to base columns
@@ -459,6 +491,7 @@ export const clientService = {
             pincode: params.pincode.trim(),
             company_phone: cleanCompanyPhone,
             company_email: params.email.trim().toLowerCase(),
+            client_code: generatedCode,
             status: 'PENDING_APPROVAL',
             submitted_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
@@ -536,17 +569,17 @@ export const clientService = {
         }
 
         targetCompanyId = compRec.id;
-        generatedCode = compRec.client_code || `CLI-${targetCompanyId.slice(0, 8).toUpperCase()}`;
       }
 
       // Upsert client_users: try rich columns first, fall back to base columns
-      let targetUserId = generateUuid();
+      let targetUserId = existingUser?.id || generateUuid();
       const { data: userRec, error: uErr } = await supabase
         .from('client_users')
         .upsert([
           {
             client_id: targetCompanyId,
             client_company_id: targetCompanyId,
+            account_id: generatedAccountId,
             full_name: params.fullName.trim(),
             mobile: cleanContactPhone,
             email: params.email.trim().toLowerCase(),
@@ -566,6 +599,7 @@ export const clientService = {
           .upsert([
             {
               client_id: targetCompanyId,
+              account_id: generatedAccountId,
               full_name: params.fullName.trim(),
               mobile: cleanContactPhone,
               email: params.email.trim().toLowerCase(),
@@ -644,6 +678,7 @@ export const clientService = {
           businessType: params.businessType,
           clientId: targetCompanyId,
           clientCode: generatedCode,
+          accountId: generatedAccountId,
           status: 'PENDING_APPROVAL',
           registeredAt: new Date().toISOString(),
         });
@@ -655,6 +690,7 @@ export const clientService = {
         companyId: targetCompanyId,
         userId: targetUserId,
         clientCode: generatedCode,
+        accountId: generatedAccountId,
         status: 'PENDING_APPROVAL',
       };
     } catch (e: any) {
@@ -807,18 +843,56 @@ export const clientService = {
     const cacheKey = lookupKey.trim().toLowerCase();
     if (!bypassCache) {
       const cached = accountStatusCache.get(cacheKey);
-      if (cached && Date.now() - cached.timestamp < ACCOUNT_STATUS_TTL_MS) {
-        return cached.data;
+      if (cached) {
+        const isApproved = cached.data.status === 'APPROVED' || (cached.data as any).status === 'ACTIVE';
+        // Only trust cache if already approved; unapproved/pending states must recheck immediately
+        if (isApproved && Date.now() - cached.timestamp < ACCOUNT_STATUS_TTL_MS) {
+          return cached.data;
+        } else if (!isApproved && Date.now() - cached.timestamp < 300) {
+          return cached.data;
+        }
       }
     }
 
     // 0. Ensure authenticated mobile session for Supabase queries
     await ensureMobileSession().catch(() => {});
 
-    // 1. Primary: Server Backend Live Status API with 800ms abort timeout
+    // 1. Primary & Ultra-Fast: Direct Supabase RPC if phone (~40-60ms)
+    if (isPhone) {
+      try {
+        const { data, error } = await supabase.rpc('check_client_account_status', {
+          p_mobile: cleanPhone,
+        });
+        if (!error && data && data.status && data.status !== 'NEW_USER' && data.status !== 'NOT_FOUND') {
+          const rawStatus = data.status;
+          const normalizedStatus = rawStatus === 'APPROVED' || rawStatus === 'ACTIVE' ? 'APPROVED' : rawStatus;
+          const result: ClientAccountStatusResult = {
+            status: normalizedStatus as any,
+            companyId: data.company_id,
+            companyName: data.company_name,
+            clientCode: data.client_code,
+            fullName: data.full_name,
+            email: data.email,
+            mobile: data.mobile || cleanPhone,
+            rejectionReason: data.rejection_reason,
+            correctionNotes: data.correction_notes,
+            submittedAt: data.submitted_at,
+            previousRole: data.previous_role,
+          };
+          // Only cache approved state with full TTL, pending with short TTL
+          accountStatusCache.set(cacheKey, {
+            data: result,
+            timestamp: Date.now(),
+          });
+          return result;
+        }
+      } catch { }
+    }
+
+    // 2. Fast Fallback: Local Server Backend Live Status API with ultra-fast 250ms abort timeout
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 800);
+      const timeoutId = setTimeout(() => controller.abort(), 250);
       const response = await fetch(`${getBackendApiUrl()}/client/status/${encodeURIComponent(lookupKey)}`, {
         headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,
@@ -846,34 +920,6 @@ export const clientService = {
         }
       }
     } catch { }
-
-    // 2. Try DB RPC if phone (SECURITY DEFINER, always reliable)
-    if (isPhone) {
-      try {
-        const { data, error } = await supabase.rpc('check_client_account_status', {
-          p_mobile: cleanPhone,
-        });
-        if (!error && data && data.status && data.status !== 'NEW_USER' && data.status !== 'NOT_FOUND') {
-          const rawStatus = data.status;
-          const normalizedStatus = rawStatus === 'APPROVED' || rawStatus === 'ACTIVE' ? 'APPROVED' : rawStatus;
-          const result: ClientAccountStatusResult = {
-            status: normalizedStatus as any,
-            companyId: data.company_id,
-            companyName: data.company_name,
-            clientCode: data.client_code,
-            fullName: data.full_name,
-            email: data.email,
-            mobile: data.mobile || cleanPhone,
-            rejectionReason: data.rejection_reason,
-            correctionNotes: data.correction_notes,
-            submittedAt: data.submitted_at,
-            previousRole: data.previous_role,
-          };
-          accountStatusCache.set(cacheKey, { data: result, timestamp: Date.now() });
-          return result;
-        }
-      } catch { }
-    }
 
     // 3. Direct query fallback
     try {
@@ -1492,6 +1538,18 @@ export const clientService = {
       if (input.loadingPointWeightDeclared !== undefined) reqPayload.loading_point_weight_declared = input.loadingPointWeightDeclared;
       if (input.loadingPointQuantityDeclared !== undefined) reqPayload.loading_point_quantity_declared = input.loadingPointQuantityDeclared;
 
+      // Dynamic location coordinates & Google Maps URLs
+      if (input.pickupCity) reqPayload.pickup_city = input.pickupCity;
+      if (input.pickupState) reqPayload.pickup_state = input.pickupState;
+      if (input.destinationCity) reqPayload.destination_city = input.destinationCity;
+      if (input.destinationState) reqPayload.destination_state = input.destinationState;
+      if (input.pickupGoogleMapsUrl) reqPayload.pickup_google_maps_url = input.pickupGoogleMapsUrl;
+      if (input.destinationGoogleMapsUrl) reqPayload.destination_google_maps_url = input.destinationGoogleMapsUrl;
+      if (input.pickupLatitude !== undefined) reqPayload.pickup_latitude = input.pickupLatitude;
+      if (input.pickupLongitude !== undefined) reqPayload.pickup_longitude = input.pickupLongitude;
+      if (input.destinationLatitude !== undefined) reqPayload.destination_latitude = input.destinationLatitude;
+      if (input.destinationLongitude !== undefined) reqPayload.destination_longitude = input.destinationLongitude;
+
       let { data: insertData, error } = await supabase
         .from('requirements')
         .insert([reqPayload])
@@ -1740,36 +1798,74 @@ export const clientService = {
         }
       }
 
-      // 1. Try to find trip by ID or booking_id
-      const query = supabase
-        .from('trips')
-        .select(`
-          id, booking_id, vehicle_id, driver_id, trip_status, started_at, completed_at, created_at, pod_approved, pod_approved_at,
-          vehicles(id, registration_number, vehicle_type, model, rated_capacity_mt),
-          drivers(id, full_name, mobile, licence_number),
-          bookings(id, requirement_id, client_id, booking_status, payment_status, confirmed_at, grand_total, booking_code, requirements(*))
-        `)
-        .or(`id.eq.${cleanId},booking_id.eq.${cleanId},lr_number.eq.${cleanId}`);
+      // 1. Try to find trip by ID, booking_id, lr_number, or trip_code
+      let tripRecord: any = null;
+      try {
+        const query = supabase
+          .from('trips')
+          .select(`
+            *,
+            vehicles(id, registration_number, vehicle_type, model, rated_capacity_mt),
+            drivers(id, full_name, mobile, licence_number),
+            vendors:vendor_id(id, name, company_name, phone),
+            bookings(id, requirement_id, client_id, booking_status, payment_status, confirmed_at, grand_total, booking_code, requirements(*))
+          `)
+          .or(`id.eq.${cleanId},booking_id.eq.${cleanId},lr_number.eq.${cleanId},trip_code.eq.${cleanId}`);
 
-      const { data, error } = await query.maybeSingle();
+        const { data, error } = await query.maybeSingle();
+        if (data && !error) {
+          tripRecord = data;
+        }
+      } catch {
+        // Fallback simple trip select if nested relation failed
+        try {
+          const { data } = await supabase
+            .from('trips')
+            .select('*, vehicles(*), drivers(*), bookings(*)')
+            .or(`id.eq.${cleanId},booking_id.eq.${cleanId},lr_number.eq.${cleanId}`)
+            .maybeSingle();
+          if (data) tripRecord = data;
+        } catch {}
+      }
 
-      if (data && !error) {
+      if (tripRecord) {
         // Enforce authorization: ensure client owns this booking
         if (clientId || targetCompanyId) {
-          const bObj: any = Array.isArray((data as any).bookings) ? (data as any).bookings[0] : (data as any).bookings;
+          const bObj: any = Array.isArray(tripRecord.bookings) ? tripRecord.bookings[0] : tripRecord.bookings;
           const bookingClientId = bObj?.client_id;
           if (bookingClientId && bookingClientId !== clientId && bookingClientId !== targetCompanyId) {
             return null; // IDOR protection: unauthorized access blocked
           }
         }
-        return data;
+
+        // Fetch POD submissions if available
+        try {
+          const { data: podSubmissions } = await supabase
+            .from('trip_pod_submissions')
+            .select('*')
+            .eq('trip_id', tripRecord.id)
+            .order('created_at', { ascending: false });
+          if (podSubmissions) tripRecord.pod_submissions = podSubmissions;
+        } catch {}
+
+        // Fetch weighments if available
+        try {
+          const { data: weighments } = await supabase
+            .from('weighments')
+            .select('*')
+            .eq('trip_id', tripRecord.id)
+            .order('recorded_at', { ascending: true });
+          if (weighments) tripRecord.weighments = weighments;
+        } catch {}
+
+        return tripRecord;
       }
 
-      // 2. If no trip created yet, check if it exists as an active booking
+      // 2. If no direct trip, check if it exists as an active booking or requirement
       const { data: bookingData } = await supabase
         .from('bookings')
         .select('*, requirements(*)')
-        .or(`id.eq.${cleanId},booking_code.eq.${cleanId}`)
+        .or(`id.eq.${cleanId},booking_code.eq.${cleanId},requirement_id.eq.${cleanId}`)
         .maybeSingle();
 
       if (bookingData) {
@@ -1778,6 +1874,25 @@ export const clientService = {
             return null; // IDOR protection: unauthorized
           }
         }
+
+        // Check if there is an active trip generated for this booking
+        try {
+          const { data: bTrip } = await supabase
+            .from('trips')
+            .select(`
+              *,
+              vehicles(id, registration_number, vehicle_type, model),
+              drivers(id, full_name, mobile),
+              vendors:vendor_id(id, name, company_name, phone)
+            `)
+            .eq('booking_id', bookingData.id)
+            .maybeSingle();
+
+          if (bTrip) {
+            bTrip.bookings = bookingData;
+            return bTrip;
+          }
+        } catch {}
 
         const isCancelled = (bookingData.booking_status || '').toUpperCase() === 'CANCELLED';
         return {
@@ -2179,20 +2294,22 @@ export const clientService = {
     try {
       const { data, error } = await supabase
         .from('requirements')
-        .select('*')
+        .select('*, client_companies(id, company_name, client_code)')
         .eq('id', reqId)
         .maybeSingle();
       if (error || !data) return null;
 
       let bookingId: string | null = null;
+      let bookingCode: string | null = null;
       try {
         const { data: bRow } = await supabase
           .from('bookings')
-          .select('id')
+          .select('id, booking_code')
           .eq('requirement_id', reqId)
           .maybeSingle();
         if (bRow?.id) {
           bookingId = bRow.id;
+          bookingCode = bRow.booking_code;
         }
       } catch {
         // Fallback if query fails
@@ -2224,6 +2341,7 @@ export const clientService = {
         return {
           ...data,
           booking_id: bookingId,
+          booking_code: bookingCode,
           quotationsCount: mappedQuotes.length,
           quotations: mappedQuotes,
         };
@@ -2231,6 +2349,7 @@ export const clientService = {
         return {
           ...data,
           booking_id: bookingId,
+          booking_code: bookingCode,
           quotationsCount: 0,
           quotations: [],
         };
@@ -2601,7 +2720,8 @@ export const clientService = {
     message?: string;
   }> {
     try {
-      const resp = await fetch(`${getBackendApiUrl()}/api/invoices/client/generate`, {
+      const apiBase = getBackendApiUrl().replace(/\/api\/?$/, '');
+      const resp = await fetch(`${apiBase}/api/invoices/client/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -2614,7 +2734,8 @@ export const clientService = {
 
   async getInvoice(invoiceId: string): Promise<ClientInvoice | null> {
     try {
-      const resp = await fetch(`${getBackendApiUrl()}/api/invoices/client/${encodeURIComponent(invoiceId)}`);
+      const apiBase = getBackendApiUrl().replace(/\/api\/?$/, '');
+      const resp = await fetch(`${apiBase}/api/invoices/client/${encodeURIComponent(invoiceId)}`);
       const data = await resp.json();
       return data?.invoice || null;
     } catch {
@@ -2633,7 +2754,8 @@ export const clientService = {
     message?: string;
   }> {
     try {
-      const resp = await fetch(`${getBackendApiUrl()}/api/invoices/client/${encodeURIComponent(invoiceId)}/record-payment`, {
+      const apiBase = getBackendApiUrl().replace(/\/api\/?$/, '');
+      const resp = await fetch(`${apiBase}/api/invoices/client/${encodeURIComponent(invoiceId)}/record-payment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -2646,7 +2768,8 @@ export const clientService = {
 
   async getFinancialReconciliation(): Promise<FinancialReconciliation | null> {
     try {
-      const resp = await fetch(`${getBackendApiUrl()}/api/finance/reconciliation`);
+      const apiBase = getBackendApiUrl().replace(/\/api\/?$/, '');
+      const resp = await fetch(`${apiBase}/api/finance/reconciliation`);
       const data = await resp.json();
       return data?.summary || null;
     } catch {

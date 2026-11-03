@@ -84,6 +84,11 @@ export const VendorQuotationDetailsScreen: React.FC<VendorQuotationDetailsScreen
             <View>
               <Text style={styles.titleText}>Quotation Details</Text>
               <Text style={styles.idSubText}>{quotation.id}</Text>
+              {quotation.requirementId && (
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748B', marginTop: 3 }}>
+                  Requirement: <Text style={{ color: '#F05A22' }}>{quotation.requirementId}</Text>
+                </Text>
+              )}
             </View>
 
             <View style={[styles.statusBadge, isAwarded && styles.badgeAwarded]}>
